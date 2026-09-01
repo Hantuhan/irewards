@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build
+.next/
+out/
+dist/
+build/
+
+# env
+.env
+.env.local
+.env.*.local
+infra/insforge/.env
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+public/uploads/
+
+Thumbs.db
+
+# ide
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# supabase
+supabase/.branches
+supabase/.temp

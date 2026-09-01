@@ -1,0 +1,97 @@
+markdown# 🚀 B2B SaaS Business Proposal: iRewards
+**The Smart Table Storefront That Brings Customers Back**  
+*Target Market: Independent Cafes, Boutique Retail, & Local Service Merchants in Malaysia & Singapore*  
+
+
+---
+
+## 📌 Executive Summary
+**iRewards** is a multi-tenant B2B SaaS platform that gives every table its own **intelligent mobile storefront** — plus an automated WhatsApp engine that brings customers back. Merchants across Malaysia and Singapore get one system that owns the full dine-in journey: **order, pay, grow the basket, and retain the customer.**
+
+Customers scan a table QR and land in the **iRewards storefront** — a fast mobile web ordering experience with no app download, no signup, and no OTP walls. They browse the menu, build their cart, and pay via local cashless rails (**DuitNow QR**, **TNG**, and **SGQR**). The storefront handles what a short-staffed floor team cannot: **smart upselling** when the basket has room to grow, and **smart downselling** when a lighter or better-fit option keeps the order moving — all inside the iRewards app, on every order.
+
+Rewards are **optional**. Diners who want them join the merchant's club on WhatsApp after checkout. Those who don't simply finish and leave. For members, iRewards closes the loop automatically: bounce-back vouchers, review nudges, and churn win-back messages on autopilot.
+
+Merchants keep their existing POS (StoreHub, Qashier, iCHEF) for counter sales and accounting. **iRewards is the table-facing storefront and retention engine.** Customer data belongs to the merchant. Flat **RM199 / SGD 80 per month**. No transaction commission.
+
+---
+
+## ❌ 1. The Core Problem Statement (The SME Cash Leakage)
+Independent brick-and-mortar businesses are currently trapped in an operational and financial stranglehold driven by macro-economic shifts in Southeast Asia:
+
+* **The Severe Local Labor Shortage:** Finding, training, and retaining front-of-house service staff or waiters is increasingly difficult and expensive. Short-staffed teams lead to delayed service and long checkout bottlenecks.
+
+* **The Death of the "Second Order" (Uncaptured Revenue):** During peak weekend rush hours, floor staff are overwhelmed running orders. Customers who want to buy an extra coffee, an add-on, or a dessert give up trying to catch a busy worker's eye. Across a single month, this silent friction costs a single shop **RM1,500 to RM4,000 (SGD \$500–\$1,300) in uncaptured revenue.**
+
+* **The 30% Third-Party Marketplace Trap:** Desperate to solve counter lines and off-site takeaway ordering, merchants turn to massive delivery aggregators. These platforms charge up to a **30% commission fee per transaction**, aggressively draining the merchant's thin margins on local customers who are already standing inside or near their physical shop.
+
+* **The Failure of Generic QR Menus:** Existing table QR menus fail due to **high abandonment rates**. They force customers to open unoptimized static PDFs, register via clunky web forms, or wait for OTP codes. Furthermore, they act as cold, transactional machines that completely destroy the personal, neighborhood "vibe" of local independent merchants.
+
+---
+
+## ⚡ 2. The Solution: A Smart Storefront on Every Table
+iRewards is the **storefront ordering system** merchants place on every table. Customers order entirely through the iRewards mobile web app — not a static PDF, not a third-party menu, not the merchant's POS screen. The storefront is where the sale happens: menu browsing, cart building, **intelligent upselling**, **intelligent downselling**, payment, and optional rewards signup.
+
+Generic QR menus show the same list to everyone and hope for the best. iRewards reads the basket in real time and adjusts — surfacing the right add-on to grow the check, or the right alternative to keep the customer ordering instead of abandoning. No staff script required. No training. It runs on every table, every shift.
+
+After the customer leaves, the **WhatsApp retention engine** takes over for members who opted in — securing the next visit without the merchant lifting a finger.
+
+### 🔄 The iRewards Infinite Cash Loop
+
+A continuous 4-step loop across **every table** in the venue — maximize today's basket inside the storefront, then secure tomorrow's return on WhatsApp:
+
+*   **1. The Entry Point (Scan → iRewards Storefront → Order)**
+    *   *The Action:* The customer scans the table QR. The **iRewards storefront** opens instantly in their browser — full menu, modifiers, live cart, and checkout. No app, no account, no OTP.
+    *   *The Logic:* They browse and order directly in iRewards — including mid-meal second rounds without flagging down staff. Returning rewards members see **1-Tap "Your Usual"** pinned at the top. The storefront continuously optimizes the basket: **upselling** a high-converting add-on when the cart sits below their typical spend, and **downselling** to a better-fit combo, smaller size, or value alternative when that keeps the order alive instead of losing it.
+*   **2. The Checkout (Pay in iRewards — Rewards Optional)**
+    *   *The Action:* The customer pays inside the iRewards storefront via **DuitNow / TNG** (Malaysia) or **SGQR** (Singapore). The paid order streams to the kitchen in real time.
+    *   *The Logic:* After payment, a single optional prompt: *"Join [Cafe Name] rewards on WhatsApp — get 20% off your next visit."* Tapping it opens a pre-filled WhatsApp message. Hitting Send registers them in seconds. **Guests who skip it simply leave. No gate. No guilt.**
+*   **3. The Reputation Booster (Google Review)**
+    *   *The Action:* Exactly **30 minutes** after payment clears, rewards members receive a WhatsApp check-in — timed so they've finished their meal.
+    *   *The Logic:* Happy customers ("5 stars") get the merchant's Google Maps link to boost local search visibility. Complaints route privately to management — never to a public review page.
+*   **4. The Retention Lock (Bounce Back)**
+    *   *The Action:* The moment a rewards member checks out, a unique next-visit voucher lands in their WhatsApp thread.
+    *   *The Logic:* A strict **14-day expiry** creates urgency. If they miss their usual visit window, a churn win-back message fires automatically — referencing their favorite order. They scan any table QR, land back in the iRewards storefront, and the loop restarts.
+
+
+### 🧠 Core Functional Capabilities:
+1. **The iRewards Storefront (Table Ordering System):** Every table gets a QR-encoded storefront (`?table=N`). Customers scan, browse, customize, and order entirely inside iRewards. No downloads, no forms, no passwords. This is the merchant's table-facing sales channel — not a link-out to something else.
+2. **Intelligent Upselling (In-App):** The storefront reads the live cart, order history, and time of day. When the basket has room to grow, it surfaces one high-converting add-on — a side, a drink upgrade, a dessert — at the moment the customer is most likely to accept.
+3. **Intelligent Downselling (In-App):** When a customer hesitates, overshoots their budget, or hits a sold-out item, the storefront doesn't lose the sale. It suggests a right-fit alternative — a value combo, a smaller portion, a comparable swap — keeping the order moving and the table happy.
+4. **Optional WhatsApp Rewards (10-Second Opt-In):** Rewards are a perk, not a toll. Registration happens post-payment via a pre-filled WhatsApp message. Phone identity = loyalty ID. No separate app.
+5. **"Your Usual" for Regulars:** Returning members see their favorite dish and custom modifiers pinned to the top of the storefront — one tap to reorder.
+6. **Local Cashless Payments:** Checkout inside iRewards generates a dynamic payment prompt (DuitNow / TNG / SGQR). Paid orders stream to the kitchen display board in real time via WebSockets.
+7. **Automated Post-Visit Engine:** Bounce-back vouchers, review nudges, and churn win-back messages run on WhatsApp in the background — converting today's storefront sale into tomorrow's return visit.
+
+---
+
+## 🎨 3. Closing the Operational Loop (Automated Retention)
+The software does not stop working after the customer pays. It executes background scripts to secure immediate return visits and local visibility:
+
+* **The 14-Day Next-Visit Bounce-Back Voucher:** The second payment clears, the WhatsApp bot automatically fires a unique next-visit discount voucher (e.g., 20% off their next breakfast combo) straight to their chat thread. Setting a strict 14-day database expiration date creates urgency, turning a one-time walk-in into a highly predictable regular.
+* **The Automated 5-Star Google Review Filter:** Exactly 30 minutes after the kitchen completes an order, the system pings the customer on WhatsApp asking for their rating. If they reply "5 Stars", the bot drops the merchant's live Google Maps link to aggressively boost their local search visibility. If they reply with a complaint, the text is kept private for management logs, trapping bad reviews before they hit the internet.
+* **Predictive Churn Prevention:** The background system monitors average visit intervals. If a regular member breaks their streak and misses their routine visit window (e.g., hasn't visited in 7 days), the AI engine triggers a context-aware WhatsApp broadcast detailing their favorite drink to bring them back through the door.
+
+---
+
+## 💼 4. Business Model & Scalability Strategy
+iRewards is engineered under a lean, highly profitable serverless multi-tenant code architecture. This allows us to run multiple independent businesses out of a centralized framework while keeping data completely separate.
+
+* **The Subscription Pricing Tier:** A flat subscription fee of **RM199 / SGD 80 per month** per outlet. This model avoids transaction-percentage fee pushback and fits cleanly within small business marketing budgets.
+* **The Non-Invasive Overlay Advantage:** We do not replace the merchant's counter POS (StoreHub, Qashier, iCHEF). iRewards is the **table storefront** — where customers order, pay, and get upsold. The existing till stays for counter sales, inventory, and accounting.
+
+### 📈 Unit Economics & Profit Margin Breakdown (Per Merchant Contract)
+* **Gross SaaS Revenue:** + RM 199.00 / SGD 80.00
+* **Twilio Number Rental Cost:** - RM 5.00
+* **Database & Web Hosting Cost:** - RM 0.00 *(Leveraging free developer cloud tiers like Supabase/Vercel)*
+* **1,000 Inbound Bot Loop Triggers:** - RM 25.00
+* **Net Profit Realized:** **= ~88% Pure Recurring Profit Margin Per Month**
+
+---
+
+## 🏁 5. The Mandate: The 48-Hour Live Table Pilot
+To satisfy our commitment to data-driven, low-cost validation before scaling code execution, we deploy a **Zero-Cost Weekend Sandbox Test** using the following low-risk parameters:
+
+1. **The Non-Invasive Isolation:** We print a single, clean visual QR stand and place it exclusively on **Table 4** at our beachhead location (Founder's brother's cafe). 
+2. **The Manual Simulation:** We do not plug in production servers. The founders will sit on the floor and manually handle the inbound WhatsApp webhook scripts—texting back the menu layout sheets, dropping the static DuitNow graphic, tracking points metrics in a ledger spreadsheet, and manually dropping next-visit vouchers and review check-ins.
+3. **The Proof of ROI:** We track the exact revenue recovered by Table 4 via mid-meal second orders, checkout speed, and voucher redemption rates. When Table 4 proves it captures hidden margins completely on automation without floor staff intervention, we secure our live case study and activate full-scale software automation.

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iRewards — Product Flow & Business Proposal</title>
+  <style>
+    @page { margin: 2cm; size: A4; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.55;
+      color: #1a1a1a;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { font-size: 22pt; color: #0d47a1; margin-bottom: 0.2em; border-bottom: 3px solid #0d47a1; padding-bottom: 8px; }
+    h2 { font-size: 14pt; color: #1565c0; margin-top: 1.8em; page-break-after: avoid; }
+    h3 { font-size: 12pt; color: #333; margin-top: 1.4em; page-break-after: avoid; }
+    .subtitle { font-size: 13pt; color: #444; font-weight: 600; margin-top: 0; }
+    .meta { font-size: 10pt; color: #666; font-style: italic; margin-bottom: 1.5em; }
+    p { margin: 0.6em 0; }
+    ul { margin: 0.4em 0; padding-left: 1.4em; }
+    li { margin: 0.3em 0; }
+    table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 10pt; }
+    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #e3f2fd; font-weight: 600; }
+    tr:nth-child(even) { background: #fafafa; }
+    .flow-box {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-left: 4px solid #1565c0;
+      padding: 14px 16px;
+      margin: 1em 0;
+      font-family: "SF Mono", Menlo, Monaco, monospace;
+      font-size: 9pt;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      page-break-inside: avoid;
+    }
+    .message-box {
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 1em 0;
+      font-size: 10pt;
+      page-break-inside: avoid;
+    }
+    .rule-table td:first-child { font-weight: 600; width: 35%; }
+    .page-break { page-break-before: always; }
+    .cover { text-align: center; padding: 80px 20px 40px; }
+    .cover h1 { border: none; font-size: 28pt; }
+    .cover .subtitle { font-size: 16pt; margin: 1em 0; }
+    .cover .date { color: #666; margin-top: 3em; font-size: 11pt; }
+    strong { color: #111; }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>iRewards</h1>
+  <p class="subtitle">The Smart Table Storefront That Brings Customers Back</p>
+  <p class="meta">Product Flow &amp; Business Proposal</p>
+  <p class="meta">Target Market: Independent Cafes &amp; F&amp;B Merchants — Malaysia &amp; Singapore</p>
+  <p class="date">September 2026</p>
+</div>
+
+<div class="page-break"></div>
+
+<h2>Executive Summary</h2>
+<p><strong>iRewards</strong> is a multi-tenant B2B SaaS platform that gives every table its own <strong>intelligent mobile storefront</strong> — plus an automated WhatsApp engine that brings customers back.</p>
+<p>Customers scan a table QR and land in the <strong>iRewards storefront</strong> instantly — no app, no signup, no OTP. They order, pay via <strong>DuitNow / TNG / SGQR</strong>, and benefit from smart upselling and downselling in-app.</p>
+<p><strong>Rewards are optional.</strong> After payment, diners may join the merchant's iRewards club on WhatsApp (+1 point). Members receive automated bounce-back vouchers, review nudges, and churn win-back messages.</p>
+<p>Merchants keep their existing POS. iRewards is the table storefront and retention engine. Customer data belongs to the merchant. <strong>RM199 / SGD 80 per month</strong>. No transaction commission.</p>
+
+<h2>Product Flow — Co-Founder Approved</h2>
+<p><em>Menu-first for ordering. WhatsApp for identity and retention after payment.</em></p>
+
+<h3>Flow 1: First-Time Visitor</h3>
+<div class="flow-box">🪑 Customer sits down
+    ↓
+📱 Scan table QR
+    ↓
+🛒 Web storefront opens instantly (Table N · No login · No WhatsApp)
+    ↓
+Browse menu → Add to cart
+    ↓
+Smart merchandising:
+  • Cart below usual → ⬆️ Upsell suggestion
+  • Hesitating / sold out → ⬇️ Downsell / swap suggestion
+    ↓
+💳 Pay (DuitNow · TNG · SGQR) → Order sent to kitchen
+    ↓
+Thank-you screen:
+  "Join iRewards on WhatsApp — +1 point 🎁"
+    ↓
+  [ Skip ]  →  Done (guest, no phone captured)
+  [ Join ]  →  WhatsApp opens → Send → Member + 1pt → Retention loop</div>
+
+<h3>Flow 2: Return Visitor</h3>
+<div class="flow-box">📱 Scan table QR
+    ↓
+Recognized? (cookie or phone match)
+    ↓
+  YES → Personalized storefront
+        • "Welcome back!"
+        • ⭐ Your Usual pinned — 1-tap reorder
+        • Upsell / Downsell in cart
+    ↓
+  NO  → Guest storefront
+        • Soft prompt: "Enter mobile to load your points"
+    ↓
+💳 Pay → Kitchen
+    ↓
+Already a member? → Points added → Retention loop
+Not a member?     → Post-payment Join CTA (same as first visit)</div>
+
+<h3>Flow 3: Post-Visit Retention Loop (Members Only)</h3>
+<div class="flow-box">✅ Payment confirmed
+    ↓
+🎁 Bounce-back voucher via WhatsApp (14-day expiry)
+    ↓
+⏱️ 30 min later → Review nudge
+    • Happy → ⭐ Google review link
+    • Complaint → 🔒 Private to manager
+    ↓
+No return by day 7? → 📲 Churn win-back ("Your usual is waiting")
+    ↓
+Customer scans QR again → Loop restarts</div>
+
+<h3>Full Journey (One View)</h3>
+<div class="flow-box">┌──────────────── DURING THE VISIT ────────────────┐
+│  Scan QR → Web Storefront → Upsell/Downsell → Pay │
+│  No WhatsApp · No signup · No waiting             │
+└──────────────────────┬────────────────────────────┘
+                       ↓
+┌────────────── AFTER PAYMENT (optional) ───────────┐
+│  "Join iRewards on WhatsApp — +1 point 🎁"        │
+│     [ Skip ] → Guest exit                         │
+│     [ Join ] → Phone captured → Member + 1pt      │
+└──────────────────────┬────────────────────────────┘
+                       ↓ (members only)
+┌──────────────── AFTER THEY LEAVE ─────────────────┐
+│  Voucher → Review nudge → Churn win-back → Return │
+└───────────────────────────────────────────────────┘</div>
+
+<div class="page-break"></div>
+
+<h2>WhatsApp Message Copy</h2>
+
+<h3>After Payment — On-Screen CTA</h3>
+<div class="message-box">
+  <strong>Join [Cafe] iRewards on WhatsApp</strong><br>
+  🎁 +1 point on your first join<br><br>
+  [ Join on WhatsApp ]&nbsp;&nbsp;&nbsp;[ Maybe later ]
+</div>
+
+<h3>After They Tap Join</h3>
+<div class="message-box">
+  Welcome to [Cafe] iRewards! 🎉<br><br>
+  +1 point added — you have 1 point.<br><br>
+  See you next time! We'll send you member deals here on WhatsApp.<br><br>
+  Reply STOP anytime.
+</div>
+
+<h3>Return Member — After Scan</h3>
+<div class="message-box">
+  Welcome back! 👋 Table 5<br><br>
+  You have 12 points.<br>
+  👉 Order here: [link]
+</div>
+
+<h2>Flow Rules</h2>
+<table class="rule-table">
+  <tr><th>Rule</th><th>Why</th></tr>
+  <tr><td>Menu opens on scan — always</td><td>Hungry people first</td></tr>
+  <tr><td>WhatsApp only after payment</td><td>Earn the right to ask</td></tr>
+  <tr><td>Join is optional — always</td><td>No angry diners</td></tr>
+  <tr><td>Upsell/downsell in storefront</td><td>Product owns the sale</td></tr>
+  <tr><td>Retention on WhatsApp</td><td>Product owns the comeback</td></tr>
+  <tr><td>Counter ordering still works</td><td>Physical escape hatch</td></tr>
+</table>
+
+<h2>The iRewards Infinite Cash Loop</h2>
+<ol>
+  <li><strong>Scan → Storefront → Order</strong> — Instant web menu. Returning members see "Your Usual." Upsell/downsell in real time.</li>
+  <li><strong>Pay → Optional Join</strong> — DuitNow/TNG/SGQR checkout. Post-payment WhatsApp join (+1 point). Guests who skip simply leave.</li>
+  <li><strong>Reputation Booster</strong> — 30 min after payment, members get a WhatsApp review nudge. Happy → Google link. Complaints → private.</li>
+  <li><strong>Retention Lock</strong> — Bounce-back voucher on checkout. 14-day expiry. Churn win-back if they don't return. Loop restarts on next scan.</li>
+</ol>
+
+<h2>Core Capabilities</h2>
+<ul>
+  <li><strong>iRewards Storefront</strong> — QR per table (<code>?table=N</code>). Full ordering channel.</li>
+  <li><strong>Intelligent Upselling</strong> — Add-on suggestions when basket has room to grow.</li>
+  <li><strong>Intelligent Downselling</strong> — Right-fit alternatives when customer hesitates or item is sold out.</li>
+  <li><strong>Optional WhatsApp Rewards</strong> — Post-payment opt-in. Phone = loyalty ID.</li>
+  <li><strong>"Your Usual" for iRewards</strong> — Favorite order pinned, one-tap reorder.</li>
+  <li><strong>Local Cashless Payments</strong> — DuitNow / TNG / SGQR. Orders to kitchen via WebSockets.</li>
+  <li><strong>Automated Post-Visit Engine</strong> — Vouchers, reviews, churn win-back on WhatsApp.</li>
+</ul>
+
+<div class="page-break"></div>
+
+<h2>Core Problem</h2>
+<ul>
+  <li><strong>Labor shortage</strong> — Short-staffed teams, slow checkout, missed second orders.</li>
+  <li><strong>Uncaptured revenue</strong> — RM1,500–4,000/month per shop in lost add-on sales.</li>
+  <li><strong>30% aggregator trap</strong> — Delivery platforms drain dine-in margins.</li>
+  <li><strong>Generic QR menus fail</strong> — PDFs, OTP walls, high abandonment, no retention.</li>
+</ul>
+
+<h2>Business Model</h2>
+<ul>
+  <li><strong>Pricing:</strong> RM199 / SGD 80 per outlet per month (flat, no transaction fee)</li>
+  <li><strong>Positioning:</strong> Table storefront overlay — does not replace counter POS</li>
+  <li><strong>Data:</strong> Customer data belongs to the merchant; iRewards is the processor</li>
+</ul>
+
+<h2>48-Hour Weekend Pilot</h2>
+<p><strong>Scope:</strong> All tables live at beachhead cafe. Manual backend (founders on floor). No production servers yet.</p>
+
+<h3>Metrics to Track</h3>
+<table>
+  <tr><th>Metric</th><th>Target</th></tr>
+  <tr><td>Scan → order completed</td><td>≥ 50%</td></tr>
+  <tr><td>AOV vs last weekend</td><td>+ 10%</td></tr>
+  <tr><td>WA join after payment</td><td>≥ 20%</td></tr>
+  <tr><td>Voucher redeemed in 14 days</td><td>≥ 1 (proves loop)</td></tr>
+  <tr><td>Counter bail-outs</td><td>&lt; 20%</td></tr>
+</table>
+
+<h3>Pilot Setup</h3>
+<ul>
+  <li>Print QR stand per table (<code>?table=N</code>)</li>
+  <li>Google Sheet: table #, order value, WA join Y/N, second order Y/N</li>
+  <li>Pre-written WhatsApp quick replies for joiners</li>
+  <li>Static DuitNow QR for manual payment (acceptable for pilot)</li>
+  <li>Table tent copy: <em>"Scan to order · Join for points after you pay"</em></li>
+</ul>
+
+<h3>Optional A/B Test</h3>
+<table>
+  <tr><th>Tables</th><th>Flow</th></tr>
+  <tr><td>1–3</td><td>Menu-first (recommended)</td></tr>
+  <tr><td>4–6</td><td>WhatsApp-first (compare)</td></tr>
+</table>
+<p>Measure: scan→order %, AOV, WA join rate, counter bail-outs. Let data pick the winner.</p>
+
+<h2>Competitive Positioning</h2>
+<table>
+  <tr><th>Competitor</th><th>They win on</th><th>iRewards wins on</th></tr>
+  <tr><td>MenuBase</td><td>Meal-time upsell, cheap QR ordering</td><td>Post-visit WhatsApp retention loop</td></tr>
+  <tr><td>StoreHub</td><td>Full POS, scale</td><td>Table overlay + WA retention without switching POS</td></tr>
+  <tr><td>FOODSERVA</td><td>Full restaurant stack</td><td>Lightweight overlay, no rip-and-replace</td></tr>
+  <tr><td>App360 / RateUp</td><td>WhatsApp loyalty CRM</td><td>Storefront ordering + loyalty in one system</td></tr>
+</table>
+
+<p style="margin-top: 2em; font-size: 9pt; color: #888; text-align: center;">
+  iRewards — Confidential · Product Flow v1.0 · September 2026
+</p>
+
+</body>
+</html>

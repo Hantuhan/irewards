@@ -1,0 +1,46 @@
+{
+  "name": "irewards",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3002",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings 0",
+    "test": "sh scripts/smoke-test.sh",
+    "test:smoke": "sh scripts/smoke-test.sh",
+    "verify": "npm run typecheck && npm run lint && npm run build && npm run test",
+    "typecheck": "tsc --noEmit",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
+    "docker:dev:detach": "docker compose -f docker-compose.dev.yml up --build -d",
+    "docker:prod": "docker compose up --build",
+    "docker:down": "docker compose -f docker-compose.dev.yml down",
+    "insforge:setup": "sh scripts/insforge-bootstrap.sh",
+    "insforge:up": "cd infra/insforge && docker compose up -d",
+    "insforge:down": "cd infra/insforge && docker compose down",
+    "insforge:sync-env": "sh scripts/insforge-sync-env.sh",
+    "db:migrate": "sh scripts/db-migrate.sh"
+  },
+  "dependencies": {
+    "@insforge/sdk": "^1.5.2",
+    "next": "^15.2.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "twilio": "^5.4.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@types/node": "^22.13.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.21.0",
+    "eslint-config-next": "^15.2.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.2"
+  }
+}

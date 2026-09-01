@@ -81,9 +81,23 @@ menu_page_code=$(http_code "$BASE_URL/dashboard/$MERCHANT_SLUG/menu")
 [ "$menu_page_code" = "200" ] && pass "Menu admin page ($menu_page_code)" || fail "Menu admin page expected 200 got $menu_page_code"
 
 # --- Checkout + dev payment ---
+first_item_id=$(node -e "
+  const d = JSON.parse(process.argv[1]);
+  for (const c of d.categories || []) {
+    for (const item of c.items || []) {
+      if (item.available !== false) {
+        console.log(item.id);
+        process.exit(0);
+      }
+    }
+  }
+  process.exit(1);
+" "$menu_resp" 2>/dev/null || true)
+[ -n "$first_item_id" ] && pass "Checkout item ($first_item_id)" || fail "No available menu item for checkout"
+
 checkout_resp=$(curl -s -X POST "$BASE_URL/api/orders/checkout" \
   -H "Content-Type: application/json" \
-  -d "{\"merchantSlug\":\"$MERCHANT_SLUG\",\"tableId\":\"$TABLE_ID\",\"items\":[{\"id\":\"latte\",\"quantity\":1}]}")
+  -d "{\"merchantSlug\":\"$MERCHANT_SLUG\",\"tableId\":\"$TABLE_ID\",\"items\":[{\"id\":\"$first_item_id\",\"quantity\":1}]}")
 order_id=$(json_field "$checkout_resp" "orderId" 2>/dev/null || true)
 [ -n "$order_id" ] && pass "Checkout created order $order_id" || fail "Checkout failed: $checkout_resp"
 
@@ -123,6 +137,34 @@ for path in "" menu rewards customers analytics campaigns automation tables sett
   code=$(http_code "$url")
   [ "$code" = "200" ] && pass "Dashboard /$path ($code)" || fail "Dashboard /$path expected 200 got $code"
 done
+
+# --- Promos API ---
+promos_code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$BASE_URL/api/merchant/$MERCHANT_SLUG/promos")
+[ "$promos_code" = "200" ] && pass "GET promos ($promos_code)" || fail "GET promos expected 200 got $promos_code"
+
+# --- Campaign banner (public) ---
+banner_code=$(http_code "$BASE_URL/api/merchant/$MERCHANT_SLUG/campaigns/banner")
+[ "$banner_code" = "200" ] && pass "Campaign banner API ($banner_code)" || fail "Campaign banner expected 200 got $banner_code"
+
+# --- Customer session ---
+session_code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/customer/session")
+[ "$session_code" = "200" ] && pass "Customer session ($session_code)" || fail "Customer session expected 200 got $session_code"
+
+# --- Kitchen SSE ---
+sse_code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" -N --max-time 2 \
+  "$BASE_URL/api/merchant/$MERCHANT_SLUG/orders/stream" 2>/dev/null || true)
+[ "$sse_code" = "200" ] && pass "Kitchen SSE stream ($sse_code)" || fail "Kitchen SSE expected 200 got $sse_code"
+
+# --- Automation cron ---
+cron_secret="${CRON_SECRET:-irewards-dev-cron}"
+cron_resp=$(curl -s -X POST "$BASE_URL/api/cron/automation" \
+  -H "Authorization: Bearer $cron_secret" \
+  -H "Content-Type: application/json")
+cron_ok=$(node -e "
+  const d = JSON.parse(process.argv[1]);
+  process.exit(d.jobs !== undefined ? 0 : 1);
+" "$cron_resp" 2>/dev/null && echo yes || echo no)
+[ "$cron_ok" = "yes" ] && pass "Automation cron" || fail "Automation cron failed: $cron_resp"
 
 echo ""
 echo "All smoke tests passed."

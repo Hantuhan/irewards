@@ -66,9 +66,17 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 15000);
-    return () => clearInterval(timer);
-  }, [load]);
+    const stream = new EventSource(`/api/merchant/${merchantSlug}/orders/stream`, {
+      withCredentials: true,
+    });
+    stream.onmessage = () => {
+      load();
+    };
+    stream.onerror = () => {
+      stream.close();
+    };
+    return () => stream.close();
+  }, [load, merchantSlug]);
 
   const counts = useMemo(() => {
     const c = { active: 0, new: 0, preparing: 0, ready: 0, served: 0 };

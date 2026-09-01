@@ -1,7 +1,6 @@
 import {
   getCustomerById,
   getMerchantBySlug,
-  getOrderById,
   touchCustomerVisit,
 } from "@/lib/db/repository";
 import {
@@ -18,7 +17,7 @@ import type { MerchantRow, OrderRow } from "@/lib/db/types";
 
 export async function schedulePostPaymentJobs(order: OrderRow, merchant: MerchantRow) {
   const reviewRule = await getAutomationRule(merchant.id, "review_nudge");
-  if (reviewRule?.enabled) {
+  if (reviewRule?.enabled && order.customer_id) {
     const delayMinutes =
       Number(merchant.google_review_delay_minutes) ||
       Number((reviewRule.config as { delayMinutes?: number })?.delayMinutes) ||
@@ -162,6 +161,36 @@ async function runCampaignSend(
     await incrementCampaignReach(payload.campaignId);
     await recordCampaignEvent(payload.campaignId, "send");
   }
+}
+
+export async function scheduleReviewAfterJoin(
+  customerId: string,
+  merchantId: string,
+  orderId: string,
+) {
+  const customer = await getCustomerById(customerId);
+  if (!customer?.phone || customer.marketing_opt_out) return;
+
+  const reviewRule = await getAutomationRule(merchantId, "review_nudge");
+  if (!reviewRule?.enabled) return;
+
+  const { getMerchantById } = await import("@/lib/db/repository");
+  const merchant = await getMerchantById(merchantId);
+  if (!merchant) return;
+
+  const delayMinutes =
+    Number(merchant.google_review_delay_minutes) ||
+    Number((reviewRule.config as { delayMinutes?: number })?.delayMinutes) ||
+    30;
+
+  await enqueueAutomationJob({
+    merchantId,
+    orderId,
+    customerId,
+    jobType: "review_nudge",
+    runAt: new Date(Date.now() + delayMinutes * 60 * 1000),
+    payload: { orderId },
+  });
 }
 
 export async function updateCustomerVisitAndUsual(orderId: string, customerId: string) {

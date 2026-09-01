@@ -86,6 +86,9 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
     xhsUrl: "",
     websiteUrl: "",
     storeEmail: "",
+    googleReviewDelayMinutes: 30,
+    bounceBackDiscountPercent: 20,
+    bounceBackExpiryDays: 14,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -103,6 +106,9 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
       xhsUrl: string | null;
       websiteUrl: string | null;
       storeEmail: string | null;
+      googleReviewDelayMinutes: number;
+      bounceBackDiscountPercent: number;
+      bounceBackExpiryDays: number;
     }>(`/api/merchant/${merchantSlug}/settings`);
     setSettings({
       name: data.name,
@@ -115,6 +121,9 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
       xhsUrl: data.xhsUrl ?? "",
       websiteUrl: data.websiteUrl ?? "",
       storeEmail: data.storeEmail ?? "",
+      googleReviewDelayMinutes: data.googleReviewDelayMinutes ?? 30,
+      bounceBackDiscountPercent: data.bounceBackDiscountPercent ?? 20,
+      bounceBackExpiryDays: data.bounceBackExpiryDays ?? 14,
     });
   }, [merchantSlug]);
 
@@ -144,6 +153,9 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
           xhsUrl: settings.xhsUrl || null,
           websiteUrl: settings.websiteUrl || null,
           storeEmail: settings.storeEmail || null,
+          googleReviewDelayMinutes: settings.googleReviewDelayMinutes,
+          bounceBackDiscountPercent: settings.bounceBackDiscountPercent,
+          bounceBackExpiryDays: settings.bounceBackExpiryDays,
         }),
       });
       setSaved(true);

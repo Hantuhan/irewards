@@ -22,6 +22,7 @@ type OrderStatusResponse = {
     discountCents: number;
     totalCents: number;
     currency: string;
+    customerId: string | null;
   };
   merchant: { name: string; slug: string } | null;
   tableNumber: string | null;

@@ -17,6 +17,10 @@ import {
   awardOrderPointsIfEligible,
   getCustomerTierForMerchant,
 } from "@/lib/services/loyalty-points";
+import {
+  scheduleReviewAfterJoin,
+  updateCustomerVisitAndUsual,
+} from "@/lib/services/automation";
 
 export type JoinResult = {
   customer: CustomerRow;
@@ -97,6 +101,9 @@ export async function processWhatsAppJoin(input: {
   }
 
   await markJoinTokenUsed(input.token);
+
+  await updateCustomerVisitAndUsual(order.id, customer.id);
+  await scheduleReviewAfterJoin(customer.id, order.merchant_id, order.id);
 
   const tier = await getCustomerTierForMerchant(customer, order.merchant_id);
 

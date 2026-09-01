@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { processDueAutomationJobs } from "@/lib/services/automation";
+import { scheduleChurnWinbackForAllMerchants } from "@/lib/services/churn-scheduler";
 
 export async function POST(request: Request) {
   const auth = request.headers.get("authorization");
@@ -8,6 +9,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await processDueAutomationJobs();
-  return NextResponse.json(result);
+  const churn = await scheduleChurnWinbackForAllMerchants();
+  const jobs = await processDueAutomationJobs(100);
+
+  return NextResponse.json({ churn, jobs });
 }

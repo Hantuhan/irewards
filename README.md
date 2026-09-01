@@ -103,6 +103,11 @@ After `npm run db:migrate`, merchant features use the database (menu, orders, me
 | iRewards levels | `GET/PUT /api/merchant/{slug}/reward-levels` |
 | Analytics | `GET /api/merchant/{slug}/analytics` |
 | Campaigns | `GET/POST/PATCH /api/merchant/{slug}/campaigns` |
+| Campaign send | `POST /api/merchant/{slug}/campaigns/send` |
+| Promos | `GET/POST/PATCH /api/merchant/{slug}/promos` |
+| Campaign banner (storefront) | `GET /api/merchant/{slug}/campaigns/banner` |
+| Kitchen SSE | `GET /api/merchant/{slug}/orders/stream` |
+| Automation cron | `POST /api/cron/automation` (Bearer `CRON_SECRET`) |
 | Automation | `GET/PATCH /api/merchant/{slug}/automation` |
 | Table QR | `GET/POST/DELETE /api/merchant/{slug}/tables` |
 | Settings | `GET/PATCH /api/merchant/{slug}/settings` |
@@ -141,6 +146,17 @@ npm run test     # smoke tests only (merchant login, APIs, checkout, kitchen boa
 ```
 
 Smoke tests default to `http://localhost:3002`. Override with `BASE_URL=... npm run test`.
+
+### Automation cron
+
+Scheduled jobs (Google review nudge, bounce-back, churn win-back, campaign broadcasts) are processed by:
+
+```bash
+# Every minute in production (cron / Cloud Scheduler)
+CRON_SECRET=your-secret ./scripts/cron-automation.sh
+```
+
+Set `CRON_SECRET` in `.env.local`. For SMS campaigns, also set `TWILIO_SMS_FROM`.
 
 ## Docs
 

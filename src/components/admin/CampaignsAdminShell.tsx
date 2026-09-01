@@ -52,6 +52,8 @@ export function CampaignsAdminShell({ merchantSlug }: CampaignsAdminShellProps) 
     value: 10,
   });
 
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
   const loadCampaigns = useCallback(async () => {
     const data = await merchantApi<{ campaigns: Campaign[] }>(
       `/api/merchant/${merchantSlug}/campaigns`,
@@ -87,6 +89,24 @@ export function CampaignsAdminShell({ merchantSlug }: CampaignsAdminShellProps) 
     });
     setForm(emptyForm);
     await loadCampaigns();
+  }
+
+  async function sendCampaign(campaign: Campaign) {
+    if (campaign.channel !== "whatsapp" && campaign.channel !== "sms") return;
+    setSendingId(campaign.id);
+    try {
+      const result = await merchantApi<{ ok: boolean; queued: number; message: string }>(
+        `/api/merchant/${merchantSlug}/campaigns/send`,
+        {
+          method: "POST",
+          body: JSON.stringify({ campaignId: campaign.id }),
+        },
+      );
+      alert(result.message);
+      await loadCampaigns();
+    } finally {
+      setSendingId(null);
+    }
   }
 
   async function toggleCampaign(campaign: Campaign) {
@@ -239,17 +259,30 @@ export function CampaignsAdminShell({ merchantSlug }: CampaignsAdminShellProps) 
                     </p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => toggleCampaign(campaign)}
-                  className={`border px-3 py-1 font-display text-eyebrow uppercase ${
-                    campaign.status === "active"
-                      ? "border-primary bg-primary text-on-primary"
-                      : "border-surface-container-highest text-on-surface-variant"
-                  }`}
-                >
-                  {campaign.status}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(campaign.channel === "whatsapp" || campaign.channel === "sms") && (
+                    <button
+                      type="button"
+                      onClick={() => sendCampaign(campaign)}
+                      disabled={sendingId === campaign.id || !campaign.messageBody}
+                      className="flex items-center gap-1 border border-primary px-3 py-1 font-display text-eyebrow uppercase text-primary disabled:opacity-50"
+                    >
+                      <Icon name="send" />
+                      {sendingId === campaign.id ? "Sending…" : "Send"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleCampaign(campaign)}
+                    className={`border px-3 py-1 font-display text-eyebrow uppercase ${
+                      campaign.status === "active"
+                        ? "border-primary bg-primary text-on-primary"
+                        : "border-surface-container-highest text-on-surface-variant"
+                    }`}
+                  >
+                    {campaign.status}
+                  </button>
+                </div>
               </article>
             ))}
           </div>

@@ -5,14 +5,16 @@ import { refreshNumberHealth } from "@/lib/whatsapp/number-health";
 import { refreshPendingTemplates } from "@/lib/whatsapp/templates";
 
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET;
+  const isProd = process.env.NODE_ENV === "production";
+  const secret =
+    process.env.CRON_SECRET ?? (isProd ? "" : "irewards-dev-cron");
   if (!secret) {
     return NextResponse.json(
       { error: "CRON_SECRET is not configured" },
       { status: 503 },
     );
   }
-  if (process.env.NODE_ENV === "production" && secret === "irewards-dev-cron") {
+  if (isProd && secret === "irewards-dev-cron") {
     return NextResponse.json(
       { error: "Refusing default CRON_SECRET in production" },
       { status: 503 },

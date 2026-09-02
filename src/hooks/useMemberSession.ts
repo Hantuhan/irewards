@@ -8,6 +8,8 @@ export type MemberProfile = {
   tierPoints: number;
   usualOrder: { name: string; quantity: number }[] | null;
   favoriteItem: string | null;
+  displayName?: string | null;
+  marketingOptOut?: boolean;
 };
 
 export function useMemberSession() {
@@ -30,18 +32,19 @@ export function useMemberSession() {
     refresh();
   }, [refresh]);
 
-  const bindSession = useCallback(
-    async (customerId: string, merchantSlug: string) => {
+  /** Bind browser cookie from a paid order that already has a member attached. */
+  const bindSessionFromOrder = useCallback(
+    async (orderId: string, merchantSlug: string) => {
       await fetch("/api/customer/session", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId, merchantSlug }),
+        body: JSON.stringify({ orderId, merchantSlug }),
       });
       await refresh();
     },
     [refresh],
   );
 
-  return { member, loading, refresh, bindSession };
+  return { member, loading, refresh, bindSessionFromOrder };
 }

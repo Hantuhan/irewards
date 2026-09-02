@@ -150,12 +150,19 @@ async function handleInbound(message: InboundMessage, value: ChangeValue) {
     return;
   }
 
+  // Review nudge replies: 5 = happy (Google link), 1–4 = private feedback.
+  const rating = text.match(/^[1-5]$/)?.[0];
+  if (rating) {
+    await handleReviewReply(phone, Number(rating));
+    return;
+  }
+
   const joinToken = parseJoinMessage(text);
   if (!joinToken) {
     if (text) {
       await sendWhatsAppMessage(
         phone,
-        "Send JOIN-{token} from your receipt to join iRewards and claim points.",
+        "Send JOIN-{token} from your receipt to join iRewards and claim points. Reply STOP to opt out of marketing.",
       );
     }
     return;
@@ -176,6 +183,51 @@ async function handleInbound(message: InboundMessage, value: ChangeValue) {
     }
     console.error("WhatsApp join error:", error);
     await sendWhatsAppMessage(phone, "Something went wrong. Please ask staff for help.");
+  }
+}
+
+async function handleReviewReply(phone: string, rating: number) {
+  const admin = createInsforgeAdmin();
+  const { data } = await admin.database
+    .from("customers")
+    .select("id, merchant_id, display_name")
+    .eq("phone", phone)
+    .eq("is_member", true)
+    .limit(5);
+
+  const customers = (data ?? []) as { id: string; merchant_id: string; display_name: string | null }[];
+  if (customers.length === 0) {
+    await sendWhatsAppMessage(phone, "Thanks for the reply. Join iRewards after your next visit to unlock member perks.");
+    return;
+  }
+
+  for (const customer of customers) {
+    if (rating === 5) {
+      const { data: merchant } = await admin.database
+        .from("merchants")
+        .select("name, google_url")
+        .eq("id", customer.merchant_id)
+        .maybeSingle();
+      const row = merchant as { name?: string; google_url?: string | null } | null;
+      const link = row?.google_url?.trim();
+      await sendWhatsAppMessage(
+        phone,
+        link
+          ? `Thanks so much! If you have 20 seconds, a Google review helps us a lot:\n${link}`
+          : `Thanks so much for dining with ${row?.name ?? "us"}! We're glad you enjoyed it.`,
+      );
+    } else {
+      await sendWhatsAppMessage(
+        phone,
+        "Thanks for telling us — a manager will follow up privately. We appreciate your honesty.",
+      );
+      console.info("[review:complaint]", {
+        customerId: customer.id,
+        merchantId: customer.merchant_id,
+        rating,
+        name: customer.display_name,
+      });
+    }
   }
 }
 

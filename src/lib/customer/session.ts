@@ -11,11 +11,14 @@ export type MemberSession = {
 };
 
 function secret() {
-  return (
+  const value =
     process.env.MEMBER_SESSION_SECRET ??
     process.env.MERCHANT_SESSION_SECRET ??
-    "irewards-dev-member-session"
-  );
+    (process.env.NODE_ENV === "production" ? "" : "irewards-dev-member-session");
+  if (!value) {
+    throw new Error("MEMBER_SESSION_SECRET (or MERCHANT_SESSION_SECRET) is required in production");
+  }
+  return value;
 }
 
 function sign(payload: string) {

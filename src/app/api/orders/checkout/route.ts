@@ -26,7 +26,7 @@ import { getMemberSessionFromRequest } from "@/lib/customer/session";
 const checkoutSchema = z.object({
   merchantSlug: z.string().min(1),
   tableId: z.string().min(1),
-  customerId: z.string().uuid().optional(),
+  // customerId from the client is ignored — only a signed member session counts.
   promoCode: z.string().optional(),
   pointsToRedeem: z.number().int().min(0).optional(),
   serviceType: z.enum(["dine_in", "takeaway"]).default("dine_in"),
@@ -78,8 +78,7 @@ export async function POST(request: Request) {
 
     const session = getMemberSessionFromRequest(request);
     let customerId =
-      body.customerId ??
-      (session?.merchantSlug === body.merchantSlug ? session.customerId : null);
+      session?.merchantSlug === body.merchantSlug ? session.customerId : null;
 
     let tierDiscountCents = 0;
     let pointsRedeemed = 0;

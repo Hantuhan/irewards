@@ -12,7 +12,13 @@ export type MerchantSession = {
 };
 
 function secret() {
-  return process.env.MERCHANT_SESSION_SECRET ?? "irewards-dev-session-secret";
+  const value =
+    process.env.MERCHANT_SESSION_SECRET ??
+    (process.env.NODE_ENV === "production" ? "" : "irewards-dev-session-secret");
+  if (!value) {
+    throw new Error("MERCHANT_SESSION_SECRET is required in production");
+  }
+  return value;
 }
 
 function sign(payload: string) {

@@ -46,6 +46,10 @@ export async function processWhatsAppJoin(input: {
     throw new JoinError("Payment not confirmed yet. Try again in a moment.");
   }
 
+  // Claim the token first so concurrent JOIN messages cannot double-award.
+  const claimed = await markJoinTokenUsed(input.token);
+  if (!claimed) throw new JoinError("This join link was already used.");
+
   let customer = await getCustomerByPhone(order.merchant_id, input.phone);
   let pointsAwarded = 0;
   let firstJoin = false;
@@ -99,8 +103,6 @@ export async function processWhatsAppJoin(input: {
     pointsAwarded += orderPoints;
     customer = (await getCustomerByPhone(order.merchant_id, input.phone)) ?? customer;
   }
-
-  await markJoinTokenUsed(input.token);
 
   await updateCustomerVisitAndUsual(order.id, customer.id);
 

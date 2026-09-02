@@ -209,14 +209,17 @@ export async function getCustomerById(customerId: string): Promise<CustomerRow |
   return data as CustomerRow | null;
 }
 
-export async function markJoinTokenUsed(token: string) {
-  const { error } = await db()
+export async function markJoinTokenUsed(token: string): Promise<boolean> {
+  const { data, error } = await db()
     .from("join_tokens")
     .update({ used_at: new Date().toISOString() })
     .eq("token", token)
-    .is("used_at", null);
+    .is("used_at", null)
+    .select("token")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  return Boolean(data);
 }
 
 export async function getCustomerByPhone(

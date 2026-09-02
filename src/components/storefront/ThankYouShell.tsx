@@ -49,7 +49,7 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
   const [data, setData] = useState<OrderStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
-  const { bindSession } = useMemberSession();
+  const { bindSessionFromOrder } = useMemberSession();
 
   const loadOrder = useCallback(async () => {
     const response = await fetch(`/api/orders/${orderId}`);
@@ -75,8 +75,8 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
 
   useEffect(() => {
     if (!data?.order.customerId || data.order.status !== "paid") return;
-    bindSession(data.order.customerId, merchantSlug).catch(() => undefined);
-  }, [data, merchantSlug, bindSession]);
+    bindSessionFromOrder(orderId, merchantSlug).catch(() => undefined);
+  }, [data, merchantSlug, orderId, bindSessionFromOrder]);
 
   async function simulateDevPayment() {
     setPaying(true);

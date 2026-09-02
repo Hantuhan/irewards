@@ -101,7 +101,7 @@ export const CAMPAIGN_WORKFLOW_TEMPLATES: CampaignWorkflowTemplate[] = [
     description: "Re-engage members who have not returned in 30 days with a limited-time offer.",
     icon: "schedule",
     channel: "whatsapp",
-    defaultName: "Churn win-back · 30 days",
+    defaultName: "Churn win-back · 7 days",
     defaultMessage:
       "Hi {name}, we miss you at {merchant}! Come back this week and enjoy 20% off — no min spend. Reply STOP to opt out.",
     defaultMessageI18n: {
@@ -109,11 +109,11 @@ export const CAMPAIGN_WORKFLOW_TEMPLATES: CampaignWorkflowTemplate[] = [
       zh: "你好 {name}，我们很想你回来 {merchant}！本周到店享 20% 折扣 — 无最低消费。回复 STOP 退订。",
       ms: "Hi {name}, kami rindu anda di {merchant}! Kembali minggu ini dan nikmati diskaun 20% — tiada belanja minimum. Balas STOP untuk berhenti.",
     },
-    triggerLabel: "No visit 30 days",
+    triggerLabel: "No visit 7 days",
     delayLabel: "On schedule",
     voucherHint: "20% off return visit",
     workflow: (lang = "en") =>
-      workflowOf(node("no_visit_days", { days: 30 }), [
+      workflowOf(node("no_visit_days", { days: 7 }), [
         node("issue_voucher", { name: "Come back", discountPercent: 20, expiryDays: 14 }),
         whatsapp(bodyFor(CAMPAIGN_WORKFLOW_TEMPLATES[1], lang)),
       ]),

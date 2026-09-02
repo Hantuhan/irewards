@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { CustomerMobileNav } from "@/components/customer/CustomerMobileNav";
 import { StorefrontLanguagePicker } from "@/components/storefront/StorefrontLanguagePicker";
 import { Icon } from "@/components/ui/Icon";
 import { MobileShell } from "@/components/ui/MobileShell";
+import { useMemberSession } from "@/hooks/useMemberSession";
 import { useStorefrontLocale } from "@/hooks/useStorefrontLocale";
 import { useStorefrontMenu } from "@/hooks/useStorefrontMenu";
 import { customerRoutes } from "@/lib/navigation/routes";
@@ -18,15 +18,15 @@ type ProfileShellProps = {
 export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
   const { lang, setLang, copy } = useStorefrontLocale(merchantSlug, ["en", "zh", "ms"]);
   const { languages } = useStorefrontMenu(merchantSlug, lang);
-  const [memberName, setMemberName] = useState<string | null>(null);
-  const [whatsappOptIn, setWhatsappOptIn] = useState(true);
-  const [promoEmails, setPromoEmails] = useState(false);
+  const { member, loading } = useMemberSession();
   const routes = customerRoutes(merchantSlug, tableId);
 
-  useEffect(() => {
-    const customerId = localStorage.getItem(`irewards-member:${merchantSlug}`);
-    if (customerId) setMemberName(`Member · ${customerId.slice(0, 8)}`);
-  }, [merchantSlug]);
+  const title = member?.displayName?.trim() || (member ? "iRewards member" : "Guest diner");
+  const subtitle = loading
+    ? "Loading…"
+    : member
+      ? `${member.points} points · lifetime ${member.tierPoints}`
+      : "Guest · join iRewards after your first order";
 
   return (
     <MobileShell>
@@ -34,9 +34,7 @@ export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-headline-mobile text-primary">{copy.profile}</h1>
-            <p className="mt-1 text-body-md text-on-surface-variant">
-              {memberName ?? "Guest · join iRewards after your first order"}
-            </p>
+            <p className="mt-1 text-body-md text-on-surface-variant">{subtitle}</p>
           </div>
           {languages.length > 1 && (
             <StorefrontLanguagePicker languages={languages} value={lang} onChange={setLang} />
@@ -51,9 +49,7 @@ export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
               <Icon name="person" className="text-3xl text-on-surface-variant" />
             </div>
             <div>
-              <h2 className="font-display text-headline-sm text-primary">
-                {memberName ?? "Guest diner"}
-              </h2>
+              <h2 className="font-display text-headline-sm text-primary">{title}</h2>
               <p className="text-body-md text-on-surface-variant">
                 Table {tableId} · {merchantSlug}
               </p>
@@ -65,39 +61,15 @@ export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
           <h2 className="mb-3 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
             Notifications
           </h2>
-          <div className="flex flex-col border border-surface-container-highest">
-            <label className="flex items-center justify-between border-b border-surface-container p-4">
-              <div>
-                <p className="font-display text-headline-sm text-primary">
-                  WhatsApp updates
-                </p>
-                <p className="text-body-md text-on-surface-variant">
-                  Points, vouchers, and win-back offers
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={whatsappOptIn}
-                onChange={(e) => setWhatsappOptIn(e.target.checked)}
-                className="h-4 w-4 accent-primary"
-              />
-            </label>
-            <label className="flex items-center justify-between p-4">
-              <div>
-                <p className="font-display text-headline-sm text-primary">
-                  Email promos
-                </p>
-                <p className="text-body-md text-on-surface-variant">
-                  Seasonal menus and events
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={promoEmails}
-                onChange={(e) => setPromoEmails(e.target.checked)}
-                className="h-4 w-4 accent-primary"
-              />
-            </label>
+          <div className="flex flex-col border border-surface-container-highest p-4">
+            <p className="font-display text-headline-sm text-primary">WhatsApp updates</p>
+            <p className="mt-1 text-body-md text-on-surface-variant">
+              {member
+                ? member.marketingOptOut
+                  ? "Opted out — reply START is not available yet; ask staff to re-join after your next visit."
+                  : "On — points, vouchers, and win-back offers. Reply STOP anytime to opt out."
+                : "Join on WhatsApp after payment to get member messages."}
+            </p>
           </div>
         </section>
 
@@ -110,28 +82,24 @@ export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
               href={routes.rewards}
               className="flex items-center justify-between border-b border-surface-container p-4 transition-colors hover:bg-surface-container-low"
             >
-              <span className="font-display text-headline-sm text-primary">
-                iRewards status
-              </span>
+              <span className="font-display text-headline-sm text-primary">iRewards status</span>
               <Icon name="chevron_right" className="text-on-surface-variant" />
             </Link>
-            <button
-              type="button"
-              className="flex items-center justify-between p-4 text-left transition-colors hover:bg-surface-container-low"
+            <Link
+              href={routes.shop}
+              className="flex items-center justify-between p-4 transition-colors hover:bg-surface-container-low"
             >
-              <span className="font-display text-headline-sm text-primary">
-                Order history
-              </span>
+              <span className="font-display text-headline-sm text-primary">Back to menu</span>
               <Icon name="chevron_right" className="text-on-surface-variant" />
-            </button>
+            </Link>
           </div>
         </section>
 
-        {!memberName && (
+        {!member && !loading && (
           <p className="text-center text-body-md text-on-surface-variant">
             Complete an order and tap{" "}
-            <span className="font-semibold text-primary">Join iRewards on WhatsApp</span>{" "}
-            on the thank-you screen.
+            <span className="font-semibold text-primary">Join iRewards on WhatsApp</span> on the
+            thank-you screen. Or enter your mobile on the menu if you already joined.
           </p>
         )}
       </main>

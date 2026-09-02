@@ -60,7 +60,10 @@ export function StorefrontShell({
     imageUrl: string | null;
     linkUrl: string | null;
   } | null>(null);
-  const { member } = useMemberSession();
+  const { member, refresh } = useMemberSession();
+  const [phonePrompt, setPhonePrompt] = useState("");
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
 
   const routes = customerRoutes(merchantSlug, tableId);
 
@@ -198,6 +201,68 @@ export function StorefrontShell({
               ? `${PREVIEW_MEMBER_TIER} member · ${activeMember!.points} points`
               : `${activeMember!.points} points available`}
           </p>
+        </div>
+      )}
+
+      {!showMemberChrome && !embed && !previewMember && (
+        <div className="mx-6 mt-4 border border-surface-container-highest bg-surface-container-lowest px-4 py-3">
+          <p className="font-display text-headline-sm text-primary">Returning member?</p>
+          <p className="mt-0.5 text-[12px] text-on-surface-variant">
+            Enter the mobile you used on WhatsApp to load your points and usual order.
+          </p>
+          <form
+            className="mt-3 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!phonePrompt.trim() || phoneBusy) return;
+              setPhoneBusy(true);
+              setPhoneMsg(null);
+              void fetch("/api/customer/join", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ merchantSlug, phone: phonePrompt.trim() }),
+              })
+                .then(async (res) => {
+                  const data = (await res.json()) as {
+                    found?: boolean;
+                    message?: string;
+                    error?: string;
+                    member?: { points: number; tierName: string };
+                  };
+                  if (!res.ok) throw new Error(data.error ?? "Lookup failed");
+                  if (!data.found) {
+                    setPhoneMsg(data.message ?? "No member found for that number.");
+                    return;
+                  }
+                  setPhoneMsg(`Welcome back · ${data.member?.tierName ?? "member"} · ${data.member?.points ?? 0} pts`);
+                  await refresh();
+                })
+                .catch((err) => {
+                  setPhoneMsg(err instanceof Error ? err.message : "Lookup failed");
+                })
+                .finally(() => setPhoneBusy(false));
+            }}
+          >
+            <input
+              type="tel"
+              inputMode="tel"
+              placeholder="+60…"
+              value={phonePrompt}
+              onChange={(e) => setPhonePrompt(e.target.value)}
+              className="h-9 min-w-0 flex-1 border border-surface-container-highest bg-white px-3 text-[13px] text-on-surface"
+            />
+            <button
+              type="submit"
+              disabled={phoneBusy}
+              className="h-9 shrink-0 bg-primary px-3 text-[12px] font-medium text-on-primary disabled:opacity-50"
+            >
+              {phoneBusy ? "…" : "Load"}
+            </button>
+          </form>
+          {phoneMsg && (
+            <p className="mt-2 text-[11px] text-on-surface-variant">{phoneMsg}</p>
+          )}
         </div>
       )}
 

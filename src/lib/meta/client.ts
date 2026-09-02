@@ -149,5 +149,6 @@ export async function verifyMetaSignature(
 }
 
 export function shouldSkipMetaVerify(): boolean {
-  return process.env.META_SKIP_VERIFY === "true" || process.env.PAYMENT_PROVIDER === "dev";
+  // Never skip based on payment mode — that coupled two unrelated systems.
+  return process.env.META_SKIP_VERIFY === "true" && process.env.NODE_ENV !== "production";
 }

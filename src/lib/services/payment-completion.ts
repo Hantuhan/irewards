@@ -3,14 +3,11 @@ import {
   createJoinToken,
   deductPointsFromCustomer,
   getCustomerById,
-  getMerchantById,
   markOrderPaid,
 } from "@/lib/db/repository";
+import { runCampaignTrigger } from "@/lib/campaigns/workflow-runtime";
 import { awardOrderPointsIfEligible } from "@/lib/services/loyalty-points";
-import {
-  schedulePostPaymentJobs,
-  updateCustomerVisitAndUsual,
-} from "@/lib/services/automation";
+import { updateCustomerVisitAndUsual } from "@/lib/services/automation";
 
 export type PaymentCompletionResult = {
   orderId: string;
@@ -28,9 +25,11 @@ export async function completePaidOrder(
   await createJoinToken(order.id, joinToken);
 
   let pointsAwarded = 0;
+  let lifetimePointsBefore: number | undefined;
 
   if (order.customer_id) {
     let customer = await getCustomerById(order.customer_id);
+    lifetimePointsBefore = customer?.lifetime_points_earned ?? undefined;
     if (customer && order.points_redeemed > 0) {
       customer = await deductPointsFromCustomer({
         customer,
@@ -51,9 +50,22 @@ export async function completePaidOrder(
     }
   }
 
-  const merchant = await getMerchantById(order.merchant_id);
-  if (merchant) {
-    await schedulePostPaymentJobs(order, merchant);
+  const customerAfter = order.customer_id ? await getCustomerById(order.customer_id) : null;
+
+  await runCampaignTrigger("order_paid", {
+    merchantId: order.merchant_id,
+    customer: customerAfter,
+    orderId: order.id,
+    orderTotalCents: order.total_cents,
+  });
+
+  if (pointsAwarded > 0 && customerAfter) {
+    await runCampaignTrigger("points_milestone", {
+      merchantId: order.merchant_id,
+      customer: customerAfter,
+      orderId: order.id,
+      previousLifetimePoints: lifetimePointsBefore,
+    });
   }
 
   return { orderId: order.id, joinToken, pointsAwarded };

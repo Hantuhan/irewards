@@ -53,14 +53,23 @@ export async function createPendingOrder(input: {
   merchantId: string;
   venueTableId: string;
   subtotalCents: number;
+  serviceChargeCents?: number;
+  taxCents?: number;
+  taxLabel?: string | null;
   discountCents?: number;
   customerId?: string | null;
   paymentRef?: string;
   promoId?: string | null;
   pointsRedeemed?: number;
+  serviceType?: "dine_in" | "takeaway";
 }): Promise<OrderRow> {
   const discountCents = input.discountCents ?? 0;
-  const totalCents = Math.max(0, input.subtotalCents - discountCents);
+  const serviceChargeCents = input.serviceChargeCents ?? 0;
+  const taxCents = input.taxCents ?? 0;
+  const totalCents = Math.max(
+    0,
+    input.subtotalCents + serviceChargeCents + taxCents - discountCents,
+  );
 
   const { data, error } = await db()
     .from("orders")
@@ -71,11 +80,15 @@ export async function createPendingOrder(input: {
         customer_id: input.customerId ?? null,
         status: "pending",
         subtotal_cents: input.subtotalCents,
+        service_charge_cents: serviceChargeCents,
+        tax_cents: taxCents,
+        tax_label: input.taxLabel ?? null,
         discount_cents: discountCents,
         total_cents: totalCents,
         payment_ref: input.paymentRef ?? null,
         promo_id: input.promoId ?? null,
         points_redeemed: input.pointsRedeemed ?? 0,
+        service_type: input.serviceType ?? "dine_in",
       },
     ])
     .select("*")
@@ -260,6 +273,9 @@ export async function updateCustomer(
       | "marketing_opt_out"
       | "favorite_item_name"
       | "usual_order"
+      | "email"
+      | "phone"
+      | "receipt_delivery_preference"
     >
   >,
 ): Promise<CustomerRow> {
@@ -319,7 +335,17 @@ export async function upsertRewardLevels(
     minLifetimePoints: number;
     pointsMultiplier: number;
     perkDescription: string | null;
+    nameI18n?: Record<string, string>;
+    perkDescriptionI18n?: Record<string, string>;
     discountPercent: number;
+    tierActive?: boolean;
+    pointExpiryDays?: number | null;
+    birthdayPoints?: number;
+    welcomePoints?: number;
+    welcomeRewards?: number;
+    renewPoints?: number;
+    renewRewards?: number;
+    validityMonths?: number | null;
   }>,
 ): Promise<RewardLevelRow[]> {
   for (const level of levels) {
@@ -333,7 +359,19 @@ export async function upsertRewardLevels(
           min_lifetime_points: level.minLifetimePoints,
           points_multiplier: level.pointsMultiplier,
           perk_description: level.perkDescription,
+          name_i18n: level.nameI18n ?? { en: level.name },
+          perk_description_i18n: level.perkDescriptionI18n ?? {
+            en: level.perkDescription ?? "",
+          },
           discount_percent: level.discountPercent,
+          tier_active: level.tierActive ?? true,
+          point_expiry_days: level.pointExpiryDays ?? null,
+          birthday_points: level.birthdayPoints ?? 0,
+          welcome_points: level.welcomePoints ?? 0,
+          welcome_rewards: level.welcomeRewards ?? 0,
+          renew_points: level.renewPoints ?? 0,
+          renew_rewards: level.renewRewards ?? 0,
+          validity_months: level.validityMonths ?? null,
         },
         { onConflict: "merchant_id,level_number" },
       );

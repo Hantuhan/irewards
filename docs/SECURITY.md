@@ -5,7 +5,7 @@
 - [ ] Points awarded only after payment verified (webhook or manual sheet for pilot)
 - [ ] Join token single-use, expires in 30 minutes
 - [ ] First join bonus once per phone per merchant
-- [ ] Twilio webhook signature validation enabled
+- [ ] Meta webhook signature validation enabled (`META_APP_SECRET`, `META_SKIP_VERIFY` unset)
 
 ## Before second merchant
 
@@ -17,7 +17,7 @@
 
 ## Identity
 
-- Primary: `phone` from Twilio `From` field (signed webhook)
+- Primary: `phone` from the Meta webhook `messages[].from` (signed webhook)
 - Secondary: `external_user_id` (BSUID) for WhatsApp username rollout
 
 Never trust phone numbers from URL params or form input alone.

@@ -31,7 +31,7 @@ fi
 
 # Dedicated ports so iRewards does not clash with other local InsForge installs.
 set_var COMPOSE_PROJECT_NAME irewards-insforge "$ENV_FILE"
-set_var COMPOSE_FILE deploy/docker-compose/docker-compose.yml "$ENV_FILE"
+set_var COMPOSE_FILE deploy/docker-compose/docker-compose.yml:docker-compose.override.yml "$ENV_FILE"
 set_var POSTGRES_DB irewards "$ENV_FILE"
 set_var APP_PORT 7230 "$ENV_FILE"
 set_var AUTH_PORT 7231 "$ENV_FILE"

@@ -3,7 +3,8 @@
  */
 
 export const FIRST_JOIN_BONUS_POINTS = 1;
-export const POINTS_REDEEM_VALUE_CENTS = 10; // 1 point = 10 sen off
+/** Default when merchant setting unavailable (10 sen = RM 0.10). */
+export const DEFAULT_CENTS_PER_POINT = 10;
 
 export function pointsForPaidOrder(totalCents: number, pointsPerRinggit = 0.1): number {
   const rm = totalCents / 100;
@@ -11,8 +12,12 @@ export function pointsForPaidOrder(totalCents: number, pointsPerRinggit = 0.1): 
   return Math.max(1, Math.floor(rm * rate));
 }
 
-export function pointsDiscountCents(pointsToRedeem: number): number {
-  return Math.max(0, pointsToRedeem) * POINTS_REDEEM_VALUE_CENTS;
+export function pointsDiscountCents(
+  pointsToRedeem: number,
+  centsPerPoint = DEFAULT_CENTS_PER_POINT,
+): number {
+  const rate = centsPerPoint > 0 ? centsPerPoint : DEFAULT_CENTS_PER_POINT;
+  return Math.max(0, pointsToRedeem) * rate;
 }
 
 export function canAwardFirstJoinBonus(alreadyMember: boolean): boolean {

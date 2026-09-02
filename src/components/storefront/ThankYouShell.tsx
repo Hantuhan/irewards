@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ReceiptView } from "@/components/receipt/ReceiptView";
 import { Icon } from "@/components/ui/Icon";
 import { useMemberSession } from "@/hooks/useMemberSession";
+import type { ReceiptLineItem, ReceiptMerchant, ReceiptOrder } from "@/lib/receipt/types";
 
 type TierInfo = {
   levelNumber: number;
@@ -19,12 +21,19 @@ type OrderStatusResponse = {
     id: string;
     status: "pending" | "paid" | "cancelled";
     subtotalCents: number;
+    serviceChargeCents: number;
+    serviceChargeLabel: string | null;
+    taxCents: number;
+    taxLabel: string | null;
     discountCents: number;
     totalCents: number;
+    paidAt: string | null;
     currency: string;
+    serviceType?: "dine_in" | "takeaway";
     customerId: string | null;
+    items: ReceiptLineItem[];
   };
-  merchant: { name: string; slug: string } | null;
+  merchant: ReceiptMerchant & { slug: string; receiptLayout?: unknown } | null;
   tableNumber: string | null;
   whatsappJoinUrl: string | null;
   tier: TierInfo | null;
@@ -87,13 +96,36 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
   }
 
   const isPaid = data?.order.status === "paid";
-  const currency = data?.order.currency ?? "MYR";
   const shortOrderId = orderId.slice(0, 8).toUpperCase();
+  const merchant = data?.merchant ?? {
+    name: merchantSlug,
+    slug: merchantSlug,
+  };
+
+  function receiptOrderFromResponse(order: OrderStatusResponse["order"]): ReceiptOrder {
+    return {
+      id: order.id,
+      shortId: shortOrderId,
+      tableNumber: data?.tableNumber ?? tableId,
+      paidAt: order.paidAt,
+      status: order.status,
+      currency: order.currency,
+      subtotalCents: order.subtotalCents,
+      serviceChargeCents: order.serviceChargeCents,
+      serviceChargeLabel: order.serviceChargeLabel,
+      taxCents: order.taxCents,
+      taxLabel: order.taxLabel,
+      discountCents: order.discountCents,
+      totalCents: order.totalCents,
+      serviceType: order.serviceType,
+      items: order.items,
+    };
+  }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-surface p-4">
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-element-gap">
-        <header className="zenith-surface mb-2 flex h-16 w-full items-center justify-between px-container-padding">
+    <div className="flex min-h-screen flex-col bg-surface p-4 pb-12">
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-6">
+        <header className="flex h-12 items-center justify-between">
           <span className="font-display text-headline-sm font-bold tracking-tight text-primary">
             iRewards
           </span>
@@ -111,74 +143,65 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
         )}
 
         {error && (
-          <p className="zenith-surface p-4 text-body-md text-red-700" role="alert">
+          <p className="border border-red-200 bg-red-50 p-4 text-body-md text-red-700" role="alert">
             {error}
           </p>
         )}
 
         {data && !isPaid && (
-          <main className="zenith-surface flex flex-col items-center gap-element-gap p-container-padding text-center">
-            <h1 className="font-display text-headline-mobile text-primary">Complete payment</h1>
-            <p className="text-body-md text-on-surface-variant">
-              Total: {currency} {(data.order.totalCents / 100).toFixed(2)}
-            </p>
-            <p className="text-body-md text-on-surface-variant">
-              Dev mode: simulate a successful DuitNow payment.
-            </p>
-            <button
-              type="button"
-              onClick={simulateDevPayment}
-              disabled={paying}
-              className="w-full bg-primary py-4 font-display text-headline-sm text-on-primary transition-colors hover:bg-surface-tint disabled:opacity-50"
-            >
-              {paying ? "Confirming…" : "Simulate payment (dev)"}
-            </button>
-          </main>
+          <div className="space-y-6">
+            <ReceiptView
+              merchant={merchant}
+              order={receiptOrderFromResponse(data.order)}
+              layout={data.merchant?.receiptLayout}
+            />
+            <div className="border border-surface-container-highest bg-surface-container-lowest p-6 text-center">
+              <p className="text-body-md text-on-surface-variant">
+                Complete payment to confirm your order.
+              </p>
+              <button
+                type="button"
+                onClick={simulateDevPayment}
+                disabled={paying}
+                className="mt-4 w-full bg-primary py-4 font-display text-headline-sm text-on-primary transition-colors hover:bg-surface-tint disabled:opacity-50"
+              >
+                {paying ? "Confirming…" : "Simulate payment (dev)"}
+              </button>
+            </div>
+          </div>
         )}
 
         {data && isPaid && (
           <>
-            <main className="zenith-surface flex flex-col items-center gap-element-gap p-container-padding text-center">
-              <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary">
-                <Icon name="check_circle" className="text-4xl text-primary" filled />
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-primary">
+                <Icon name="check_circle" className="text-3xl text-primary" filled />
               </div>
               <h1 className="font-display text-headline-mobile text-primary tracking-tight">
-                Order Confirmed
+                Order confirmed
               </h1>
-              <span className="font-mono text-label-mono uppercase tracking-wider text-on-surface-variant">
-                Order ID: #{shortOrderId}
-              </span>
-              <div className="mt-1 flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-primary" />
-                <span className="text-body-md text-on-surface-variant">
-                  {data.merchant?.name ?? merchantSlug} · Table {data.tableNumber ?? tableId}
-                </span>
-              </div>
-              <p className="font-display text-headline-sm text-primary">
-                {currency} {(data.order.totalCents / 100).toFixed(2)} paid
-              </p>
-              {data.order.discountCents > 0 && (
-                <p className="text-body-md text-on-surface-variant">
-                  iRewards discount: -{currency}{" "}
-                  {(data.order.discountCents / 100).toFixed(2)}
-                </p>
-              )}
-            </main>
+            </div>
+
+            <ReceiptView
+              merchant={merchant}
+              order={receiptOrderFromResponse(data.order)}
+              layout={data.merchant?.receiptLayout}
+            />
 
             {data.tier && (
-              <section className="zenith-surface flex flex-col gap-element-gap p-container-padding">
+              <section className="border border-surface-container-highest bg-surface-container-lowest p-6">
                 <h2 className="text-center font-display text-eyebrow uppercase tracking-wider text-on-surface-variant">
                   iRewards status
                 </h2>
-                <p className="text-center font-display text-headline-sm text-primary">
+                <p className="mt-2 text-center font-display text-headline-sm text-primary">
                   Your level: {data.tier.name}
                 </p>
                 {data.tier.perkDescription && (
-                  <p className="text-center text-body-md text-on-surface-variant">
+                  <p className="mt-1 text-center text-body-md text-on-surface-variant">
                     {data.tier.perkDescription}
                   </p>
                 )}
-                <div className="mt-2 border-t border-surface-container-high pt-4">
+                <div className="mt-4 border-t border-surface-container-high pt-4">
                   <div className="mb-2 flex items-end justify-between">
                     <span className="font-display text-eyebrow uppercase text-on-surface-variant">
                       {data.tier.lifetimePointsEarned} lifetime pts
@@ -208,7 +231,7 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
               </section>
             )}
 
-            <section className="mt-2 flex flex-col gap-4">
+            <section className="flex flex-col gap-4">
               {data.whatsappJoinUrl ? (
                 <>
                   <a
@@ -227,7 +250,7 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
                   </p>
                   <a
                     href={`/m/${merchantSlug}/table/${tableId}`}
-                    className="mt-1 text-center font-mono text-label-mono uppercase tracking-widest text-on-surface-variant underline decoration-outline-variant underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
+                    className="text-center font-mono text-label-mono uppercase tracking-widest text-on-surface-variant underline decoration-outline-variant underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
                   >
                     Skip for now
                   </a>
@@ -238,38 +261,6 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
                 </p>
               )}
             </section>
-
-            <details className="zenith-surface mt-4 p-container-padding group">
-              <summary className="flex cursor-pointer list-none items-center justify-between font-display text-eyebrow uppercase tracking-wider text-on-surface">
-                Order summary
-                <Icon
-                  name="expand_more"
-                  className="text-on-surface-variant transition-transform group-open:rotate-180"
-                />
-              </summary>
-              <div className="mt-4 flex flex-col gap-3 border-t border-surface-container-high pt-4">
-                <div className="flex justify-between text-body-md">
-                  <span>Subtotal</span>
-                  <span className="font-mono text-label-mono">
-                    {currency} {(data.order.subtotalCents / 100).toFixed(2)}
-                  </span>
-                </div>
-                {data.order.discountCents > 0 && (
-                  <div className="flex justify-between text-body-md text-on-surface-variant">
-                    <span>iRewards discount</span>
-                    <span className="font-mono text-label-mono">
-                      -{currency} {(data.order.discountCents / 100).toFixed(2)}
-                    </span>
-                  </div>
-                )}
-                <div className="mt-1 flex justify-between border-t border-surface-container-high pt-3 font-display text-headline-sm">
-                  <span>Total</span>
-                  <span className="font-mono text-label-mono">
-                    {currency} {(data.order.totalCents / 100).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </details>
           </>
         )}
       </div>

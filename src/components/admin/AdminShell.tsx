@@ -17,19 +17,23 @@ type AdminShellProps = {
   headerAction?: React.ReactNode;
   /** Fill viewport height — for kitchen board */
   layout?: "default" | "viewport";
+  /** Hide page title header — for full-page chat */
+  hideHeader?: boolean;
 };
 
 const SIDEBAR_STORAGE_KEY = "irewards-sidebar-expanded";
+const SHELL_HEADER_HEIGHT = "min-h-[5.5rem]";
 
 const navItems: { id: AdminSection; label: string; icon: string }[] = [
   { id: "orders", label: "Orders", icon: "assignment" },
   { id: "menu", label: "Menu", icon: "restaurant_menu" },
   { id: "customers", label: "Members", icon: "badge" },
-  { id: "rewards", label: "iRewards levels", icon: "military_tech" },
+  { id: "rewards", label: "IRewards", icon: "military_tech" },
   { id: "analytics", label: "Analytics", icon: "insert_chart" },
+  { id: "reports", label: "Reports", icon: "summarize" },
   { id: "campaigns", label: "Campaigns", icon: "campaign" },
-  { id: "automation", label: "Automation", icon: "auto_awesome" },
   { id: "tables", label: "Table QR", icon: "qr_code_2" },
+  { id: "assistant", label: "AI Assistant", icon: "smart_toy" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 
@@ -41,6 +45,7 @@ export function AdminShell({
   children,
   headerAction,
   layout = "default",
+  hideHeader = false,
 }: AdminShellProps) {
   const routes = dashboardRoutes(merchantSlug);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -84,8 +89,8 @@ export function AdminShell({
         } ${
           isActive
             ? collapsed
-              ? "bg-surface-container-low text-primary"
-              : "border-primary bg-surface-container-low font-bold text-primary"
+              ? "bg-primary text-on-primary"
+              : "border-primary bg-primary font-bold text-on-primary"
             : collapsed
               ? "border-transparent text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
               : "border-transparent text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
@@ -114,7 +119,11 @@ export function AdminShell({
           sidebarExpanded ? "w-64" : "w-16"
         }`}
       >
-        <div className={`border-b border-surface-container-highest ${sidebarExpanded ? "px-4 py-5" : "px-2 py-4"}`}>
+        <div
+          className={`flex shrink-0 items-center border-b border-surface-container-highest ${SHELL_HEADER_HEIGHT} ${
+            sidebarExpanded ? "px-4" : "justify-center px-2"
+          }`}
+        >
           <div className={`flex items-center ${sidebarExpanded ? "gap-3" : "justify-center"}`}>
             <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-surface-container-highest bg-surface-container">
               <Icon name="storefront" className="text-primary" />
@@ -211,7 +220,10 @@ export function AdminShell({
           </div>
         )}
 
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-surface-container-highest bg-surface-container-lowest px-6 py-4 md:px-8">
+        {!hideHeader && (
+        <header
+          className={`flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-surface-container-highest bg-surface-container-lowest px-6 md:px-8 ${SHELL_HEADER_HEIGHT}`}
+        >
           <div className="min-w-0">
             <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
               {eyebrow}
@@ -220,10 +232,13 @@ export function AdminShell({
           </div>
           {headerAction}
         </header>
+        )}
         <main
           className={
             layout === "viewport"
-              ? "flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:p-6"
+              ? hideHeader
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                : "flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:p-6"
               : "flex-1 p-6 md:p-8"
           }
         >

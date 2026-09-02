@@ -8,6 +8,11 @@
     font-size: 14px;
     line-height: 20px;
   }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: #166534;
+  }
 }
 
 @layer utilities {

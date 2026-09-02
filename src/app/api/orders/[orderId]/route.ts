@@ -4,9 +4,11 @@ import {
   getCustomerById,
   getOrderById,
 } from "@/lib/db/repository";
+import { getOrderItems } from "@/lib/db/merchant-repository";
 import { buildWhatsAppJoinUrl } from "@/lib/loyalty/join-token";
 import { createInsforgeAdmin } from "@/lib/insforge/client";
 import { getCustomerTierForMerchant } from "@/lib/services/loyalty-points";
+import { buildReceiptOrderFromDb } from "@/lib/receipt/build-order-from-db";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
@@ -21,9 +23,13 @@ export async function GET(_request: Request, context: RouteContext) {
     const admin = createInsforgeAdmin();
     const { data: merchant } = await admin.database
       .from("merchants")
-      .select("slug, name, whatsapp_number, currency")
+      .select(
+        "slug, name, whatsapp_number, currency, logo_url, address, landline_number, registration_number, sst_number, gst_number, receipt_footer_text, receipt_show_registration, receipt_layout_json, service_charge_enabled, service_charge_percent, sst_enabled, sst_rate_percent, gst_enabled, gst_rate_percent",
+      )
       .eq("id", order.merchant_id)
       .single();
+
+    const items = await getOrderItems(order.id);
 
     let tableNumber: string | null = null;
     if (order.venue_table_id) {
@@ -61,19 +67,71 @@ export async function GET(_request: Request, context: RouteContext) {
       }
     }
 
+    const receiptItems = items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      unitPriceCents: item.unit_price_cents,
+      modifiers: item.modifiers ?? null,
+    }));
+
+    const receiptOrder = merchant
+      ? buildReceiptOrderFromDb(
+          order,
+          merchant,
+          receiptItems,
+          orderId.slice(0, 8).toUpperCase(),
+          tableNumber,
+        )
+      : null;
+
     return NextResponse.json({
-      order: {
-        id: order.id,
-        status: order.status,
-        subtotalCents: order.subtotal_cents,
-        discountCents: order.discount_cents,
-        totalCents: order.total_cents,
-        paidAt: order.paid_at,
-        currency: merchant?.currency ?? "MYR",
-        customerId: order.customer_id,
-      },
+      order: receiptOrder
+        ? {
+            id: receiptOrder.id,
+            status: receiptOrder.status,
+            subtotalCents: receiptOrder.subtotalCents,
+            serviceChargeCents: receiptOrder.serviceChargeCents,
+            serviceChargeLabel: receiptOrder.serviceChargeLabel,
+            taxCents: receiptOrder.taxCents,
+            taxLabel: receiptOrder.taxLabel,
+            discountCents: receiptOrder.discountCents,
+            totalCents: receiptOrder.totalCents,
+            paidAt: receiptOrder.paidAt,
+            currency: receiptOrder.currency,
+            serviceType: receiptOrder.serviceType,
+            customerId: order.customer_id,
+            items: receiptOrder.items,
+          }
+        : {
+            id: order.id,
+            status: order.status,
+            subtotalCents: order.subtotal_cents,
+            serviceChargeCents: order.service_charge_cents ?? 0,
+            serviceChargeLabel: null,
+            taxCents: order.tax_cents ?? 0,
+            taxLabel: order.tax_label ?? null,
+            discountCents: order.discount_cents,
+            totalCents: order.total_cents,
+            paidAt: order.paid_at,
+            currency: "MYR",
+            serviceType: order.service_type ?? "dine_in",
+            customerId: order.customer_id,
+            items: receiptItems,
+          },
       merchant: merchant
-        ? { name: merchant.name, slug: merchant.slug }
+        ? {
+            name: merchant.name,
+            slug: merchant.slug,
+            logoUrl: merchant.logo_url ?? null,
+            address: merchant.address ?? null,
+            landlineNumber: merchant.landline_number ?? null,
+            registrationNumber: merchant.registration_number ?? null,
+            sstNumber: merchant.sst_number ?? null,
+            gstNumber: merchant.gst_number ?? null,
+            receiptFooterText: merchant.receipt_footer_text ?? null,
+            receiptShowRegistration: merchant.receipt_show_registration ?? true,
+            receiptLayout: merchant.receipt_layout_json ?? null,
+          }
         : null,
       tableNumber,
       joinToken,

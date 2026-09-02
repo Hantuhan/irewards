@@ -73,6 +73,8 @@ export function TablesAdminShell({ merchantSlug }: TablesAdminShellProps) {
   const [tables, setTables] = useState<Table[]>([]);
   const [newTable, setNewTable] = useState("");
   const [view, setView] = useState<ViewMode>("grid");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const appOrigin =
     typeof window !== "undefined"
       ? window.location.origin
@@ -84,10 +86,18 @@ export function TablesAdminShell({ merchantSlug }: TablesAdminShellProps) {
   }, []);
 
   const load = useCallback(async () => {
-    const data = await merchantApi<{ tables: Table[] }>(
-      `/api/merchant/${merchantSlug}/tables`,
-    );
-    setTables(data.tables);
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await merchantApi<{ tables: Table[] }>(
+        `/api/merchant/${merchantSlug}/tables`,
+      );
+      setTables(data.tables);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load tables");
+    } finally {
+      setLoading(false);
+    }
   }, [merchantSlug]);
 
   useEffect(() => {
@@ -101,20 +111,30 @@ export function TablesAdminShell({ merchantSlug }: TablesAdminShellProps) {
 
   async function addTable() {
     if (!newTable.trim()) return;
-    await merchantApi(`/api/merchant/${merchantSlug}/tables`, {
-      method: "POST",
-      body: JSON.stringify({ tableNumber: newTable.trim() }),
-    });
-    setNewTable("");
-    await load();
+    setError(null);
+    try {
+      await merchantApi(`/api/merchant/${merchantSlug}/tables`, {
+        method: "POST",
+        body: JSON.stringify({ tableNumber: newTable.trim() }),
+      });
+      setNewTable("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add table");
+    }
   }
 
   async function removeTable(tableId: string) {
-    await merchantApi(`/api/merchant/${merchantSlug}/tables`, {
-      method: "DELETE",
-      body: JSON.stringify({ tableId }),
-    });
-    await load();
+    setError(null);
+    try {
+      await merchantApi(`/api/merchant/${merchantSlug}/tables`, {
+        method: "DELETE",
+        body: JSON.stringify({ tableId }),
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove table");
+    }
   }
 
   return (
@@ -122,6 +142,21 @@ export function TablesAdminShell({ merchantSlug }: TablesAdminShellProps) {
       <p className="mb-6 max-w-2xl text-body-md text-on-surface-variant">
         Generate QR codes for each table. Diners scan to open their storefront.
       </p>
+
+      {error && (
+        <div className="mb-6 border border-red-200 bg-red-50 px-4 py-3 text-body-md text-red-800">
+          {error}
+          {error.includes("insforge:up") && (
+            <button
+              type="button"
+              onClick={() => load()}
+              className="ml-3 font-mono text-label-mono uppercase underline"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex gap-2">
@@ -163,7 +198,11 @@ export function TablesAdminShell({ merchantSlug }: TablesAdminShellProps) {
         </div>
       </div>
 
-      {tables.length === 0 ? (
+      {loading ? (
+        <div className="flex min-h-[200px] items-center justify-center border border-dashed border-surface-container-highest bg-surface-container-lowest">
+          <p className="text-body-md text-on-surface-variant">Loading tables…</p>
+        </div>
+      ) : tables.length === 0 ? (
         <div className="flex min-h-[200px] items-center justify-center border border-dashed border-surface-container-highest bg-surface-container-lowest">
           <p className="text-body-md text-on-surface-variant">No tables yet — add a table number above.</p>
         </div>

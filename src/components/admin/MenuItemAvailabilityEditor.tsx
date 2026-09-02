@@ -16,6 +16,7 @@ type MenuItemAvailabilityEditorProps = {
   onWeeklyEndChange: (value: string) => void;
   onAvailableFromChange: (value: string) => void;
   onAvailableUntilChange: (value: string) => void;
+  hideHeader?: boolean;
 };
 
 export function MenuItemAvailabilityEditor({
@@ -31,6 +32,7 @@ export function MenuItemAvailabilityEditor({
   onWeeklyEndChange,
   onAvailableFromChange,
   onAvailableUntilChange,
+  hideHeader,
 }: MenuItemAvailabilityEditorProps) {
   function toggleDay(day: WeekdayKey) {
     if (weeklyDays.includes(day)) {
@@ -41,15 +43,25 @@ export function MenuItemAvailabilityEditor({
   }
 
   return (
-    <div className="border border-surface-container-highest bg-surface-container-lowest p-4 sm:col-span-2">
-      <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-        Availability
-      </p>
-      <p className="mt-1 text-body-md text-on-surface-variant">
-        Control when diners can order this item on the storefront.
-      </p>
+    <div
+      className={
+        hideHeader
+          ? ""
+          : "border border-surface-container-highest bg-surface-container-lowest p-4 sm:col-span-2"
+      }
+    >
+      {!hideHeader && (
+        <>
+          <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
+            Availability
+          </p>
+          <p className="mt-1 text-body-md text-on-surface-variant">
+            Control when diners can order this item on the storefront.
+          </p>
+        </>
+      )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className={hideHeader ? "flex flex-wrap gap-2" : "mt-4 flex flex-wrap gap-2"}>
         {(
           [
             { id: "always", label: "Always" },

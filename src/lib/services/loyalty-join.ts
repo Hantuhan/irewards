@@ -12,13 +12,13 @@ import {
   markJoinTokenUsed,
   updateCustomer,
 } from "@/lib/db/repository";
+import { runCampaignTrigger } from "@/lib/campaigns/workflow-runtime";
 import type { CustomerRow } from "@/lib/db/types";
 import {
   awardOrderPointsIfEligible,
   getCustomerTierForMerchant,
 } from "@/lib/services/loyalty-points";
 import {
-  scheduleReviewAfterJoin,
   updateCustomerVisitAndUsual,
 } from "@/lib/services/automation";
 
@@ -103,9 +103,27 @@ export async function processWhatsAppJoin(input: {
   await markJoinTokenUsed(input.token);
 
   await updateCustomerVisitAndUsual(order.id, customer.id);
-  await scheduleReviewAfterJoin(customer.id, order.merchant_id, order.id);
 
   const tier = await getCustomerTierForMerchant(customer, order.merchant_id);
+
+  await runCampaignTrigger("member_joined", {
+    merchantId: order.merchant_id,
+    customer,
+    orderId: order.id,
+    source: "receipt",
+    firstJoin,
+    tierName: tier.current.name,
+  });
+
+  if (firstJoin) {
+    await runCampaignTrigger("first_visit", {
+      merchantId: order.merchant_id,
+      customer,
+      orderId: order.id,
+      orderTotalCents: order.total_cents,
+      tierName: tier.current.name,
+    });
+  }
 
   return {
     customer,

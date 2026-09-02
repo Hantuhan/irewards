@@ -39,4 +39,9 @@ done
 
 docker compose exec -T postgres psql -U postgres -d irewards -c "NOTIFY pgrst, 'reload schema';" >/dev/null 2>&1 || true
 
+# PostgREST caches column metadata; restart after DDL so new columns are visible immediately.
+if docker compose ps postgrest 2>/dev/null | grep -qE 'Up|running'; then
+  docker compose restart postgrest >/dev/null 2>&1 || true
+fi
+
 echo "Migrations applied."

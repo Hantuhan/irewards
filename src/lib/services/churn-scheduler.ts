@@ -1,42 +1,69 @@
+import { runCampaignTrigger } from "@/lib/campaigns/workflow-runtime";
 import { createInsforgeAdmin } from "@/lib/insforge/client";
-import { getAutomationRule, enqueueAutomationJob } from "@/lib/db/automation-repository";
-import { hasRecentChurnJob, listMarketingMembers } from "@/lib/services/campaign-send";
+import { listMarketingMembers } from "@/lib/services/campaign-send";
+import { isAutomationEnabled } from "@/lib/services/automation";
 
 function db() {
   return createInsforgeAdmin().database;
 }
 
-/** Run from cron — enqueue churn win-back for lapsed members. */
-export async function scheduleChurnWinbackForAllMerchants(): Promise<{ queued: number }> {
-  const { data: merchants, error } = await db().from("merchants").select("id, slug");
+const SWEEP_INTERVAL_MS = 23 * 60 * 60 * 1000;
+
+/**
+ * Daily sweep behind the "No visit for N days" trigger.
+ *
+ * The cron endpoint calls this every minute; each merchant is swept at most
+ * once a day (`merchants.automation_sweep_at`). Per-campaign day thresholds
+ * and the once-per-window cooldown are enforced by the runtime's trigger gate,
+ * so this only has to hand each lapsed member to `runCampaignTrigger`.
+ */
+export async function runInactivitySweep(): Promise<{ merchants: number; fired: number }> {
+  const { data: merchants, error } = await db()
+    .from("merchants")
+    .select("id, retention_enabled, automation_sweep_at");
   if (error) throw new Error(error.message);
 
-  let queued = 0;
+  const cutoff = Date.now() - SWEEP_INTERVAL_MS;
+  let swept = 0;
+  let fired = 0;
 
-  for (const merchant of merchants ?? []) {
-    const rule = await getAutomationRule(merchant.id as string, "churn_winback");
-    if (!rule?.enabled) continue;
+  for (const row of merchants ?? []) {
+    const merchant = row as {
+      id: string;
+      retention_enabled?: boolean;
+      automation_sweep_at?: string | null;
+    };
+    if (!isAutomationEnabled(merchant)) continue;
+    if (merchant.automation_sweep_at && new Date(merchant.automation_sweep_at).getTime() > cutoff) {
+      continue;
+    }
 
-    const config = (rule.config ?? {}) as { inactiveDays?: number };
-    const inactiveDays = config.inactiveDays ?? 30;
-    const cutoff = new Date(Date.now() - inactiveDays * 24 * 60 * 60 * 1000);
+    const { data: armed } = await db()
+      .from("campaigns")
+      .select("id")
+      .eq("merchant_id", merchant.id)
+      .eq("trigger_type", "no_visit_days")
+      .eq("status", "active")
+      .limit(1);
 
-    const members = await listMarketingMembers(merchant.id as string);
+    // Stamp the sweep even when nothing is armed so the query stays cheap.
+    await db()
+      .from("merchants")
+      .update({ automation_sweep_at: new Date().toISOString() })
+      .eq("id", merchant.id);
+    swept += 1;
+    if (!armed || armed.length === 0) continue;
+
+    const members = await listMarketingMembers(merchant.id);
     for (const member of members) {
       if (!member.last_visit_at) continue;
-      if (new Date(member.last_visit_at) > cutoff) continue;
-      if (await hasRecentChurnJob(merchant.id as string, member.id)) continue;
-
-      await enqueueAutomationJob({
-        merchantId: merchant.id as string,
-        customerId: member.id,
-        jobType: "churn_winback",
-        runAt: new Date(),
-        payload: { memberId: member.id },
+      const result = await runCampaignTrigger("no_visit_days", {
+        merchantId: merchant.id,
+        customer: member,
       });
-      queued += 1;
+      fired += result.fired;
     }
   }
 
-  return { queued };
+  return { merchants: swept, fired };
 }

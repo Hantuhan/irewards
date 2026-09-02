@@ -6,8 +6,10 @@ export type AdminSection =
   | "customers"
   | "rewards"
   | "analytics"
+  | "reports"
   | "campaigns"
   | "automation"
+  | "assistant"
   | "settings"
   | "tables";
 
@@ -32,8 +34,10 @@ export function dashboardRoutes(merchantSlug: string) {
     customers: `${base}/customers`,
     rewards: `${base}/rewards`,
     analytics: `${base}/analytics`,
+    reports: `${base}/reports`,
     campaigns: `${base}/campaigns`,
     automation: `${base}/automation`,
+    assistant: `${base}/assistant`,
     settings: `${base}/settings`,
     tables: `${base}/tables`,
   };
@@ -42,7 +46,24 @@ export function dashboardRoutes(merchantSlug: string) {
 /** @deprecated Use dashboardRoutes */
 export const adminRoutes = dashboardRoutes;
 
+export type TablePreviewOptions = {
+  embed?: boolean;
+  /** Simulate a returning member in admin flow preview */
+  member?: boolean;
+};
+
 /** Dev-only: preview a table QR destination from merchant console */
-export function tablePreviewRoute(merchantSlug: string, tableId = "1") {
-  return customerRoutes(merchantSlug, tableId).shop;
+export function tablePreviewRoute(
+  merchantSlug: string,
+  tableId = "1",
+  embedOrOptions: boolean | TablePreviewOptions = false,
+) {
+  const options: TablePreviewOptions =
+    typeof embedOrOptions === "boolean" ? { embed: embedOrOptions } : embedOrOptions;
+  const shop = customerRoutes(merchantSlug, tableId).shop;
+  const params = new URLSearchParams();
+  if (options.embed) params.set("embed", "1");
+  if (options.member) params.set("preview", "member");
+  const qs = params.toString();
+  return qs ? `${shop}?${qs}` : shop;
 }

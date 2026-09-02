@@ -1,196 +1,190 @@
+/**
+ * Automation job worker.
+ *
+ * Every automated message, point award or voucher is a job queued by the
+ * campaign workflow runtime (`@/lib/campaigns/workflow-runtime`). This module
+ * drains that queue from the cron endpoint.
+ */
+
+import { getCustomerById, getMerchantBySlug, touchCustomerVisit } from "@/lib/db/repository";
 import {
-  getCustomerById,
-  getMerchantBySlug,
-  touchCustomerVisit,
-} from "@/lib/db/repository";
-import {
-  enqueueAutomationJob,
-  getAutomationRule,
   incrementCampaignReach,
   listDueAutomationJobs,
   markAutomationJob,
   recordCampaignEvent,
+  type AutomationJobRow,
 } from "@/lib/db/automation-repository";
 import { getOrderItemsForOrder } from "@/lib/db/merchant-repository";
-import { sendSmsMessage, sendWhatsAppMessage } from "@/lib/twilio/outbound";
-import type { MerchantRow, OrderRow } from "@/lib/db/types";
+import type { MerchantRow } from "@/lib/db/types";
+import { sendWhatsAppTemplateMessage } from "@/lib/whatsapp/outbound";
+import { templateValuesFor } from "@/lib/whatsapp/template-spec";
+import { resolveApprovedTemplate } from "@/lib/whatsapp/templates";
 
-export async function schedulePostPaymentJobs(order: OrderRow, merchant: MerchantRow) {
-  const reviewRule = await getAutomationRule(merchant.id, "review_nudge");
-  if (reviewRule?.enabled && order.customer_id) {
-    const delayMinutes =
-      Number(merchant.google_review_delay_minutes) ||
-      Number((reviewRule.config as { delayMinutes?: number })?.delayMinutes) ||
-      30;
-    await enqueueAutomationJob({
-      merchantId: merchant.id,
-      orderId: order.id,
-      customerId: order.customer_id,
-      jobType: "review_nudge",
-      runAt: new Date(Date.now() + delayMinutes * 60 * 1000),
-      payload: { orderId: order.id },
-    });
-  }
-
-  const bounceRule = await getAutomationRule(merchant.id, "post_payment_join");
-  if (bounceRule?.enabled && order.customer_id) {
-    await enqueueAutomationJob({
-      merchantId: merchant.id,
-      orderId: order.id,
-      customerId: order.customer_id,
-      jobType: "bounce_back",
-      runAt: new Date(Date.now() + 2 * 60 * 1000),
-      payload: {
-        orderId: order.id,
-        discountPercent: Number(merchant.bounce_back_discount_percent) || 20,
-        expiryDays: Number(merchant.bounce_back_expiry_days) || 14,
-      },
-    });
-  }
+/** Master switch: pauses every triggered campaign for the merchant (manual broadcasts still send). */
+export function isAutomationEnabled(merchant: Pick<MerchantRow, "retention_enabled">): boolean {
+  return merchant.retention_enabled !== false;
 }
+
+/** Job types that must never send — either retired bots or paused channels. */
+const CANCELLED_JOB_TYPES = new Set([
+  "review_nudge",
+  "bounce_back",
+  "churn_winback",
+  "campaign_sms",
+]);
 
 export async function processDueAutomationJobs(limit = 50) {
   const jobs = await listDueAutomationJobs(limit);
   let processed = 0;
+  let cancelled = 0;
 
   for (const job of jobs) {
+    if (CANCELLED_JOB_TYPES.has(job.job_type)) {
+      const reason =
+        job.job_type === "campaign_sms"
+          ? "SMS is paused — use WhatsApp campaigns instead"
+          : "Retired bot job — journeys now run as campaigns";
+      await markAutomationJob(job.id, "cancelled", reason);
+      cancelled += 1;
+      continue;
+    }
     try {
-      await executeJob(job);
-      await markAutomationJob(job.id, "sent");
-      processed += 1;
+      const outcome = await executeJob(job);
+      if (outcome.status === "cancelled") {
+        await markAutomationJob(job.id, "cancelled", outcome.reason);
+        cancelled += 1;
+      } else {
+        await markAutomationJob(job.id, "sent");
+        processed += 1;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Job failed";
       await markAutomationJob(job.id, "failed", message);
     }
   }
 
-  return { processed, total: jobs.length };
+  return { processed, cancelled, total: jobs.length };
 }
 
-async function executeJob(job: Awaited<ReturnType<typeof listDueAutomationJobs>>[number]) {
-  const merchant = job.merchant_slug
-    ? await getMerchantBySlug(job.merchant_slug)
-    : null;
+type JobOutcome = { status: "sent" } | { status: "cancelled"; reason: string };
+
+async function executeJob(job: AutomationJobRow): Promise<JobOutcome> {
+  const merchant = job.merchant_slug ? await getMerchantBySlug(job.merchant_slug) : null;
   if (!merchant) throw new Error("Merchant not found");
 
-  if (job.job_type === "review_nudge") {
-    await runReviewNudge(job, merchant);
-    return;
-  }
-  if (job.job_type === "bounce_back") {
-    await runBounceBack(job, merchant);
-    return;
-  }
-  if (job.job_type === "churn_winback") {
-    await runChurnWinback(job, merchant);
-    return;
-  }
-  if (job.job_type === "campaign_whatsapp" || job.job_type === "campaign_sms") {
-    await runCampaignSend(job);
-    return;
-  }
-}
-
-async function runReviewNudge(
-  job: Awaited<ReturnType<typeof listDueAutomationJobs>>[number],
-  merchant: MerchantRow,
-) {
-  const customer = job.customer_id ? await getCustomerById(job.customer_id) : null;
-  if (!customer?.phone || customer.marketing_opt_out) return;
-
-  const body = `Hi from ${merchant.name}! How was your visit? Reply 5 if you loved it — we'll send our Google review link. Reply 1-4 and we'll pass feedback to the team privately.`;
-  await sendWhatsAppMessage(customer.phone, body);
-
-  if (merchant.google_url) {
-    await sendWhatsAppMessage(
-      customer.phone,
-      `Thanks! Leave us a review: ${merchant.google_url}`,
-    );
+  switch (job.job_type) {
+    case "campaign_whatsapp":
+      return runCampaignSend(job, merchant);
+    case "campaign_award_points":
+      await runCampaignAwardPoints(job);
+      return { status: "sent" };
+    case "campaign_issue_voucher":
+      // The voucher code is delivered inside the campaign's message; the job
+      // only exists so reporting can count the issue.
+      if (typeof job.payload?.campaignId === "string") {
+        await recordCampaignEvent(job.payload.campaignId, "conversion");
+      }
+      return { status: "sent" };
+    default:
+      throw new Error(`Unknown job type ${job.job_type}`);
   }
 }
 
-async function runBounceBack(
-  job: Awaited<ReturnType<typeof listDueAutomationJobs>>[number],
-  merchant: MerchantRow,
-) {
-  const customer = job.customer_id ? await getCustomerById(job.customer_id) : null;
-  if (!customer?.phone || customer.marketing_opt_out || !customer.is_member) return;
+async function runCampaignAwardPoints(job: AutomationJobRow) {
+  const payload = job.payload as { campaignId?: string; points?: number; reason?: string };
+  const points = Number(payload.points ?? 0);
+  if (!job.customer_id || points <= 0) return;
 
-  const payload = (job.payload ?? {}) as { discountPercent?: number; expiryDays?: number };
-  const discount = payload.discountPercent ?? 20;
-  const days = payload.expiryDays ?? 14;
-  const code = `BACK${discount}`;
+  const customer = await getCustomerById(job.customer_id);
+  if (!customer?.is_member) return;
 
-  await sendWhatsAppMessage(
-    customer.phone,
-    `${merchant.name}: ${discount}% off your next visit! Use code ${code} within ${days} days when you scan our table QR. Reply STOP to opt out.`,
-  );
+  const { awardPointsToCustomer } = await import("@/lib/db/repository");
+  await awardPointsToCustomer({
+    customer,
+    orderId: job.order_id ?? null,
+    points,
+    reason: payload.reason?.trim() || "campaign_bonus",
+  });
+
+  if (payload.campaignId) await recordCampaignEvent(payload.campaignId, "conversion");
 }
 
-async function runChurnWinback(
-  job: Awaited<ReturnType<typeof listDueAutomationJobs>>[number],
-  merchant: MerchantRow,
-) {
-  const customer = job.customer_id ? await getCustomerById(job.customer_id) : null;
-  if (!customer?.phone || customer.marketing_opt_out) return;
-
-  const favorite = customer.favorite_item_name ?? "your usual";
-  await sendWhatsAppMessage(
-    customer.phone,
-    `We miss you at ${merchant.name}! Your ${favorite} is waiting. Scan any table QR to order. Reply STOP to opt out.`,
-  );
-}
-
-async function runCampaignSend(
-  job: Awaited<ReturnType<typeof listDueAutomationJobs>>[number],
-) {
+/**
+ * Campaign sends. WhatsApp always goes out as the campaign's Meta-approved
+ * template; a job whose copy has no approved template fails with a clear
+ * reason and is never sent as free text.
+ */
+async function runCampaignSend(job: AutomationJobRow, merchant: MerchantRow): Promise<JobOutcome> {
   const payload = job.payload as {
     campaignId?: string;
     phone?: string;
     message?: string;
+    code?: string;
   };
-  if (!payload.phone || !payload.message) return;
-
-  if (job.job_type === "campaign_sms") {
-    await sendSmsMessage(payload.phone, payload.message);
-  } else {
-    await sendWhatsAppMessage(payload.phone, payload.message);
+  if (!payload.phone || !payload.message) {
+    return { status: "cancelled", reason: "Missing phone or message" };
   }
+
+  const customer = job.customer_id ? await getCustomerById(job.customer_id) : null;
+  if (customer?.marketing_opt_out) {
+    return { status: "cancelled", reason: "Member opted out after queue" };
+  }
+
+  // Win-back / delayed journeys: if they visited again since we queued, don't nag.
+  if (payload.campaignId && customer?.last_visit_at) {
+    const { getCampaignById } = await import("@/lib/services/campaign-send");
+    const campaign = await getCampaignById(merchant.id, payload.campaignId);
+    if (campaign?.trigger_type === "no_visit_days") {
+      const lastVisit = new Date(customer.last_visit_at).getTime();
+      const queuedAt = new Date(job.created_at).getTime();
+      if (lastVisit >= queuedAt) {
+        return { status: "cancelled", reason: "Member visited again before send" };
+      }
+    }
+  }
+
+  // Re-check frequency cap at send time so long waits can't bypass it.
+  const capHours = Number(merchant.campaign_send_cap_hours ?? 48);
+  if (customer?.id && capHours > 0) {
+    const { memberRecentlyMessaged } = await import("@/lib/db/campaign-analytics-repository");
+    if (
+      await memberRecentlyMessaged(merchant.id, customer.id, capHours, {
+        excludeJobId: job.id,
+      })
+    ) {
+      return { status: "cancelled", reason: `Member messaged within ${capHours}h` };
+    }
+  }
+
+  const values = {
+    merchant: merchant.name,
+    name: customer?.display_name ?? "",
+    code: payload.code ?? "",
+  };
+
+  const template = payload.campaignId
+    ? await resolveApprovedTemplate(payload.campaignId, payload.message)
+    : null;
+  if (!template) {
+    // Business-initiated messages must use an approved template. Sending
+    // free text here would just be rejected by Meta and count against us.
+    throw new Error(
+      "Not sent: the campaign's WhatsApp copy has no approved Meta template (or it changed after approval).",
+    );
+  }
+  await sendWhatsAppTemplateMessage(payload.phone, {
+    name: template.name,
+    language: template.language,
+    bodyParams: templateValuesFor(template.variables, values),
+    headerImageUrl: template.headerImageUrl,
+  });
 
   if (payload.campaignId) {
     await incrementCampaignReach(payload.campaignId);
     await recordCampaignEvent(payload.campaignId, "send");
   }
-}
 
-export async function scheduleReviewAfterJoin(
-  customerId: string,
-  merchantId: string,
-  orderId: string,
-) {
-  const customer = await getCustomerById(customerId);
-  if (!customer?.phone || customer.marketing_opt_out) return;
-
-  const reviewRule = await getAutomationRule(merchantId, "review_nudge");
-  if (!reviewRule?.enabled) return;
-
-  const { getMerchantById } = await import("@/lib/db/repository");
-  const merchant = await getMerchantById(merchantId);
-  if (!merchant) return;
-
-  const delayMinutes =
-    Number(merchant.google_review_delay_minutes) ||
-    Number((reviewRule.config as { delayMinutes?: number })?.delayMinutes) ||
-    30;
-
-  await enqueueAutomationJob({
-    merchantId,
-    orderId,
-    customerId,
-    jobType: "review_nudge",
-    runAt: new Date(Date.now() + delayMinutes * 60 * 1000),
-    payload: { orderId },
-  });
+  return { status: "sent" };
 }
 
 export async function updateCustomerVisitAndUsual(orderId: string, customerId: string) {

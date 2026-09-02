@@ -5,9 +5,10 @@ Smart table storefront + WhatsApp retention for cafes and F&B merchants in Malay
 ## Stack
 
 - **Next.js 15** — storefront + API routes
-- **Docker** — local and production containers
+- **Docker** — local development containers
+- **Cloudflare** — production hosting (Workers via OpenNext) and cron triggers
 - **InsForge** — dedicated Postgres + API (`infra/insforge/`)
-- **Twilio** — WhatsApp webhooks and outbound messages
+- **Meta WhatsApp Cloud API** — inbound webhooks, outbound messages, template approvals
 - **HitPay** — payment requests + webhooks (dev mode for local testing)
 
 ## Two surfaces (do not mix)
@@ -28,12 +29,13 @@ src/
   app/
     dashboard/[merchantSlug]/           # merchant SaaS console
     m/[merchantSlug]/table/[tableId]/   # diner storefront (QR)
-    api/webhooks/                       # payments + twilio
+    api/webhooks/                       # payments + meta (WhatsApp)
   lib/
     insforge/                           # InsForge SDK clients
     loyalty/
     payments/
-    twilio/
+    meta/                               # Graph API client + webhook signature
+    whatsapp/                           # outbound sends + template approvals
 infra/insforge/                         # dedicated InsForge Docker stack
 insforge/migrations/                    # SQL schema + demo seed
 docker-compose.yml                      # production app container
@@ -73,7 +75,7 @@ Set `INSFORGE_URL=http://host.docker.internal:7230` in `.env.local` when InsForg
 | `GET /api/orders/[orderId]` | Order status + WhatsApp join link |
 | `POST /api/orders/[orderId]/dev-pay` | Simulate payment (dev mode only) |
 | `POST /api/webhooks/payments` | Payment confirmed → join token + points |
-| `POST /api/webhooks/twilio` | `JOIN-{token}` → member + points |
+| `GET/POST /api/webhooks/meta` | Meta verification handshake; `JOIN-{token}` → member + points; template review verdicts |
 
 ## Dev flow (no HitPay keys)
 
@@ -82,7 +84,7 @@ Set `INSFORGE_URL=http://host.docker.internal:7230` in `.env.local` when InsForg
 3. **Merchant:** open `/dashboard/demo-cafe` to configure tiers and tables  
 4. **Diner test:** open `/m/demo-cafe/table/1` → add items → Pay
 4. Thank-you page → **Simulate payment (dev)**
-5. **Join iRewards on WhatsApp** → Twilio webhook processes `JOIN-{token}`
+5. **Join iRewards on WhatsApp** → Meta webhook processes `JOIN-{token}`
 
 ## Merchant dashboard
 
@@ -91,7 +93,7 @@ Sign in at http://localhost:3002/login
 - **Demo login:** `owner@demo-cafe.com` / `demo123`
 - **Dashboard:** http://localhost:3002/dashboard/demo-cafe
 
-After `npm run db:migrate`, merchant features use the database (menu, orders, members, campaigns, automation, analytics, tables, settings).
+After `npm run db:migrate`, merchant features use the database (menu, orders, members, campaigns, analytics, tables, settings).
 
 | Dashboard section | API |
 |-------------------|-----|
@@ -104,11 +106,11 @@ After `npm run db:migrate`, merchant features use the database (menu, orders, me
 | Analytics | `GET /api/merchant/{slug}/analytics` |
 | Campaigns | `GET/POST/PATCH /api/merchant/{slug}/campaigns` |
 | Campaign send | `POST /api/merchant/{slug}/campaigns/send` |
+| WhatsApp template approval | `GET/POST /api/merchant/{slug}/campaigns/whatsapp-template` |
 | Promos | `GET/POST/PATCH /api/merchant/{slug}/promos` |
 | Campaign banner (storefront) | `GET /api/merchant/{slug}/campaigns/banner` |
 | Kitchen SSE | `GET /api/merchant/{slug}/orders/stream` |
 | Automation cron | `POST /api/cron/automation` (Bearer `CRON_SECRET`) |
-| Automation | `GET/PATCH /api/merchant/{slug}/automation` |
 | Table QR | `GET/POST/DELETE /api/merchant/{slug}/tables` |
 | Settings | `GET/PATCH /api/merchant/{slug}/settings` |
 
@@ -133,7 +135,7 @@ Public tier ladder API: `GET /api/merchant/{slug}/reward-levels`
 
 - Points only after payment webhook confirms `paid`
 - Join tokens single-use, tied to paid orders
-- Validate Twilio `X-Twilio-Signature` on inbound webhooks
+- Validate Meta `X-Hub-Signature-256` (HMAC-SHA256 with `META_APP_SECRET`) on inbound webhooks
 - Use `INSFORGE_API_KEY` only on server (webhooks, admin writes)
 
 ## Testing
@@ -149,14 +151,72 @@ Smoke tests default to `http://localhost:3002`. Override with `BASE_URL=... npm 
 
 ### Automation cron
 
-Scheduled jobs (Google review nudge, bounce-back, churn win-back, campaign broadcasts) are processed by:
+Every automated journey is a campaign with a trigger (order paid, first visit, no visit for N days, points milestone, member opted in). The cron drains the job queue, runs the daily inactivity sweep and polls Meta for template verdicts:
 
 ```bash
 # Every minute in production (cron / Cloud Scheduler)
 CRON_SECRET=your-secret ./scripts/cron-automation.sh
 ```
 
-Set `CRON_SECRET` in `.env.local`. For SMS campaigns, also set `TWILIO_SMS_FROM`.
+Set `CRON_SECRET` in `.env.local`. The Campaigns overview has a master switch that pauses every journey that runs on its own; manual broadcasts are unaffected. SMS campaigns are paused for now — use WhatsApp instead.
+
+## WhatsApp (Meta Cloud API)
+
+Messaging runs directly on Meta's WhatsApp Business Platform — no Twilio.
+
+1. In [Meta for Developers](https://developers.facebook.com) create an app of type **Business**, add the **WhatsApp** product and link (or create) a WhatsApp Business Account (WABA) with a verified phone number.
+2. Create a **System User** in Business Manager with `whatsapp_business_messaging` and `whatsapp_business_management`, generate a permanent token and put it in `META_ACCESS_TOKEN`. Copy `META_WABA_ID`, `META_PHONE_NUMBER_ID`, `META_APP_ID` and `META_APP_SECRET` from the app settings.
+3. Under **WhatsApp → Configuration** set the callback URL to `https://<your-domain>/api/webhooks/meta`, use `META_WEBHOOK_VERIFY_TOKEN` as the verify token, and subscribe to the `messages` and `message_template_status_update` fields.
+4. Locally, keep `WHATSAPP_SKIP_SEND=true`: sends are logged, and template submissions are simulated (a "Check status" click approves them) so the full flow can be exercised without a WABA.
+
+### Template approval (required for broadcasts)
+
+Meta only delivers business-initiated messages (broadcasts, win-back, review nudges) as **approved message templates**; free-form text is limited to the 24-hour window after a member writes in.
+
+- Every WhatsApp campaign carries its own template. In the workflow builder (**Campaigns → Edit campaign**) the **Meta approval** panel shows the state of the current copy: *Not submitted*, *Pending Meta review*, *Approved*, *Rejected* (with Meta's reason), or *Message changed since submission*.
+- **Submit for approval** saves the draft, converts `{merchant}` / `{name}` / `{code}` into positional `{{1}}`… variables, uploads the banner image as an image header when one is set, and creates the template on the WABA under `MARKETING`. Each submission is versioned (`<campaign>_<id>_v<n>`) in the `whatsapp_templates` table.
+- Verdicts arrive on the webhook (`message_template_status_update`); the automation cron also polls anything still pending, and the panel has a manual **Check status**.
+- A campaign cannot go live, and a broadcast cannot be queued, until the *current* copy is approved. Editing the copy after approval requires a resubmission; sends keep using the last approved version only while it still matches.
+- The sender picks the approved template automatically and fills the variables per member (store name, member name, promo code).
+
+## Deploying on Cloudflare
+
+The app targets Cloudflare Workers through the OpenNext adapter; the database stays on the InsForge Postgres instance.
+
+```bash
+npm install --save-dev @opennextjs/cloudflare wrangler
+npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
+```
+
+- `wrangler.toml` needs `compatibility_flags = ["nodejs_compat"]` and a `[triggers] crons = ["* * * * *"]` entry; the scheduled handler should `POST /api/cron/automation` with `Authorization: Bearer $CRON_SECRET` (equivalent to `scripts/cron-automation.sh`).
+- Store `META_*`, `INSFORGE_API_KEY`, `CRON_SECRET`, `PAYMENT_*` and `DEEPSEEK_API_KEY` as Worker secrets (`wrangler secret put NAME`); non-secret values go in `[vars]`.
+- Point the Meta webhook and the HitPay webhook at the Worker's custom domain. Uploaded menu and banner images must be served from a public URL (Cloudflare R2 or the InsForge storage) so Meta can fetch template headers.
+- The WhatsApp client and webhook signature check use `fetch` and Web Crypto only, so they run unchanged on Workers.
+
+## DeepSeek AI (merchant assistant)
+
+Add to `.env.local`:
+
+```bash
+DEEPSEEK_API_KEY=your-key
+DEEPSEEK_API_BASE=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+```
+
+- **Setup agent** — full-page chat at `/dashboard/{slug}/assistant` (sidebar: **AI Assistant**). Answers earn/redeem math using your live tiers, rules, and rates.
+- **Campaign copy** — `POST /api/merchant/{slug}/ai/campaign`
+- **Store intelligence** — upsell suggestions on the diner menu via `POST /api/merchant/{slug}/ai/store-suggest`
+
+### Points earn & redeem (how the system calculates)
+
+| Step | Rule |
+|------|------|
+| **Earn** | `floor(RM × pts/RM)` min 1 pt, then × **max**(tier multiplier, matching points rule multiplier) |
+| **When** | Only members, only after **verified payment** |
+| **Redeem** | Checkout: `points × cents-per-point` off subtotal; capped by balance and subtotal |
+| **Configure** | iRewards program → Points (base), Points rule (Monday 2×), Membership (tiers) |
+
+Redemption now uses each merchant's `points_redeem_cents_per_point` from the Points tab (default 10 sen/pt ≈ 1% back at 0.1 pt/RM).
 
 ## Docs
 

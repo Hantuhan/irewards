@@ -3,9 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CustomerMobileNav } from "@/components/customer/CustomerMobileNav";
+import { StorefrontLanguagePicker } from "@/components/storefront/StorefrontLanguagePicker";
 import { Icon } from "@/components/ui/Icon";
 import { MobileShell } from "@/components/ui/MobileShell";
+import { useStorefrontLocale } from "@/hooks/useStorefrontLocale";
+import { useStorefrontMenu } from "@/hooks/useStorefrontMenu";
 import { customerRoutes } from "@/lib/navigation/routes";
+import { formatMultiplier } from "@/lib/format/number";
+import { tierCardGradient } from "@/lib/loyalty/reward-level-map";
 
 type RewardLevel = {
   levelNumber: number;
@@ -14,6 +19,8 @@ type RewardLevel = {
   pointsMultiplier: number;
   perkDescription: string | null;
   discountPercent: number;
+  birthdayPoints?: number;
+  welcomePoints?: number;
 };
 
 type TierSnapshot = {
@@ -31,25 +38,41 @@ type RewardsShellProps = {
   tableId: string;
 };
 
-const DEMO_VOUCHERS = [
-  {
-    code: "IR-WELCOME",
-    title: "10% off next order",
-    detail: "Join iRewards on WhatsApp to unlock",
-    locked: true,
-  },
+const BENEFITS = [
+  { icon: "redeem", title: "Welcome rewards", detail: "Join on WhatsApp after pay" },
+  { icon: "paid", title: "Dine & earn", detail: "Points on every order" },
+  { icon: "military_tech", title: "Tier programme", detail: "More value as you level up" },
+  { icon: "cake", title: "Birthday offers", detail: "Bonus points in your birthday month" },
+  { icon: "local_offer", title: "Cash voucher", detail: "Redeem points at checkout" },
+  { icon: "campaign", title: "Monthly rewards", detail: "Campaigns from your café" },
+  { icon: "card_giftcard", title: "Gift cards", detail: "Coming soon" },
+  { icon: "group_add", title: "Referral", detail: "Invite friends via WhatsApp" },
+  { icon: "storefront", title: "Reorder usual", detail: "One-tap from your table QR" },
+];
+
+const REWARD_CATALOG = [
+  { title: "Birthday reward", subtitle: "Double points", points: 10, emoji: "🎂" },
+  { title: "Welcome reward", subtitle: "Free drink + bonus points", points: 0, emoji: "☕" },
+  { title: "Meal combo", subtitle: "Combo + free coffee", points: 500, emoji: "🍽️" },
+  { title: "Free coffee", subtitle: "Any size", points: 200, emoji: "☕" },
 ];
 
 export function RewardsShell({ merchantSlug, tableId }: RewardsShellProps) {
+  const { lang, setLang, copy } = useStorefrontLocale(merchantSlug, ["en", "zh", "ms"]);
+  const { languages } = useStorefrontMenu(merchantSlug, lang);
   const [levels, setLevels] = useState<RewardLevel[]>([]);
   const [tier, setTier] = useState<TierSnapshot | null>(null);
   const [merchantName, setMerchantName] = useState(merchantSlug);
+  const [view, setView] = useState<"home" | "catalog">("home");
   const routes = customerRoutes(merchantSlug, tableId);
 
   useEffect(() => {
-    fetch(`/api/merchant/${merchantSlug}/reward-levels`)
+    fetch(`/api/merchant/${merchantSlug}/reward-levels?lang=${lang}`)
       .then((res) => res.json())
-      .then((json: { levels?: RewardLevel[]; merchant?: { name: string } }) => {
+      .then((json: {
+        levels?: RewardLevel[];
+        merchant?: { name: string; languages?: string[] };
+      }) => {
         if (json.levels) setLevels(json.levels);
         if (json.merchant?.name) setMerchantName(json.merchant.name);
       })
@@ -83,153 +106,138 @@ export function RewardsShell({ merchantSlug, tableId }: RewardsShellProps) {
         });
       })
       .catch(() => undefined);
-  }, [merchantSlug]);
+  }, [merchantSlug, lang]);
 
-  const currentLevel = tier ?? levels[0];
-  const progressPct =
-    tier?.pointsToNextLevel && tier.lifetimePointsEarned
-      ? Math.min(
-          95,
-          Math.max(
-            8,
-            (tier.lifetimePointsEarned /
-              (tier.lifetimePointsEarned + tier.pointsToNextLevel)) *
-              100,
-          ),
-        )
-      : tier
-        ? 100
-        : 12;
+  const cardGradient = tierCardGradient(
+    tier?.levelNumber ?? levels[0]?.levelNumber ?? 1,
+    tier?.name ?? levels[0]?.name,
+  );
 
   return (
     <MobileShell>
-      <header className="border-b border-surface-container-highest px-6 pb-6 pt-12">
-        <p className="font-mono text-label-mono uppercase tracking-widest text-on-surface-variant">
-          {merchantName}
-        </p>
-        <h1 className="mt-2 font-display text-headline-mobile text-primary">
-          Your iRewards
-        </h1>
-        <p className="mt-1 text-body-md text-on-surface-variant">
-          Earn points on every visit. Unlock perks as you level up.
-        </p>
-        {currentLevel && (
-          <div className="mt-4 inline-flex items-center gap-3 border border-primary bg-surface-container-lowest px-4 py-2">
-            <span className="font-mono text-label-mono uppercase tracking-widest text-primary">
-              {tier ? tier.name : "Guest"}
-            </span>
-            {tier && (
-              <>
-                <span className="h-1 w-1 rounded-full bg-primary" />
-                <span className="font-display text-eyebrow uppercase text-primary">
-                  {tier.pointsMultiplier}x pts
-                </span>
-              </>
+      <header className="relative overflow-hidden border-b border-surface-container-highest px-6 pb-8 pt-12">
+        <div className="absolute inset-0 bg-gradient-to-b from-surface-container-low to-surface-container-lowest opacity-80" />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-3">
+            <p className="flex-1 text-center font-display text-headline-sm uppercase tracking-[0.2em] text-primary">
+              {merchantName} {copy.rewards}
+            </p>
+            {languages.length > 1 && (
+              <StorefrontLanguagePicker languages={languages} value={lang} onChange={setLang} />
             )}
           </div>
-        )}
+          <div
+            className="mx-auto mt-6 flex h-36 w-full max-w-[280px] flex-col justify-between rounded-xl p-5 text-on-primary shadow-lg"
+            style={{ background: cardGradient }}
+          >
+            <span className="font-mono text-[10px] uppercase tracking-widest opacity-90">
+              Membership
+            </span>
+            <div>
+              <p className="font-display text-headline-md">{tier?.name ?? "Guest"}</p>
+              <p className="mt-1 text-body-md opacity-90">
+                {tier ? `${tier.lifetimePointsEarned} pts` : "Scan · order · join"}
+              </p>
+            </div>
+          </div>
+          <p className="mx-auto mt-4 max-w-sm text-center text-body-md text-on-surface-variant">
+            Earn points every visit. Unlock perks as you level up.
+          </p>
+        </div>
       </header>
 
-      <main className="flex flex-col gap-8 px-6 py-8 pb-24">
-        <section className="zenith-surface flex flex-col gap-4 p-6">
-          <div className="flex items-end justify-between">
-            <h2 className="font-display text-headline-sm text-primary">
-              Lifetime tier progress
-            </h2>
-            {tier && (
-              <span className="font-mono text-label-mono text-on-surface-variant">
-                {tier.lifetimePointsEarned} pts
-              </span>
-            )}
-          </div>
-          <div className="h-4 w-full border border-surface-container-high bg-surface-container">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-          <p className="text-body-md text-on-surface-variant">
-            {tier?.pointsToNextLevel && tier.nextLevelName
-              ? `${tier.pointsToNextLevel} points to ${tier.nextLevelName}`
-              : tier
-                ? "You are at the top tier for this merchant."
-                : "Order and join on WhatsApp after payment to start earning."}
-          </p>
-        </section>
+      <div className="flex border-b border-surface-container-highest">
+        {(["home", "catalog"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`flex-1 py-3 font-display text-eyebrow uppercase ${
+              view === v ? "border-b-2 border-primary text-primary" : "text-on-surface-variant"
+            }`}
+          >
+            {v === "home" ? "Programme" : "Rewards"}
+          </button>
+        ))}
+      </div>
 
-        <section>
-          <h2 className="mb-4 font-display text-headline-sm text-primary">
-            Tier ladder
-          </h2>
-          <ul className="flex flex-col border border-surface-container-highest">
-            {levels.map((level) => {
-              const isCurrent = tier?.levelNumber === level.levelNumber;
-              return (
-                <li
-                  key={level.levelNumber}
-                  className={`flex items-start gap-4 border-b border-surface-container p-4 last:border-0 ${
-                    isCurrent ? "bg-surface-container-low" : ""
-                  }`}
-                >
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center border ${
-                      isCurrent
-                        ? "border-primary bg-primary text-on-primary"
-                        : "border-surface-container bg-surface-container-lowest text-on-surface-variant"
+      <main className="flex flex-col gap-6 px-6 py-8 pb-24">
+        {view === "home" ? (
+          <>
+            <div className="grid grid-cols-3 gap-4">
+              {BENEFITS.map((b) => (
+                <div key={b.title} className="flex flex-col items-center text-center">
+                  <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border border-surface-container-highest bg-surface-container-lowest">
+                    <Icon name={b.icon} className="text-primary" />
+                  </div>
+                  <p className="font-display text-[10px] uppercase leading-tight text-primary">
+                    {b.title}
+                  </p>
+                  <p className="mt-1 text-[10px] leading-snug text-on-surface-variant">
+                    {b.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <section>
+              <h2 className="mb-3 font-display text-headline-sm text-primary">Tier ladder</h2>
+              <ul className="flex flex-col border border-surface-container-highest">
+                {levels.map((level) => (
+                  <li
+                    key={level.levelNumber}
+                    className={`border-b border-surface-container p-4 last:border-0 ${
+                      tier?.levelNumber === level.levelNumber
+                        ? "border-l-4 border-l-primary bg-primary text-on-primary"
+                        : ""
                     }`}
                   >
-                    <span className="font-mono text-label-mono">{level.levelNumber}</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-display text-headline-sm text-primary">
+                    <p
+                      className={`font-display text-headline-sm ${
+                        tier?.levelNumber === level.levelNumber ? "text-on-primary" : "text-primary"
+                      }`}
+                    >
                       {level.name}
-                    </h3>
-                    <p className="mt-1 text-body-md text-on-surface-variant">
-                      {level.minLifetimePoints}+ lifetime pts · {level.pointsMultiplier}x
-                      earn · {level.discountPercent}% checkout discount
                     </p>
-                    {level.perkDescription && (
-                      <p className="mt-1 text-body-md text-on-surface-variant">
-                        {level.perkDescription}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="mb-4 font-display text-headline-sm text-primary">
-            Vouchers
-          </h2>
-          <div className="flex flex-col gap-3">
-            {DEMO_VOUCHERS.map((voucher) => (
-              <div
-                key={voucher.code}
-                className={`zenith-surface p-4 ${voucher.locked ? "opacity-60" : ""}`}
+                    <p
+                      className={`mt-1 text-body-md ${
+                        tier?.levelNumber === level.levelNumber
+                          ? "text-on-primary/80"
+                          : "text-on-surface-variant"
+                      }`}
+                    >
+                      {level.minLifetimePoints}+ pts · {formatMultiplier(level.pointsMultiplier)}x earn
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
+        ) : (
+          <ul className="space-y-3">
+            {REWARD_CATALOG.map((reward) => (
+              <li
+                key={reward.title}
+                className="flex overflow-hidden border border-surface-container-highest bg-surface-container-lowest"
               >
-                <div className="flex justify-between">
-                  <span className="font-mono text-label-mono text-primary">
-                    {voucher.code}
-                  </span>
-                  {voucher.locked && (
-                    <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-                      Locked
-                    </span>
-                  )}
+                <div className="flex w-20 shrink-0 items-center justify-center bg-surface-container text-3xl">
+                  {reward.emoji}
                 </div>
-                <h3 className="mt-2 font-display text-headline-sm text-primary">
-                  {voucher.title}
-                </h3>
-                <p className="mt-1 text-body-md text-on-surface-variant">
-                  {voucher.detail}
-                </p>
-              </div>
+                <div className="flex flex-1 items-center justify-between gap-3 border-l-4 border-primary p-4">
+                  <div>
+                    <p className="font-display text-eyebrow uppercase text-on-surface-variant">
+                      {reward.title}
+                    </p>
+                    <p className="font-display text-headline-sm text-primary">{reward.subtitle}</p>
+                  </div>
+                  <span className="shrink-0 font-mono text-label-mono text-primary">
+                    {reward.points} pts
+                  </span>
+                </div>
+              </li>
             ))}
-          </div>
-        </section>
+          </ul>
+        )}
 
         {!tier && (
           <Link
@@ -246,6 +254,12 @@ export function RewardsShell({ merchantSlug, tableId }: RewardsShellProps) {
         merchantSlug={merchantSlug}
         tableId={tableId}
         active="rewards"
+        labels={{
+          shop: copy.shop,
+          rewards: copy.rewards,
+          cart: copy.cart,
+          profile: copy.profile,
+        }}
       />
     </MobileShell>
   );

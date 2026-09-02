@@ -16,6 +16,10 @@ import {
 import { createHitPayPaymentRequest, isDevPaymentMode } from "@/lib/payments/hitpay";
 import { applyLevelDiscount, resolveCustomerLevel } from "@/lib/loyalty/tiers";
 import { calculatePromoDiscountCents } from "@/lib/services/promo";
+import {
+  calculateOrderTotals,
+  merchantChargeSettingsFromRow,
+} from "@/lib/services/order-totals";
 import { pointsDiscountCents } from "@/lib/loyalty/points";
 import { getMemberSessionFromRequest } from "@/lib/customer/session";
 
@@ -25,10 +29,21 @@ const checkoutSchema = z.object({
   customerId: z.string().uuid().optional(),
   promoCode: z.string().optional(),
   pointsToRedeem: z.number().int().min(0).optional(),
+  serviceType: z.enum(["dine_in", "takeaway"]).default("dine_in"),
   items: z.array(
     z.object({
       id: z.string(),
       quantity: z.number().int().positive(),
+      selections: z
+        .array(
+          z.object({
+            groupId: z.string().uuid(),
+            optionId: z.string().uuid(),
+            quantity: z.number().int().positive().optional(),
+          }),
+        )
+        .optional(),
+      packedForTakeaway: z.boolean().optional(),
     }),
   ),
 });
@@ -54,6 +69,7 @@ export async function POST(request: Request) {
       merchant.id,
       body.items,
       merchant.timezone ?? "Asia/Kuala_Lumpur",
+      body.serviceType,
     );
 
     if (subtotalCents <= 0) {
@@ -80,9 +96,10 @@ export async function POST(request: Request) {
 
         const requestedPoints = body.pointsToRedeem ?? 0;
         if (requestedPoints > 0) {
+          const centsPerPoint = Number(merchant.points_redeem_cents_per_point ?? 10);
           const maxPoints = Math.min(
             customer.points_balance,
-            Math.floor(subtotalCents / 10),
+            Math.floor(subtotalCents / centsPerPoint),
           );
           pointsRedeemed = Math.min(requestedPoints, maxPoints);
         }
@@ -99,21 +116,25 @@ export async function POST(request: Request) {
       }
     }
 
-    const pointsDiscount = pointsDiscountCents(pointsRedeemed);
-    const discountCents = Math.min(
-      subtotalCents,
-      tierDiscountCents + promoDiscountCents + pointsDiscount,
-    );
-    const totalCents = Math.max(0, subtotalCents - discountCents);
+    const centsPerPoint = Number(merchant.points_redeem_cents_per_point ?? 10);
+    const pointsDiscount = pointsDiscountCents(pointsRedeemed, centsPerPoint);
+    const rawDiscountCents = tierDiscountCents + promoDiscountCents + pointsDiscount;
+
+    const chargeSettings = merchantChargeSettingsFromRow(merchant);
+    const totals = calculateOrderTotals(subtotalCents, rawDiscountCents, chargeSettings);
 
     const order = await createPendingOrder({
       merchantId: merchant.id,
       venueTableId: table.id,
-      subtotalCents,
-      discountCents,
+      subtotalCents: totals.subtotalCents,
+      serviceChargeCents: totals.serviceChargeCents,
+      taxCents: totals.taxCents,
+      taxLabel: totals.taxLabel,
+      discountCents: totals.discountCents,
       customerId,
       promoId,
       pointsRedeemed,
+      serviceType: body.serviceType,
     });
 
     await createOrderItems(order.id, orderLines);
@@ -132,9 +153,12 @@ export async function POST(request: Request) {
       return NextResponse.json({
         orderId: order.id,
         mode: "dev",
-        subtotalCents,
-        discountCents,
-        totalCents,
+        subtotalCents: totals.subtotalCents,
+        serviceChargeCents: totals.serviceChargeCents,
+        taxCents: totals.taxCents,
+        taxLabel: totals.taxLabel,
+        discountCents: totals.discountCents,
+        totalCents: totals.totalCents,
         devPayUrl: `/api/orders/${order.id}/dev-pay`,
         thanksUrl,
       });
@@ -142,7 +166,7 @@ export async function POST(request: Request) {
 
     const payment = await createHitPayPaymentRequest({
       orderId: order.id,
-      amountCents: totalCents,
+      amountCents: totals.totalCents,
       currency: merchant.currency,
       redirectUrl: thanksUrl,
       webhookUrl: `${getAppUrl()}/api/webhooks/payments`,
@@ -151,9 +175,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       orderId: order.id,
       mode: "hitpay",
-      subtotalCents,
-      discountCents,
-      totalCents,
+      subtotalCents: totals.subtotalCents,
+      serviceChargeCents: totals.serviceChargeCents,
+      taxCents: totals.taxCents,
+      taxLabel: totals.taxLabel,
+      discountCents: totals.discountCents,
+      totalCents: totals.totalCents,
       paymentUrl: payment.url,
       thanksUrl,
     });

@@ -4,6 +4,9 @@ import {
   resolveCustomerLevel,
 } from "@/lib/loyalty/tiers";
 import { pointsForPaidOrder } from "@/lib/loyalty/points";
+import { bestPointsMultiplier, dayOfWeekId } from "@/lib/loyalty/points-rules";
+import { listPointsRules } from "@/lib/db/points-rules-repository";
+import { getOrderItemsForOrder } from "@/lib/db/merchant-repository";
 import {
   awardPointsToCustomer,
   getMerchantById,
@@ -16,15 +19,27 @@ export async function calculateOrderPointsAward(
   customer: CustomerRow,
   merchantId: string,
   totalCents: number,
+  orderMenuItemIds: string[] = [],
+  at = new Date(),
 ): Promise<number> {
-  const [levels, merchant] = await Promise.all([
+  const [levels, merchant, rules] = await Promise.all([
     getRewardLevels(merchantId),
     getMerchantById(merchantId),
+    listPointsRules(merchantId),
   ]);
   const level = resolveCustomerLevel(customer.lifetime_points_earned, levels);
   const rate = Number(merchant?.points_per_ringgit ?? 0.1);
   const basePoints = pointsForPaidOrder(totalCents, rate);
-  return applyLevelMultiplier(basePoints, Number(level.points_multiplier));
+  const multiplier = bestPointsMultiplier(
+    rules,
+    {
+      tierName: level.name,
+      dayOfWeek: dayOfWeekId(at),
+      orderMenuItemIds,
+    },
+    Number(level.points_multiplier),
+  );
+  return applyLevelMultiplier(basePoints, multiplier);
 }
 
 export async function awardOrderPointsIfEligible(input: {
@@ -42,10 +57,16 @@ export async function awardOrderPointsIfEligible(input: {
   );
   if (alreadyAwarded) return 0;
 
+  const items = await getOrderItemsForOrder(input.orderId);
+  const menuIds = items
+    .map((i) => i.menu_item_id)
+    .filter((id): id is string => Boolean(id));
+
   const points = await calculateOrderPointsAward(
     input.customer,
     input.merchantId,
     input.totalCents,
+    menuIds,
   );
 
   await awardPointsToCustomer({

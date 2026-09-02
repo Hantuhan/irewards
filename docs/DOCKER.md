@@ -11,7 +11,7 @@ iRewards ships its **own** InsForge stack under `infra/insforge/`. It does not s
 └─────────────────┘     └──────────────────────────────┘
          │
          ▼
-   Twilio WhatsApp / HitPay webhooks
+   Meta WhatsApp / HitPay webhooks
 ```
 
 ## Quick start (recommended)

@@ -9,6 +9,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "sh scripts/smoke-test.sh",
     "test:smoke": "sh scripts/smoke-test.sh",
+    "test:smoke:campaigns": "sh scripts/smoke-campaigns.sh",
     "verify": "npm run typecheck && npm run lint && npm run build && npm run test",
     "typecheck": "tsc --noEmit",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
@@ -27,7 +28,8 @@
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "twilio": "^5.4.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {

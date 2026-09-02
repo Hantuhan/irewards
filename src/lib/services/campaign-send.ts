@@ -1,6 +1,7 @@
 import { createInsforgeAdmin } from "@/lib/insforge/client";
 import type { CampaignRow, CustomerRow } from "@/lib/db/types";
 import { enqueueAutomationJob } from "@/lib/db/automation-repository";
+import { resolveApprovedTemplate } from "@/lib/whatsapp/templates";
 
 function db() {
   return createInsforgeAdmin().database;
@@ -38,15 +39,20 @@ export async function queueCampaignBroadcast(
   merchantId: string,
   campaign: CampaignRow,
 ): Promise<{ queued: number }> {
-  if (campaign.channel !== "whatsapp" && campaign.channel !== "sms") {
-    throw new Error("Only WhatsApp and SMS campaigns can be broadcast");
+  if (campaign.channel !== "whatsapp") {
+    throw new Error("Only WhatsApp campaigns can be broadcast");
   }
   if (!campaign.message_body?.trim()) {
     throw new Error("Campaign message is required");
   }
+  const approved = await resolveApprovedTemplate(campaign.id, campaign.message_body);
+  if (!approved) {
+    throw new Error(
+      "WhatsApp broadcasts need a Meta-approved template for the current message. Submit it for approval in the workflow builder and wait for Meta's verdict.",
+    );
+  }
 
   const members = await listMarketingMembers(merchantId);
-  const jobType = campaign.channel === "sms" ? "campaign_sms" : "campaign_whatsapp";
   const runAt = new Date();
   let queued = 0;
 
@@ -55,7 +61,7 @@ export async function queueCampaignBroadcast(
     await enqueueAutomationJob({
       merchantId,
       customerId: member.id,
-      jobType,
+      jobType: "campaign_whatsapp",
       runAt: new Date(runAt.getTime() + queued * 2000),
       payload: {
         campaignId: campaign.id,
@@ -67,23 +73,4 @@ export async function queueCampaignBroadcast(
   }
 
   return { queued };
-}
-
-export async function hasRecentChurnJob(
-  merchantId: string,
-  customerId: string,
-  withinDays = 14,
-): Promise<boolean> {
-  const since = new Date(Date.now() - withinDays * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await db()
-    .from("automation_jobs")
-    .select("id")
-    .eq("merchant_id", merchantId)
-    .eq("customer_id", customerId)
-    .eq("job_type", "churn_winback")
-    .gte("created_at", since)
-    .limit(1);
-
-  if (error) throw new Error(error.message);
-  return (data?.length ?? 0) > 0;
 }

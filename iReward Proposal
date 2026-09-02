@@ -1,4 +1,4 @@
-markdown# 🚀 B2B SaaS Business Proposal: iRewards
+# 🚀 B2B SaaS Business Proposal: iRewards
 **The Smart Table Storefront That Brings Customers Back**  
 *Target Market: Independent Cafes, Boutique Retail, & Local Service Merchants in Malaysia & Singapore*  
 
@@ -62,6 +62,43 @@ A continuous 4-step loop across **every table** in the venue — maximize today'
 5. **"Your Usual" for Regulars:** Returning members see their favorite dish and custom modifiers pinned to the top of the storefront — one tap to reorder.
 6. **Local Cashless Payments:** Checkout inside iRewards generates a dynamic payment prompt (DuitNow / TNG / SGQR). Paid orders stream to the kitchen display board in real time via WebSockets.
 7. **Automated Post-Visit Engine:** Bounce-back vouchers, review nudges, and churn win-back messages run on WhatsApp in the background — converting today's storefront sale into tomorrow's return visit.
+8. **Merchant loyalty console:** Points rules, tier matrix, Campaign Bot scheduler, member insights, and Copilot-assisted earn/redeem setup — all self-serve in the dashboard.
+
+---
+
+## 🖥️ 3.5 Merchant Console (Built & Shipping)
+
+The merchant dashboard is the **loyalty and retention control plane** — separate from the diner storefront. Key modules now in the product:
+
+### Points program (Eber-style tabs)
+Merchants configure earn, redeem, and tier perks without spreadsheets:
+
+| Tab | Purpose |
+|-----|---------|
+| **Points** | Earn rate (pts/RM), redemption (sen/pt), and **iRewards Copilot** |
+| **Points rule** | Conditional multipliers (member tier, day of week, menu items) |
+| **Membership** | Tier matrix — birthday points, point expiry, welcome/renew rewards, validity |
+
+### iRewards Copilot & DeepSeek setup agent
+On the **Points** tab, a copilot suggests earn/redeem structure. A dedicated **AI Assistant** page (Manus-style chat, sidebar above Settings) powered by DeepSeek answers setup questions with **live merchant data** — earn formulas, Monday double points, tier math, and redemption caps — matching production behaviour.
+
+*Requires `DEEPSEEK_API_KEY` in `.env.local`; falls back to rule-based FAQ without it.*
+
+### Campaign bots (Message → Audience → Schedule → Confirm)
+The **Automation** page uses a Campaign Bot workflow inspired by enterprise loyalty platforms:
+
+1. **Message** — WhatsApp template with placeholders (`{merchant}`, `{favorite}`, `{discount}`)
+2. **Audiences** — All members, new, loyal (3+ visits/90d), at-risk (90+ days idle)
+3. **Schedule** — On-trigger (review @ 30 min), daily, or weekly; hour/minute; skip-if-sent-within-X-days
+4. **Confirm & set live** — Summary cards (channel, reach count, schedule) then **Save draft** or **Confirm & set it live**
+
+Bots shipped: post-payment join, review nudge, churn win-back, birthday perk.
+
+### Member insights (Analytics dashboards)
+Segment bar: **New / joined · Frequent · Loyal · Infrequent · At risk** — powered by paid-order visit patterns. Feeds churn win-back audience targeting.
+
+### Diner rewards UX (Bean Rewards–style)
+Mobile member portal at `/m/{slug}/table/{id}/rewards`: digital tier card, 3×3 benefits grid, rewards catalogue tickets.
 
 ---
 
@@ -82,9 +119,9 @@ iRewards is engineered under a lean, highly profitable serverless multi-tenant c
 
 ### 📈 Unit Economics & Profit Margin Breakdown (Per Merchant Contract)
 * **Gross SaaS Revenue:** + RM 199.00 / SGD 80.00
-* **Twilio Number Rental Cost:** - RM 5.00
-* **Database & Web Hosting Cost:** - RM 0.00 *(Leveraging free developer cloud tiers like Supabase/Vercel)*
-* **1,000 Inbound Bot Loop Triggers:** - RM 25.00
+* **WhatsApp Business Platform (Meta Cloud API):** - RM 0.00 platform fee *(no number rental; conversations billed per Meta's marketing/utility rates — see bot loop line below)*
+* **Database & Web Hosting Cost:** - RM 0.00 *(Cloudflare Workers free tier for the app and cron triggers; InsForge Postgres)*
+* **1,000 WhatsApp Bot Conversations (Meta conversation pricing, MY/SG marketing + utility mix):** - RM 25.00
 * **Net Profit Realized:** **= ~88% Pure Recurring Profit Margin Per Month**
 
 ---

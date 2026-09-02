@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { processDueAutomationJobs } from "@/lib/services/automation";
-import { scheduleChurnWinbackForAllMerchants } from "@/lib/services/churn-scheduler";
+import { runInactivitySweep } from "@/lib/services/churn-scheduler";
+import { refreshNumberHealth } from "@/lib/whatsapp/number-health";
+import { refreshPendingTemplates } from "@/lib/whatsapp/templates";
 
 export async function POST(request: Request) {
   const auth = request.headers.get("authorization");
@@ -9,8 +11,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const churn = await scheduleChurnWinbackForAllMerchants();
+  const templates = await refreshPendingTemplates();
+  const number = await refreshNumberHealth().catch((err) => ({
+    checked: false,
+    quality: null,
+    error: err instanceof Error ? err.message : "failed",
+  }));
+  const sweep = await runInactivitySweep();
   const jobs = await processDueAutomationJobs(100);
 
-  return NextResponse.json({ churn, jobs });
+  return NextResponse.json({ templates, number, sweep, jobs });
 }

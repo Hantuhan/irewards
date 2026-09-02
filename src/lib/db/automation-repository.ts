@@ -1,5 +1,4 @@
 import { createInsforgeAdmin } from "@/lib/insforge/client";
-import type { AutomationRuleRow } from "@/lib/db/types";
 
 function db() {
   return createInsforgeAdmin().database;
@@ -19,42 +18,6 @@ export type AutomationJobRow = {
   sent_at: string | null;
   merchant_slug?: string;
 };
-
-export async function getAutomationRule(
-  merchantId: string,
-  ruleKey: string,
-): Promise<(AutomationRuleRow & { config: Record<string, unknown> }) | null> {
-  const { data, error } = await db()
-    .from("automation_rules")
-    .select("*")
-    .eq("merchant_id", merchantId)
-    .eq("rule_key", ruleKey)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  return data as (AutomationRuleRow & { config: Record<string, unknown> }) | null;
-}
-
-export async function updateAutomationRuleConfig(
-  merchantId: string,
-  ruleKey: string,
-  config: Record<string, unknown>,
-  enabled?: boolean,
-) {
-  const patch: Record<string, unknown> = { config };
-  if (enabled !== undefined) patch.enabled = enabled;
-
-  const { data, error } = await db()
-    .from("automation_rules")
-    .update(patch)
-    .eq("merchant_id", merchantId)
-    .eq("rule_key", ruleKey)
-    .select("*")
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
-}
 
 export async function enqueueAutomationJob(input: {
   merchantId: string;
@@ -94,6 +57,32 @@ export async function listDueAutomationJobs(limit = 50): Promise<AutomationJobRo
   });
 }
 
+export async function getAutomationJobStats(
+  merchantId: string,
+  jobTypes: string[],
+): Promise<{ sent: number; failed: number; pending: number; cancelled: number }> {
+  const empty = { sent: 0, failed: 0, pending: 0, cancelled: 0 };
+  if (jobTypes.length === 0) return empty;
+
+  const { data, error } = await db()
+    .from("automation_jobs")
+    .select("status")
+    .eq("merchant_id", merchantId)
+    .in("job_type", jobTypes);
+
+  if (error) throw new Error(error.message);
+
+  const counts = { ...empty };
+  for (const row of data ?? []) {
+    const status = (row as { status: string }).status;
+    if (status === "sent") counts.sent += 1;
+    else if (status === "failed") counts.failed += 1;
+    else if (status === "pending") counts.pending += 1;
+    else if (status === "cancelled") counts.cancelled += 1;
+  }
+  return counts;
+}
+
 export async function markAutomationJob(
   jobId: string,
   status: "sent" | "failed" | "cancelled",
@@ -124,7 +113,7 @@ export async function incrementCampaignReach(campaignId: string) {
 
 export async function recordCampaignEvent(
   campaignId: string,
-  eventType: "impression" | "click" | "send" | "conversion",
+  eventType: "impression" | "click" | "send" | "conversion" | "redeem",
 ) {
   const { error } = await db().from("campaign_events").insert([
     { campaign_id: campaignId, event_type: eventType },

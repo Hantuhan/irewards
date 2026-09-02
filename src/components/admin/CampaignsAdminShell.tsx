@@ -2,346 +2,209 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { merchantApi } from "@/lib/merchant/fetch";
-import { CAMPAIGN_CHANNELS, type CampaignChannel } from "@/lib/campaigns/channels";
+import { CampaignManagerView } from "@/components/admin/campaigns/CampaignManagerView";
+import { PromoVoucherInventoryView } from "@/components/admin/campaigns/PromoVoucherInventoryView";
+import type { Campaign } from "@/components/admin/campaigns/types";
 import { Icon } from "@/components/ui/Icon";
+import { CAMPAIGNS_MAIN_TABS, type CampaignsMainTab } from "@/lib/campaigns/main-tabs";
+import { merchantApi } from "@/lib/merchant/fetch";
+import type { NumberHealthSummary } from "@/lib/whatsapp/number-health";
 
-type CampaignsAdminShellProps = { merchantSlug: string };
-
-type Campaign = {
-  id: string;
-  name: string;
-  channel: string;
-  channelLabel: string;
-  status: string;
-  reach: number;
-  conversion: string;
-  messageBody: string | null;
-  bannerTitle: string | null;
-  bannerText: string | null;
-  linkUrl: string | null;
+type CampaignsAdminShellProps = {
+  merchantSlug: string;
+  /** Deep link, e.g. `?tab=promos`; old `?tab=bots` / `?tab=automations` links are normalised by the page. */
+  initialTab?: CampaignsMainTab;
+  /** `?campaign=<id>` opens that campaign's report inside the Campaigns tab. */
+  openCampaignId?: string | null;
+  /** `?compose=1` lands on the AI planner instead of the overview. */
+  startCompose?: boolean;
 };
 
-type Promo = {
-  id: string;
-  name: string;
-  code: string | null;
-  type: string;
-  value: number;
-  active: boolean;
-};
-
-const emptyForm = {
-  name: "",
-  channel: "banner" as CampaignChannel,
-  messageBody: "",
-  bannerTitle: "",
-  bannerText: "",
-  linkUrl: "",
-};
-
-export function CampaignsAdminShell({ merchantSlug }: CampaignsAdminShellProps) {
-  const [tab, setTab] = useState<"campaigns" | "promos">("campaigns");
+export function CampaignsAdminShell({
+  merchantSlug,
+  initialTab = "campaigns",
+  openCampaignId = null,
+  startCompose = false,
+}: CampaignsAdminShellProps) {
+  const [mainTab, setMainTab] = useState<CampaignsMainTab>(initialTab);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [promos, setPromos] = useState<Promo[]>([]);
-  const [form, setForm] = useState(emptyForm);
-  const [promoForm, setPromoForm] = useState({
-    name: "",
-    code: "",
-    type: "percentage" as "percentage" | "fixed",
-    value: 10,
-  });
+  const [merchantName, setMerchantName] = useState("");
+  const [currency, setCurrency] = useState<"MYR" | "SGD">("MYR");
+  const [automationsEnabled, setAutomationsEnabled] = useState(true);
+  const [sendWindowStart, setSendWindowStart] = useState("");
+  const [sendWindowEnd, setSendWindowEnd] = useState("");
+  const [sendCapHours, setSendCapHours] = useState(48);
+  const [programLanguages, setProgramLanguages] = useState<string[]>(["en"]);
+  const [savingSwitch, setSavingSwitch] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+  const [focusCampaignId, setFocusCampaignId] = useState<string | null>(openCampaignId);
+  const [numberHealth, setNumberHealth] = useState<NumberHealthSummary | null>(null);
 
-  const [sendingId, setSendingId] = useState<string | null>(null);
+  useEffect(() => {
+    setMainTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    setFocusCampaignId(openCampaignId);
+  }, [openCampaignId]);
 
   const loadCampaigns = useCallback(async () => {
-    const data = await merchantApi<{ campaigns: Campaign[] }>(
+    const data = await merchantApi<{ campaigns: Campaign[]; numberHealth?: NumberHealthSummary }>(
       `/api/merchant/${merchantSlug}/campaigns`,
     );
     setCampaigns(data.campaigns);
+    setNumberHealth(data.numberHealth ?? null);
   }, [merchantSlug]);
 
-  const loadPromos = useCallback(async () => {
-    const data = await merchantApi<{ promos: Promo[] }>(
-      `/api/merchant/${merchantSlug}/promos`,
-    );
-    setPromos(data.promos);
+  const loadSettings = useCallback(async () => {
+    const data = await merchantApi<{
+      name: string;
+      currency?: "MYR" | "SGD";
+      retentionEnabled: boolean;
+      campaignSendWindowStart?: string | null;
+      campaignSendWindowEnd?: string | null;
+      campaignSendCapHours?: number;
+      languages?: string[];
+    }>(`/api/merchant/${merchantSlug}/settings`);
+    setMerchantName(data.name ?? "");
+    setCurrency(data.currency === "SGD" ? "SGD" : "MYR");
+    setAutomationsEnabled(data.retentionEnabled !== false);
+    setSendWindowStart(data.campaignSendWindowStart?.slice(0, 5) || "");
+    setSendWindowEnd(data.campaignSendWindowEnd?.slice(0, 5) || "");
+    setSendCapHours(Number(data.campaignSendCapHours ?? 48));
+    setProgramLanguages(data.languages?.length ? data.languages : ["en"]);
   }, [merchantSlug]);
 
   useEffect(() => {
     loadCampaigns();
-    loadPromos();
-  }, [loadCampaigns, loadPromos]);
+    loadSettings();
+  }, [loadCampaigns, loadSettings]);
 
-  async function createCampaign() {
-    if (!form.name.trim()) return;
-    await merchantApi(`/api/merchant/${merchantSlug}/campaigns`, {
+  async function createVoucher(input: {
+    name: string;
+    code: string;
+    type: "percentage" | "fixed";
+    value: number;
+    expiresAt: string | null;
+  }) {
+    await merchantApi(`/api/merchant/${merchantSlug}/promos`, {
       method: "POST",
-      body: JSON.stringify({
-        name: form.name.trim(),
-        channel: form.channel,
-        status: "draft",
-        messageBody: form.messageBody || null,
-        bannerTitle: form.bannerTitle || null,
-        bannerText: form.bannerText || null,
-        linkUrl: form.linkUrl || null,
-      }),
+      body: JSON.stringify(input),
     });
-    setForm(emptyForm);
-    await loadCampaigns();
   }
 
-  async function sendCampaign(campaign: Campaign) {
-    if (campaign.channel !== "whatsapp" && campaign.channel !== "sms") return;
-    setSendingId(campaign.id);
+  async function revokeVoucher(promoId: string) {
+    await merchantApi(`/api/merchant/${merchantSlug}/promos`, {
+      method: "PATCH",
+      body: JSON.stringify({ promoId, active: false }),
+    });
+  }
+
+  async function toggleAutomations(enabled: boolean) {
+    setSavingSwitch(true);
+    setSwitchError(null);
     try {
-      const result = await merchantApi<{ ok: boolean; queued: number; message: string }>(
-        `/api/merchant/${merchantSlug}/campaigns/send`,
-        {
-          method: "POST",
-          body: JSON.stringify({ campaignId: campaign.id }),
-        },
-      );
-      alert(result.message);
-      await loadCampaigns();
+      await merchantApi(`/api/merchant/${merchantSlug}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ retentionEnabled: enabled }),
+      });
+      setAutomationsEnabled(enabled);
+    } catch (err) {
+      setSwitchError(err instanceof Error ? err.message : "Could not update automations");
     } finally {
-      setSendingId(null);
+      setSavingSwitch(false);
     }
   }
 
-  async function toggleCampaign(campaign: Campaign) {
-    const next = campaign.status === "active" ? "paused" : "active";
-    await merchantApi(`/api/merchant/${merchantSlug}/campaigns`, {
-      method: "PATCH",
-      body: JSON.stringify({ campaignId: campaign.id, status: next }),
-    });
-    await loadCampaigns();
-  }
-
-  async function createPromo() {
-    if (!promoForm.name.trim() || !promoForm.code.trim()) return;
-    await merchantApi(`/api/merchant/${merchantSlug}/promos`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: promoForm.name,
-        code: promoForm.code,
-        type: promoForm.type,
-        value: promoForm.value,
-      }),
-    });
-    setPromoForm({ name: "", code: "", type: "percentage", value: 10 });
-    await loadPromos();
-  }
-
-  async function togglePromo(promo: Promo) {
-    await merchantApi(`/api/merchant/${merchantSlug}/promos`, {
-      method: "PATCH",
-      body: JSON.stringify({ promoId: promo.id, active: !promo.active }),
-    });
-    await loadPromos();
+  async function saveSendHygiene(patch: {
+    campaignSendWindowStart?: string | null;
+    campaignSendWindowEnd?: string | null;
+    campaignSendCapHours?: number;
+  }) {
+    setSavingSwitch(true);
+    setSwitchError(null);
+    try {
+      await merchantApi(`/api/merchant/${merchantSlug}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      if (patch.campaignSendWindowStart !== undefined) {
+        setSendWindowStart(patch.campaignSendWindowStart?.slice(0, 5) || "");
+      }
+      if (patch.campaignSendWindowEnd !== undefined) {
+        setSendWindowEnd(patch.campaignSendWindowEnd?.slice(0, 5) || "");
+      }
+      if (patch.campaignSendCapHours !== undefined) {
+        setSendCapHours(patch.campaignSendCapHours);
+      }
+    } catch (err) {
+      setSwitchError(err instanceof Error ? err.message : "Could not update send settings");
+    } finally {
+      setSavingSwitch(false);
+    }
   }
 
   return (
     <AdminShell
       merchantSlug={merchantSlug}
       active="campaigns"
-      title="Campaigns & promos"
-      eyebrow="Marketing"
+      title="Campaign overview"
+      eyebrow="Marketing command center"
     >
-      <div className="mb-6 flex gap-2 border-b border-surface-container-highest">
-        {(["campaigns", "promos"] as const).map((t) => (
+      <div className="mb-6 flex gap-1 border-b border-surface-container-highest">
+        {CAMPAIGNS_MAIN_TABS.map((t) => (
           <button
-            key={t}
+            key={t.id}
             type="button"
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 font-mono text-label-mono uppercase ${
-              tab === t ? "border-b-2 border-primary text-primary" : "text-on-surface-variant"
+            onClick={() => setMainTab(t.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 font-display text-eyebrow uppercase transition-colors ${
+              mainTab === t.id
+                ? "border-b-2 border-primary text-primary"
+                : "text-on-surface-variant hover:text-primary"
             }`}
           >
-            {t}
+            <Icon name={t.icon} className="text-base" />
+            {t.label}
           </button>
         ))}
       </div>
 
-      {tab === "campaigns" ? (
+      {mainTab === "campaigns" ? (
         <>
-          <div className="mb-8 border border-surface-container-highest bg-surface-container-lowest p-6">
-            <h2 className="mb-4 font-display text-headline-sm text-primary">New campaign</h2>
-            <div className="grid max-w-2xl gap-4">
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Campaign name"
-                className="border border-surface-container-highest px-3 py-2"
-              />
-              <div className="grid gap-2 sm:grid-cols-3">
-                {CAMPAIGN_CHANNELS.map((ch) => (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    onClick={() => setForm({ ...form, channel: ch.id })}
-                    className={`flex flex-col items-start gap-1 border p-3 text-left ${
-                      form.channel === ch.id
-                        ? "border-primary bg-surface-container-low"
-                        : "border-surface-container-highest"
-                    }`}
-                  >
-                    <Icon name={ch.icon} className="text-primary" />
-                    <span className="font-display text-eyebrow uppercase">{ch.label}</span>
-                    <span className="text-body-md text-on-surface-variant">{ch.description}</span>
-                  </button>
-                ))}
-              </div>
-              {form.channel === "banner" ? (
-                <>
-                  <input
-                    value={form.bannerTitle}
-                    onChange={(e) => setForm({ ...form, bannerTitle: e.target.value })}
-                    placeholder="Banner headline"
-                    className="border border-surface-container-highest px-3 py-2"
-                  />
-                  <textarea
-                    value={form.bannerText}
-                    onChange={(e) => setForm({ ...form, bannerText: e.target.value })}
-                    placeholder="Banner message"
-                    rows={3}
-                    className="border border-surface-container-highest px-3 py-2"
-                  />
-                  <input
-                    value={form.linkUrl}
-                    onChange={(e) => setForm({ ...form, linkUrl: e.target.value })}
-                    placeholder="Optional link URL"
-                    className="border border-surface-container-highest px-3 py-2"
-                  />
-                </>
-              ) : (
-                <textarea
-                  value={form.messageBody}
-                  onChange={(e) => setForm({ ...form, messageBody: e.target.value })}
-                  placeholder={form.channel === "sms" ? "SMS message" : "WhatsApp message"}
-                  rows={4}
-                  className="border border-surface-container-highest px-3 py-2"
-                />
-              )}
-              <button
-                type="button"
-                onClick={createCampaign}
-                className="flex w-fit items-center gap-2 bg-primary px-4 py-2 text-on-primary"
-              >
-                <Icon name="add" />
-                Create campaign
-              </button>
+          {switchError && (
+            <div
+              role="alert"
+              className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-body-md text-red-800"
+            >
+              <Icon name="error" className="text-lg" />
+              {switchError}
             </div>
-          </div>
-
-          <div className="grid gap-4">
-            {campaigns.map((campaign) => (
-              <article
-                key={campaign.id}
-                className="flex flex-wrap items-start justify-between gap-4 border border-surface-container-highest bg-surface-container-lowest p-6"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-display text-headline-sm text-primary">{campaign.name}</h2>
-                    <span className="border border-surface-container-highest px-2 py-0.5 font-mono text-[10px] uppercase">
-                      {campaign.channelLabel}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-body-md text-on-surface-variant">
-                    {campaign.reach} reached · {campaign.conversion} conversion
-                  </p>
-                  {campaign.bannerText && (
-                    <p className="mt-2 text-body-md">{campaign.bannerText}</p>
-                  )}
-                  {campaign.messageBody && (
-                    <p className="mt-2 font-mono text-label-mono text-on-surface-variant">
-                      {campaign.messageBody}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {(campaign.channel === "whatsapp" || campaign.channel === "sms") && (
-                    <button
-                      type="button"
-                      onClick={() => sendCampaign(campaign)}
-                      disabled={sendingId === campaign.id || !campaign.messageBody}
-                      className="flex items-center gap-1 border border-primary px-3 py-1 font-display text-eyebrow uppercase text-primary disabled:opacity-50"
-                    >
-                      <Icon name="send" />
-                      {sendingId === campaign.id ? "Sending…" : "Send"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => toggleCampaign(campaign)}
-                    className={`border px-3 py-1 font-display text-eyebrow uppercase ${
-                      campaign.status === "active"
-                        ? "border-primary bg-primary text-on-primary"
-                        : "border-surface-container-highest text-on-surface-variant"
-                    }`}
-                  >
-                    {campaign.status}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
+          )}
+          <CampaignManagerView
+            merchantSlug={merchantSlug}
+            merchantName={merchantName}
+            currency={currency}
+            campaigns={campaigns}
+            onCampaignsChange={loadCampaigns}
+            automationsEnabled={automationsEnabled}
+            savingSwitch={savingSwitch}
+            onToggleAutomations={toggleAutomations}
+            sendWindowStart={sendWindowStart}
+            sendWindowEnd={sendWindowEnd}
+            sendCapHours={sendCapHours}
+            onSaveSendHygiene={saveSendHygiene}
+            programLanguages={programLanguages}
+            openCampaignId={focusCampaignId}
+            numberHealth={numberHealth}
+            startCompose={startCompose}
+          />
         </>
       ) : (
-        <>
-          <div className="mb-8 flex flex-wrap gap-2 border border-surface-container-highest bg-surface-container-lowest p-4">
-            <input
-              value={promoForm.name}
-              onChange={(e) => setPromoForm({ ...promoForm, name: e.target.value })}
-              placeholder="Promo name"
-              className="border border-surface-container-highest px-3 py-2"
-            />
-            <input
-              value={promoForm.code}
-              onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value.toUpperCase() })}
-              placeholder="Code"
-              className="border border-surface-container-highest px-3 py-2"
-            />
-            <input
-              type="number"
-              value={promoForm.value}
-              onChange={(e) => setPromoForm({ ...promoForm, value: Number(e.target.value) })}
-              className="w-24 border border-surface-container-highest px-3 py-2"
-            />
-            <button type="button" onClick={createPromo} className="bg-primary px-4 py-2 text-on-primary">
-              Add promo
-            </button>
-          </div>
-          <div className="grid gap-3">
-            {promos.map((promo) => (
-              <div
-                key={promo.id}
-                className="flex items-center justify-between border border-surface-container-highest bg-surface-container-lowest p-4"
-              >
-                <div>
-                  <p className="font-display text-headline-sm text-primary">
-                    {promo.name}{" "}
-                    <span className="font-mono text-label-mono text-on-surface-variant">
-                      {promo.code}
-                    </span>
-                  </p>
-                  <p className="text-body-md text-on-surface-variant">
-                    {promo.type === "percentage" ? `${promo.value}% off` : `RM ${promo.value} off`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => togglePromo(promo)}
-                  className={`border px-3 py-1 font-mono text-label-mono uppercase ${
-                    promo.active ? "border-primary text-primary" : "text-on-surface-variant"
-                  }`}
-                >
-                  {promo.active ? "Active" : "Paused"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </>
+        <PromoVoucherInventoryView
+          merchantSlug={merchantSlug}
+          onCreateVoucher={createVoucher}
+          onRevokeVoucher={revokeVoucher}
+        />
       )}
     </AdminShell>
   );

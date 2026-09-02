@@ -8,7 +8,7 @@
    **Prod:** redirect to HitPay → webhook marks order paid
 4. Server creates **join token** (single-use, 30 min) — points only after verified payment
 5. Thank-you page shows **Join iRewards on WhatsApp** (`JOIN-{token}`)
-6. Twilio webhook → member created → +1 first join + order points (with level multiplier)
+6. Meta WhatsApp webhook → member created → +1 first join + order points (with level multiplier)
 
 ## Return visit
 

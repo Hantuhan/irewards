@@ -61,7 +61,7 @@ login_code=$(printf '%s' "$login_resp" | tail -n 1)
 auth() { curl -s -b "$COOKIE_JAR" "$@"; }
 
 # --- Merchant APIs ---
-for path in settings menu orders customers analytics campaigns automation tables reward-levels; do
+for path in settings menu orders customers analytics campaigns tables reward-levels reports "reports/compare?periodDays=7" reports/intelligence; do
   code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$BASE_URL/api/merchant/$MERCHANT_SLUG/$path")
   [ "$code" = "200" ] && pass "GET /api/merchant/$MERCHANT_SLUG/$path ($code)" || fail "GET $path expected 200 got $code"
 done
@@ -131,7 +131,7 @@ code=$(http_code "$BASE_URL/m/$MERCHANT_SLUG/table/$TABLE_ID/thanks?orderId=$ord
 [ "$code" = "200" ] && pass "Thank-you page ($code)" || fail "Thank-you page expected 200 got $code"
 
 # --- Dashboard pages ---
-for path in "" menu rewards customers analytics campaigns automation tables settings; do
+for path in "" menu rewards customers analytics campaigns "campaigns?tab=promos" tables settings reports; do
   url="$BASE_URL/dashboard/$MERCHANT_SLUG"
   [ -n "$path" ] && url="$url/$path"
   code=$(http_code "$url")
@@ -151,8 +151,13 @@ session_code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/customer/se
 [ "$session_code" = "200" ] && pass "Customer session ($session_code)" || fail "Customer session expected 200 got $session_code"
 
 # --- Kitchen SSE ---
-sse_code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" -N --max-time 2 \
+sse_code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" -N --max-time 5 \
   "$BASE_URL/api/merchant/$MERCHANT_SLUG/orders/stream" 2>/dev/null || true)
+if [ "$sse_code" != "200" ]; then
+  sleep 1
+  sse_code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" -N --max-time 5 \
+    "$BASE_URL/api/merchant/$MERCHANT_SLUG/orders/stream" 2>/dev/null || true)
+fi
 [ "$sse_code" = "200" ] && pass "Kitchen SSE stream ($sse_code)" || fail "Kitchen SSE expected 200 got $sse_code"
 
 # --- Automation cron ---

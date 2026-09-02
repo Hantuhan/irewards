@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CustomerMobileNav } from "@/components/customer/CustomerMobileNav";
+import { StorefrontLanguagePicker } from "@/components/storefront/StorefrontLanguagePicker";
 import { Icon } from "@/components/ui/Icon";
 import { MobileShell } from "@/components/ui/MobileShell";
+import { useStorefrontLocale } from "@/hooks/useStorefrontLocale";
+import { useStorefrontMenu } from "@/hooks/useStorefrontMenu";
 import { customerRoutes } from "@/lib/navigation/routes";
 
 type ProfileShellProps = {
@@ -13,6 +16,8 @@ type ProfileShellProps = {
 };
 
 export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
+  const { lang, setLang, copy } = useStorefrontLocale(merchantSlug, ["en", "zh", "ms"]);
+  const { languages } = useStorefrontMenu(merchantSlug, lang);
   const [memberName, setMemberName] = useState<string | null>(null);
   const [whatsappOptIn, setWhatsappOptIn] = useState(true);
   const [promoEmails, setPromoEmails] = useState(false);
@@ -26,10 +31,17 @@ export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
   return (
     <MobileShell>
       <header className="border-b border-surface-container-highest px-6 pb-6 pt-12">
-        <h1 className="font-display text-headline-mobile text-primary">Profile</h1>
-        <p className="mt-1 text-body-md text-on-surface-variant">
-          {memberName ?? "Guest · join iRewards after your first order"}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="font-display text-headline-mobile text-primary">{copy.profile}</h1>
+            <p className="mt-1 text-body-md text-on-surface-variant">
+              {memberName ?? "Guest · join iRewards after your first order"}
+            </p>
+          </div>
+          {languages.length > 1 && (
+            <StorefrontLanguagePicker languages={languages} value={lang} onChange={setLang} />
+          )}
+        </div>
       </header>
 
       <main className="flex flex-col gap-6 px-6 py-6 pb-24">
@@ -128,6 +140,12 @@ export function ProfileShell({ merchantSlug, tableId }: ProfileShellProps) {
         merchantSlug={merchantSlug}
         tableId={tableId}
         active="profile"
+        labels={{
+          shop: copy.shop,
+          rewards: copy.rewards,
+          cart: copy.cart,
+          profile: copy.profile,
+        }}
       />
     </MobileShell>
   );

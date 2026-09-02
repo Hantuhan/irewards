@@ -1,4 +1,5 @@
 import type { RewardLevelRow } from "@/lib/db/types";
+import type { LocalizedMap } from "@/lib/i18n/program-locale";
 
 export type CustomerTierSnapshot = {
   current: RewardLevelRow;
@@ -71,7 +72,17 @@ export type RewardLevelInput = {
   minLifetimePoints: number;
   pointsMultiplier: number;
   perkDescription: string | null;
+  nameI18n?: LocalizedMap;
+  perkDescriptionI18n?: LocalizedMap;
   discountPercent: number;
+  tierActive?: boolean;
+  pointExpiryDays?: number | null;
+  birthdayPoints?: number;
+  welcomePoints?: number;
+  welcomeRewards?: number;
+  renewPoints?: number;
+  renewRewards?: number;
+  validityMonths?: number | null;
 };
 
 export function validateRewardLevels(levels: RewardLevelInput[]): string | null {

@@ -9,6 +9,7 @@ import {
   type ProductDetailAddPayload,
 } from "@/components/storefront/ProductDetailView";
 import { useStorefrontLocale } from "@/hooks/useStorefrontLocale";
+import { useMemberSession } from "@/hooks/useMemberSession";
 import { useStorefrontMenu } from "@/hooks/useStorefrontMenu";
 import { useTableCart } from "@/hooks/useTableCart";
 import { customerRoutes } from "@/lib/navigation/routes";
@@ -32,9 +33,9 @@ export function ProductDetailShell({ merchantSlug, tableId, itemSlug }: ProductD
     ingredientPresets,
     merchantCurrency,
     pointsProgramEnabled,
-    pointsPerRinggit,
     loading: menuLoading,
   } = useStorefrontMenu(merchantSlug, lang);
+  const { member } = useMemberSession();
 
   const [item, setItem] = useState<StorefrontMenuItem | null>(null);
   const [itemLoading, setItemLoading] = useState(true);
@@ -159,7 +160,7 @@ export function ProductDetailShell({ merchantSlug, tableId, itemSlug }: ProductD
         copy={copy}
         contextLabel={contextLabel}
         pointsProgramEnabled={pointsProgramEnabled}
-        pointsPerRinggit={pointsPerRinggit}
+        isMember={Boolean(member)}
         pairings={pairings}
         quantityInCart={item ? quantityInCart(item.id) : 0}
         loading={itemLoading || (menuLoading && !item)}

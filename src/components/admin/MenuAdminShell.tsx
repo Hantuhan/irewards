@@ -2014,7 +2014,6 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
                   badgeCatalog={badgeCatalog}
                   ingredientCatalog={ingredientPresets}
                   contextLabel="Table 01 · Dine-in"
-                  pointsPerRinggit={1}
                   pairings={previewPairings()}
                   onBack={() => setProductPreview(null)}
                 />

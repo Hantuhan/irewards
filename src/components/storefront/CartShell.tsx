@@ -10,8 +10,10 @@ import { StorefrontLanguagePicker } from "@/components/storefront/StorefrontLang
 import { useCheckoutSettings } from "@/hooks/useCheckoutSettings";
 import { useStorefrontMenu } from "@/hooks/useStorefrontMenu";
 import { useStorefrontLocale } from "@/hooks/useStorefrontLocale";
+import { pointsUnit } from "@/lib/i18n/storefront-locale";
 import { useStoreSuggestion, type StoreSuggestion } from "@/hooks/useStoreSuggestion";
 import { useTableCart } from "@/hooks/useTableCart";
+import { usePointsPreview } from "@/hooks/usePointsPreview";
 import { customerRoutes } from "@/lib/navigation/routes";
 import { Icon } from "@/components/ui/Icon";
 import { useMemberSession } from "@/hooks/useMemberSession";
@@ -179,6 +181,17 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
     : formatMerchantPrice(cartTotal, currency);
 
   const itemById = useMemo(() => new Map(allItems.map((item) => [item.id, item])), [allItems]);
+
+  // Points are earned on the paid total, so preview from the same figure the
+  // diner is about to pay rather than estimating per item.
+  const pointsPreview = usePointsPreview({
+    merchantSlug,
+    totalCents: orderTotals?.totalCents ?? 0,
+    menuItemIds: cartLines
+      .map((line) => itemById.get(line.itemId)?.menuItemId)
+      .filter((id): id is string => Boolean(id)),
+    enabled: Boolean(orderTotals) && cartCount > 0,
+  });
 
   const cartItemIds = useMemo(
     () => [...new Set(cartLines.map((line) => line.itemId))],
@@ -532,16 +545,35 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                 )}
                 {!member && (
                   <p className="border border-dashed border-surface-container-highest px-3 py-2 text-[12px] text-on-surface-variant">
-                    Not a member yet? Order &amp; pay, then join on WhatsApp. Redeem next visit.
+                    {pointsPreview?.enabled && pointsPreview.points > 0 ? (
+                      <>
+                        {copy.joinToClaimPoints}{" "}
+                        <span className="font-medium text-on-surface">
+                          {pointsPreview.points} {pointsUnit(pointsPreview.points, copy)}
+                        </span>{" "}
+                        {copy.onThisOrder}
+                      </>
+                    ) : (
+                      "Not a member yet? Order & pay, then join on WhatsApp. Redeem next visit."
+                    )}
                   </p>
                 )}
                 {member && maxRedeemable <= 0 && (
                   <p className="border border-surface-container-highest px-3 py-2 text-[12px] text-on-surface-variant">
-                    You have {member.points} pts
+                    You have {member.points} {pointsUnit(member.points, copy)}
                     {(member.reservedPoints ?? 0) > 0
                       ? ` (${member.reservedPoints} reserved on an unpaid order)`
                       : ""}
-                    . Earn more on this visit after you pay.
+                    .{" "}
+                    {pointsPreview?.enabled && pointsPreview.points > 0 ? (
+                      <>
+                        {copy.earnOnThisOrder}{" "}
+                        <span className="font-medium text-on-surface">
+                          +{pointsPreview.points} {pointsUnit(pointsPreview.points, copy)}
+                        </span>{" "}
+                        {copy.onThisOrder} {copy.pointsAfterPayment}
+                      </>
+                    ) : null}
                   </p>
                 )}
                 {member && maxRedeemable > 0 && !redeemAuthorized && (

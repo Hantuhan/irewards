@@ -186,7 +186,6 @@ type StorefrontUsualCardProps = {
   item: StorefrontMenuItem;
   subtitle?: string | null;
   currency?: "MYR" | "SGD";
-  earnPts?: number | null;
   onAdd: () => void;
   onOpen: () => void;
 };
@@ -242,7 +241,6 @@ type StorefrontMenuItemRowProps = {
   quantityInCart: number;
   currency?: "MYR" | "SGD";
   badgeCatalog?: MenuBadge[];
-  earnPts?: number | null;
   onOpen: () => void;
   onAdd: (event: React.MouseEvent) => void;
 };
@@ -252,7 +250,6 @@ export function StorefrontMenuItemRow({
   quantityInCart,
   currency = "MYR",
   badgeCatalog = [],
-  earnPts,
   onOpen,
   onAdd,
 }: StorefrontMenuItemRowProps) {
@@ -279,11 +276,6 @@ export function StorefrontMenuItemRow({
             <span className="font-display text-[14px] font-medium text-on-surface">
               {formatMerchantPrice(item.priceCents, currency)}
             </span>
-            {earnPts != null && earnPts > 0 && (
-              <span className="bg-surface-container px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">
-                +{earnPts} pts
-              </span>
-            )}
             {quantityInCart > 0 && (
               <span className="font-mono text-[10px] text-on-surface">×{quantityInCart}</span>
             )}

@@ -58,7 +58,8 @@ export type ProductDetailViewProps = {
   /** e.g. "Table 04 · Dine-in" — rendered under the page title. */
   contextLabel?: string | null;
   pointsProgramEnabled?: boolean;
-  pointsPerRinggit?: number;
+  /** Drives the loyalty chip wording. Points are never quantified per item. */
+  isMember?: boolean;
   pairings?: ProductDetailPairing[];
   quantityInCart?: number;
   loading?: boolean;
@@ -83,11 +84,6 @@ function buildInitialQuantities(groups: ModifierGroup[]): OptionQuantities {
   return initial;
 }
 
-function earnPoints(cents: number, pointsPerRinggit: number): number {
-  if (!Number.isFinite(pointsPerRinggit) || pointsPerRinggit <= 0) return 0;
-  return Math.floor((cents / 100) * pointsPerRinggit);
-}
-
 const CARD = "border border-surface-container-highest bg-surface-container-lowest";
 const EYEBROW = "font-display text-eyebrow uppercase tracking-widest";
 
@@ -109,7 +105,7 @@ export function ProductDetailView({
   copy: copyProp,
   contextLabel,
   pointsProgramEnabled = true,
-  pointsPerRinggit = 0,
+  isMember = false,
   pairings = [],
   quantityInCart = 0,
   loading = false,
@@ -159,8 +155,6 @@ export function ProductDetailView({
 
   const unitPrice = unitPriceWithModifiers(item.priceCents, selections);
   const totalPrice = unitPrice * quantity;
-  const basePoints = pointsProgramEnabled ? earnPoints(item.priceCents, pointsPerRinggit) : 0;
-  const totalPoints = pointsProgramEnabled ? earnPoints(totalPrice, pointsPerRinggit) : 0;
 
   const missingGroup = useMemo(() => {
     for (const group of groups) {
@@ -296,11 +290,11 @@ export function ProductDetailView({
               ))}
             </div>
           ) : null}
-          {basePoints > 0 ? (
+          {pointsProgramEnabled ? (
             <div className="absolute right-3 top-3 z-10">
               <span className="inline-flex items-center gap-1 border border-surface-container-highest bg-surface-container-lowest/95 px-2.5 py-1 font-mono text-[11px] font-medium text-primary">
-                <Icon name="award_star" filled className="text-[14px] text-manus" />+{basePoints}{" "}
-                {copy.loyaltyPts}
+                <Icon name="award_star" filled className="text-[14px] text-manus" />
+                {isMember ? copy.earnsPoints : copy.joinToEarn}
               </span>
             </div>
           ) : null}
@@ -576,9 +570,6 @@ export function ProductDetailView({
             </div>
             <div className="flex flex-col gap-3">
               {pairings.map(({ item: pairing, href, quantityInCart: pairQty }) => {
-                const pairPoints = pointsProgramEnabled
-                  ? earnPoints(pairing.priceCents, pointsPerRinggit)
-                  : 0;
                 const thumb = (
                   <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden border border-surface-container-highest bg-surface-container">
                     {pairing.imageUrl ? (
@@ -599,13 +590,8 @@ export function ProductDetailView({
                         {pairing.description}
                       </span>
                     ) : null}
-                    <span className="mt-1 flex items-center gap-2 font-mono text-[12px]">
-                      <span className="font-medium text-primary">
-                        {formatMerchantPrice(pairing.priceCents, currency)}
-                      </span>
-                      {pairPoints > 0 ? (
-                        <span className="text-[11px] text-manus">(+{pairPoints} {copy.pts})</span>
-                      ) : null}
+                    <span className="mt-1 block font-mono text-[12px] font-medium text-primary">
+                      {formatMerchantPrice(pairing.priceCents, currency)}
                     </span>
                   </span>
                 );
@@ -717,12 +703,7 @@ export function ProductDetailView({
                 {formatMerchantPrice(totalPrice, currency)}
               </span>
             </span>
-            {totalPoints > 0 ? (
-              <span className="w-full text-left font-mono text-[9px] uppercase tracking-wider text-white/80">
-                {copy.earnsPoints} +{totalPoints} iRewards {copy.pts}
-                {quantityInCart > 0 ? ` · ${quantityInCart} ${copy.inCart}` : ""}
-              </span>
-            ) : quantityInCart > 0 ? (
+            {quantityInCart > 0 ? (
               <span className="w-full text-left font-mono text-[9px] uppercase tracking-wider text-white/80">
                 {quantityInCart} {copy.inCart}
               </span>

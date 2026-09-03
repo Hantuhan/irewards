@@ -130,6 +130,7 @@ export type OrderRow = {
   promo_id: string | null;
   points_redeemed: number;
   service_type?: "dine_in" | "takeaway";
+  stamp_reward_applied?: boolean;
   receipt_requested?: boolean;
   receipt_sent_at?: string | null;
   receipt_delivery_method?: "email" | "whatsapp" | null;
@@ -259,6 +260,10 @@ export type PromoRow = {
   active: boolean;
   code: string | null;
   campaign_id?: string | null;
+  /** Max redemptions across all members. Null = unlimited. */
+  usage_limit?: number | null;
+  /** Max redemptions by one member. Null = unlimited. */
+  per_customer_limit?: number | null;
   created_at?: string;
 };
 

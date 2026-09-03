@@ -3,6 +3,7 @@ import { processDueAutomationJobs } from "@/lib/services/automation";
 import { runInactivitySweep } from "@/lib/services/churn-scheduler";
 import { refreshNumberHealth } from "@/lib/whatsapp/number-health";
 import { refreshPendingTemplates } from "@/lib/whatsapp/templates";
+import { AUTOMATION_TASK, recordHeartbeat } from "@/lib/services/heartbeat";
 
 export async function POST(request: Request) {
   const isProd = process.env.NODE_ENV === "production";
@@ -34,6 +35,9 @@ export async function POST(request: Request) {
   }));
   const sweep = await runInactivitySweep();
   const jobs = await processDueAutomationJobs(100);
+
+  // Stamped last so the heartbeat means "a full run completed", not "a run started".
+  await recordHeartbeat(AUTOMATION_TASK, { jobs, sweep });
 
   return NextResponse.json({ templates, number, sweep, jobs });
 }

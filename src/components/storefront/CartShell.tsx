@@ -258,7 +258,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
       }
       throw new Error("No payment URL returned");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
+      setError(err instanceof Error ? err.message : copy.checkoutFailed);
     } finally {
       setCheckoutState("idle");
     }
@@ -270,6 +270,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
     pointsToRedeem,
     serviceType,
     paymentMethod,
+    copy.checkoutFailed,
   ]);
 
   const requestRedeemOtp = useCallback(async () => {
@@ -296,15 +297,15 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
       );
       if (data.devCode) setDevOtpHint(data.devCode);
     } catch (err) {
-      setOtpMsg(err instanceof Error ? err.message : "Could not send code");
+      setOtpMsg(err instanceof Error ? err.message : copy.couldNotSendCode);
     } finally {
       setOtpBusy(false);
     }
-  }, [merchantSlug]);
+  }, [merchantSlug, copy.couldNotSendCode]);
 
   const verifyRedeemOtp = useCallback(async () => {
     if (!/^\d{4}$/.test(otpCode.trim())) {
-      setOtpMsg("Enter the 4-digit code from WhatsApp.");
+      setOtpMsg(copy.enterFourDigit);
       return;
     }
     setOtpBusy(true);
@@ -318,15 +319,22 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Verification failed");
-      setOtpMsg("Verified — you can spend points on this order.");
+      setOtpMsg(copy.verifiedCanSpend);
       setDevOtpHint(null);
       await refreshMember();
     } catch (err) {
-      setOtpMsg(err instanceof Error ? err.message : "Verification failed");
+      setOtpMsg(err instanceof Error ? err.message : copy.verificationFailed);
     } finally {
       setOtpBusy(false);
     }
-  }, [merchantSlug, otpCode, refreshMember]);
+  }, [
+    merchantSlug,
+    otpCode,
+    refreshMember,
+    copy.enterFourDigit,
+    copy.verifiedCanSpend,
+    copy.verificationFailed,
+  ]);
 
   function handleAddSuggestion(suggestion: StoreSuggestion) {
     if (!suggestion.itemId) return;
@@ -345,7 +353,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
   if (loading) {
     return (
       <MobileShell>
-        <p className="p-12 text-center text-on-surface-variant">Loading cart…</p>
+        <p className="p-12 text-center text-on-surface-variant">{copy.loadingCart}</p>
       </MobileShell>
     );
   }
@@ -388,8 +396,9 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
           <div>
             <h1 className="font-display text-headline-mobile text-primary">{copy.cart}</h1>
             <p className="mt-1 text-body-md text-on-surface-variant">
-              {copy.table} {tableId} · {cartCount} item{cartCount === 1 ? "" : "s"}
-              {serviceType === "takeaway" ? " · Take away" : " · Dine in"}
+              {copy.table} {tableId} · {cartCount}{" "}
+              {cartCount === 1 ? copy.itemOne : copy.itemMany} ·{" "}
+              {serviceType === "takeaway" ? copy.takeaway : copy.dineIn}
             </p>
           </div>
           {languages.length > 1 && (
@@ -403,7 +412,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
             className="mt-2 flex items-center gap-1 font-mono text-label-mono text-on-surface-variant"
           >
             <Icon name="arrow_back" className="text-lg" />
-            Back to suggestions
+            {copy.backToSuggestions}
           </button>
         )}
       </header>
@@ -412,19 +421,19 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
         {cartLines.length === 0 ? (
           <div className="zenith-surface flex flex-col items-center gap-4 p-8 text-center">
             <Icon name="shopping_bag" className="text-4xl text-outline-variant" />
-            <p className="text-body-md text-on-surface-variant">Your cart is empty.</p>
+            <p className="text-body-md text-on-surface-variant">{copy.cartEmpty}</p>
             <Link
               href={routes.shop}
               className="bg-primary px-6 py-3 font-display text-headline-sm text-on-primary"
             >
-              Browse menu
+              {copy.browseMenu}
             </Link>
           </div>
         ) : step === "review" ? (
           <>
             <section>
               <h2 className="mb-3 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Order type
+                {copy.orderType}
               </h2>
               <ServiceTypePicker value={serviceType} onChange={setServiceType} />
             </section>
@@ -455,9 +464,9 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                           </p>
                         )}
                         <p className="mt-1 font-mono text-label-mono text-on-surface-variant">
-                          {formatMerchantPrice(line.unitPriceCents, currency)} each
+                          {formatMerchantPrice(line.unitPriceCents, currency)} {copy.each}
                           {line.takeawaySurchargeCents > 0 && (
-                            <span className="ml-1 text-primary">incl. takeaway</span>
+                            <span className="ml-1 text-primary">{copy.inclTakeaway}</span>
                           )}
                         </p>
                       </div>
@@ -490,7 +499,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                           onChange={(e) => setLinePackedForTakeaway(line.key, e.target.checked)}
                           className="h-4 w-4"
                         />
-                        Pack this item to go
+                        {copy.packToGo}
                       </label>
                     )}
                   </li>
@@ -499,14 +508,14 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
             </ul>
 
             <div className="zenith-surface flex justify-between p-4 font-display text-headline-sm">
-              <span>Subtotal</span>
+              <span>{copy.subtotal}</span>
               <span className="font-mono text-label-mono">
                 {formatMerchantPrice(cartTotal, currency)}
               </span>
             </div>
 
             <p className="text-center text-body-md text-on-surface-variant">
-              Tap continue to review add-ons before payment.
+              {copy.continueHint}
             </p>
 
             <button
@@ -514,7 +523,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
               onClick={() => setStep("suggestions")}
               className="flex w-full items-center justify-center gap-2 bg-primary py-4 font-display text-headline-sm text-on-primary"
             >
-              Continue
+              {copy.continueLabel}
               <Icon name="arrow_forward" />
             </button>
           </>
@@ -535,13 +544,13 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
 
             <section>
               <h2 className="mb-3 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Promo & points
+                {copy.promoAndPoints}
               </h2>
               <div className="flex flex-col gap-2">
                 <input
                   value={promoCode}
                   onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                  placeholder="Promo code"
+                  placeholder={copy.promoCode}
                   className="border border-surface-container-highest px-3 py-2"
                 />
                 {promoMsg && (
@@ -564,15 +573,15 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                         {copy.onThisOrder}
                       </>
                     ) : (
-                      "Not a member yet? Order & pay, then join on WhatsApp. Redeem next visit."
+                      copy.notMemberYet
                     )}
                   </p>
                 )}
                 {member && maxRedeemable <= 0 && (
                   <p className="border border-surface-container-highest px-3 py-2 text-[12px] text-on-surface-variant">
-                    You have {member.points} {pointsUnit(member.points, copy)}
+                    {copy.youHave} {member.points} {pointsUnit(member.points, copy)}
                     {(member.reservedPoints ?? 0) > 0
-                      ? ` (${member.reservedPoints} reserved on an unpaid order)`
+                      ? ` (${member.reservedPoints} ${copy.reservedOnUnpaid})`
                       : ""}
                     .{" "}
                     {pointsPreview?.enabled && pointsPreview.points > 0 ? (
@@ -589,7 +598,8 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                 {member && maxRedeemable > 0 && !redeemAuthorized && (
                   <div className="flex flex-col gap-2 border border-surface-container-highest px-3 py-3">
                     <p className="text-body-md">
-                      You have {maxRedeemable} pts available. Verify on WhatsApp to spend them.
+                      {copy.youHave} {maxRedeemable} {pointsUnit(maxRedeemable, copy)}{" "}
+                      {copy.available}. {copy.verifyToSpend}
                     </p>
                     <button
                       type="button"
@@ -597,14 +607,14 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                       onClick={() => void requestRedeemOtp()}
                       className="bg-primary px-3 py-2 text-[12px] font-medium text-on-primary disabled:opacity-50"
                     >
-                      {otpBusy ? "Sending…" : "Send WhatsApp code"}
+                      {otpBusy ? copy.sending : copy.sendWhatsAppCode}
                     </button>
                     <div className="flex gap-2">
                       <input
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         maxLength={4}
-                        placeholder="4-digit code"
+                        placeholder={copy.fourDigitCode}
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
                         className="h-9 min-w-0 flex-1 border border-surface-container-highest px-3 text-[13px]"
@@ -615,7 +625,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                         onClick={() => void verifyRedeemOtp()}
                         className="h-9 shrink-0 border border-primary px-3 text-[12px] font-medium text-primary disabled:opacity-50"
                       >
-                        Verify
+                        {copy.verify}
                       </button>
                     </div>
                     {devOtpHint && (
@@ -631,7 +641,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                 {member && maxRedeemable > 0 && redeemAuthorized && (
                   <label className="flex items-center justify-between border border-surface-container-highest px-3 py-2">
                     <span className="text-body-md">
-                      Redeem points (max {maxRedeemable})
+                      {copy.redeemPoints} ({copy.max} {maxRedeemable})
                     </span>
                     <input
                       type="number"
@@ -652,15 +662,15 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
 
             <section>
               <h2 className="mb-3 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Payment method
+                {copy.paymentMethod}
               </h2>
               <div className="overflow-hidden border border-surface-container-highest">
                 {(
                   [
                     {
                       id: "duitnow" as const,
-                      label: "DuitNow QR",
-                      hint: "Scan with any banking app",
+                      label: copy.duitnowLabel,
+                      hint: copy.duitnowHint,
                       icon: "qr_code_2",
                       iconBg: "bg-[#ED1C24]/10 text-[#ED1C24]",
                       brands: ["FPX", "DuitNow"],
@@ -668,8 +678,8 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                     },
                     {
                       id: "card" as const,
-                      label: "Card",
-                      hint: "Visa, Mastercard, Amex",
+                      label: copy.cardLabel,
+                      hint: copy.cardHint,
                       icon: "credit_card",
                       iconBg: "bg-surface-container text-on-surface",
                       brands: ["Visa", "Mastercard"],
@@ -677,8 +687,8 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                     },
                     {
                       id: "wallet" as const,
-                      label: "E-wallet",
-                      hint: "Touch ’n Go, GrabPay, ShopeePay",
+                      label: copy.walletLabel,
+                      hint: copy.walletHint,
                       icon: "account_balance_wallet",
                       iconBg: "bg-[#00B14F]/10 text-[#00B14F]",
                       brands: ["TNG", "Grab", "Shopee"],
@@ -708,7 +718,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                           </span>
                           {method.recommended && (
                             <span className="bg-primary px-1.5 py-0.5 font-mono text-[8px] font-medium uppercase tracking-[0.08em] text-on-primary">
-                              Popular
+                              {copy.popular}
                             </span>
                           )}
                         </span>
@@ -743,9 +753,9 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                 })}
               </div>
               <p className="mt-2 text-[11px] text-on-surface-variant">
-                {paymentMethod === "duitnow" && "You’ll see a QR after confirming — pay in your bank app."}
-                {paymentMethod === "card" && "Card details are entered on a secure payment page."}
-                {paymentMethod === "wallet" && "Choose your wallet on the next screen."}
+                {paymentMethod === "duitnow" && copy.duitnowNote}
+                {paymentMethod === "card" && copy.cardNote}
+                {paymentMethod === "wallet" && copy.walletNote}
               </p>
             </section>
 
@@ -758,7 +768,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
               </div>
               {orderTotals && orderTotals.serviceChargeCents > 0 && (
                 <div className="flex justify-between text-body-md text-on-surface-variant">
-                  <span>{orderTotals.serviceChargeLabel ?? "Service charge"}</span>
+                  <span>{orderTotals.serviceChargeLabel ?? copy.serviceCharge}</span>
                   <span className="font-mono text-label-mono">
                     {formatMerchantPrice(orderTotals.serviceChargeCents, currency)}
                   </span>
@@ -766,7 +776,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
               )}
               {orderTotals && orderTotals.taxCents > 0 && (
                 <div className="flex justify-between text-body-md text-on-surface-variant">
-                  <span>{orderTotals.taxLabel ?? "Tax"}</span>
+                  <span>{orderTotals.taxLabel ?? copy.tax}</span>
                   <span className="font-mono text-label-mono">
                     {formatMerchantPrice(orderTotals.taxCents, currency)}
                   </span>
@@ -774,14 +784,14 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
               )}
               {orderTotals && orderTotals.discountCents > 0 && (
                 <div className="flex justify-between text-body-md text-on-surface-variant">
-                  <span>Discounts</span>
+                  <span>{copy.discounts}</span>
                   <span className="font-mono text-label-mono">
                     −{formatMerchantPrice(orderTotals.discountCents, currency)}
                   </span>
                 </div>
               )}
               <div className="flex justify-between border-t border-surface-container-highest pt-2 font-display text-headline-sm">
-                <span>Total</span>
+                <span>{copy.total}</span>
                 <span className="font-mono text-label-mono">{formattedTotal}</span>
               </div>
             </section>
@@ -795,12 +805,12 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
               className="flex w-full items-center justify-center gap-2 bg-primary py-4 font-display text-headline-sm text-on-primary disabled:opacity-60"
             >
               {checkoutState === "loading"
-                ? "Starting…"
+                ? copy.starting
                 : paymentMethod === "duitnow"
-                  ? "Pay with DuitNow"
+                  ? copy.payWithDuitnow
                   : paymentMethod === "card"
-                    ? "Pay with card"
-                    : "Pay with e-wallet"}
+                    ? copy.payWithCard
+                    : copy.payWithWallet}
               <Icon name="arrow_forward" />
             </button>
           </>

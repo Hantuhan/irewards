@@ -11,7 +11,6 @@ import {
 import {
   createOrderItems,
   getPromoByCode,
-  recordPromoRedemption,
   resolveMenuItemsForCheckout,
 } from "@/lib/db/merchant-repository";
 import {
@@ -21,7 +20,8 @@ import {
   type StorefrontPaymentMethod,
 } from "@/lib/payments/hitpay";
 import { applyLevelDiscount, resolveCustomerLevel } from "@/lib/loyalty/tiers";
-import { calculatePromoDiscountCents } from "@/lib/services/promo";
+import { CheckoutError } from "@/lib/services/checkout-error";
+import { evaluatePromoForCheckout } from "@/lib/services/promo";
 import {
   calculateOrderTotals,
   merchantChargeSettingsFromRow,
@@ -29,7 +29,7 @@ import {
 import { pointsDiscountCents } from "@/lib/loyalty/points";
 import { getMemberSessionFromRequest } from "@/lib/customer/session";
 import { getRedeemAuthFromRequest } from "@/lib/customer/redeem-session";
-import { consumePendingStampRewardDiscount } from "@/lib/services/loyalty-stamps";
+import { previewPendingStampRewardDiscount } from "@/lib/services/loyalty-stamps";
 
 const checkoutSchema = z.object({
   merchantSlug: z.string().min(1),
@@ -142,7 +142,8 @@ export async function POST(request: Request) {
           pointsRedeemed = requestedPoints;
         }
 
-        const stampReward = await consumePendingStampRewardDiscount({
+        // Quoted now, spent only once the order is paid.
+        const stampReward = await previewPendingStampRewardDiscount({
           customer,
           merchantId: merchant.id,
           subtotalCents,
@@ -155,10 +156,21 @@ export async function POST(request: Request) {
 
     if (body.promoCode?.trim()) {
       const promo = await getPromoByCode(merchant.id, body.promoCode.trim());
-      if (promo) {
-        promoDiscountCents = calculatePromoDiscountCents(promo, subtotalCents);
-        if (promoDiscountCents > 0) promoId = promo.id;
+      if (!promo) {
+        return NextResponse.json({ error: "That promo code was not recognised." }, { status: 400 });
       }
+      // A code that silently stops applying between the cart and here means the
+      // diner pays full price after being shown a discount. Say so instead.
+      const evaluation = await evaluatePromoForCheckout({
+        promo,
+        subtotalCents,
+        customerId,
+      });
+      if (!evaluation.ok) {
+        return NextResponse.json({ error: evaluation.reason }, { status: 400 });
+      }
+      promoDiscountCents = evaluation.discountCents;
+      promoId = promo.id;
     }
 
     const centsPerPoint = Number(merchant.points_redeem_cents_per_point ?? 10);
@@ -181,17 +193,13 @@ export async function POST(request: Request) {
       promoId,
       pointsRedeemed,
       serviceType: body.serviceType,
+      stampRewardApplied: stampRewardDiscountCents > 0,
     });
 
     await createOrderItems(order.id, orderLines);
 
-    if (promoId) {
-      await recordPromoRedemption({
-        promoId,
-        customerId,
-        orderId: order.id,
-      });
-    }
+    // The promo redemption and the stamp reward are banked by
+    // `completePaidOrder`, not here — an abandoned payment must not spend them.
 
     const thanksUrl = `${getAppUrl()}/m/${merchant.slug}/table/${body.tableId}/thanks?orderId=${order.id}`;
 
@@ -233,7 +241,13 @@ export async function POST(request: Request) {
       thanksUrl,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Checkout failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "That order could not be read. Try again." }, { status: 400 });
+    }
+    // Messages from the menu resolver are written for diners ("Nasi lemak is
+    // not available right now"); anything else is ours to debug, not theirs.
+    const message = error instanceof CheckoutError ? error.message : "Checkout failed. Try again.";
+    console.error("Checkout failed:", error);
+    return NextResponse.json({ error: message }, { status: error instanceof CheckoutError ? 400 : 500 });
   }
 }

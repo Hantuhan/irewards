@@ -1,6 +1,7 @@
 import { adminDb } from "@/lib/db/admin";
 import type { CampaignRow, CustomerRow } from "@/lib/db/types";
-import { enqueueAutomationJob } from "@/lib/db/automation-repository";
+import { enqueueAutomationJobs } from "@/lib/db/automation-repository";
+import { snapToSendWindow } from "@/lib/campaigns/send-window";
 import { resolveApprovedTemplate } from "@/lib/whatsapp/templates";
 
 function db() {
@@ -35,6 +36,9 @@ export async function listMarketingMembers(merchantId: string): Promise<Customer
   return (data ?? []) as CustomerRow[];
 }
 
+/** Seconds between consecutive broadcast sends, so a blast is paced for Meta. */
+const BROADCAST_SPACING_MS = 2000;
+
 export async function queueCampaignBroadcast(
   merchantId: string,
   campaign: CampaignRow,
@@ -52,25 +56,51 @@ export async function queueCampaignBroadcast(
     );
   }
 
-  const members = await listMarketingMembers(merchantId);
-  const runAt = new Date();
-  let queued = 0;
+  const { data: merchantRow } = await db()
+    .from("merchants")
+    .select("timezone, campaign_send_window_start, campaign_send_window_end")
+    .eq("id", merchantId)
+    .maybeSingle();
+  const merchant = merchantRow as {
+    timezone?: string | null;
+    campaign_send_window_start?: string | null;
+    campaign_send_window_end?: string | null;
+  } | null;
+  const window = {
+    start: merchant?.campaign_send_window_start ?? null,
+    end: merchant?.campaign_send_window_end ?? null,
+    timezone: merchant?.timezone || "Asia/Kuala_Lumpur",
+  };
 
+  const members = await listMarketingMembers(merchantId);
+  const startedAt = Date.now();
+  let index = 0;
+
+  // Built in memory and inserted in chunks: a list of a few thousand members
+  // is a few thousand round trips otherwise, which exceeds the per-request
+  // budget on Workers long before the broadcast is queued.
+  const rows = [];
   for (const member of members) {
     if (!member.phone) continue;
-    await enqueueAutomationJob({
+    // A broadcast obeys quiet hours the same as an automated send does.
+    const runAt = snapToSendWindow(
+      new Date(startedAt + index * BROADCAST_SPACING_MS),
+      window,
+    );
+    rows.push({
       merchantId,
       customerId: member.id,
       jobType: "campaign_whatsapp",
-      runAt: new Date(runAt.getTime() + queued * 2000),
+      runAt,
       payload: {
         campaignId: campaign.id,
         phone: member.phone,
-        message: campaign.message_body,
+        message: campaign.message_body as string,
       },
     });
-    queued += 1;
+    index += 1;
   }
 
+  const queued = await enqueueAutomationJobs(rows);
   return { queued };
 }

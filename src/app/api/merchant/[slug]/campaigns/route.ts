@@ -20,6 +20,7 @@ import { goLiveBlocker } from "@/lib/services/campaign-status";
 import { ensureCampaignVoucherForGoLive, pauseCampaignAndVoucher } from "@/lib/campaigns/campaign-voucher";
 import { summarizeTemplate } from "@/lib/whatsapp/templates";
 import { getNumberHealth, summarizeNumberHealth } from "@/lib/whatsapp/number-health";
+import { getAutomationHealth } from "@/lib/services/heartbeat";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -66,14 +67,16 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Merchant not found" }, { status: 404 });
     }
 
-    const [campaigns, templates, health] = await Promise.all([
+    const [campaigns, templates, health, automationHealth] = await Promise.all([
       listCampaigns(merchant.id),
       listLatestTemplatesByCampaign(merchant.id),
       getNumberHealth().catch(() => null),
+      getAutomationHealth().catch(() => null),
     ]);
     return NextResponse.json({
       campaigns: campaigns.map((c) => mapCampaign(c, templates.get(c.id) ?? null)),
       numberHealth: summarizeNumberHealth(health),
+      automationHealth,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load campaigns";

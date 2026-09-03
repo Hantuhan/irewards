@@ -107,7 +107,8 @@ export async function memberRecentlyMessaged(
     .eq("merchant_id", merchantId)
     .eq("customer_id", customerId)
     .in("job_type", ["campaign_whatsapp", "campaign_sms"])
-    .in("status", ["pending", "sent"])
+    // "processing" is mid-send: it counts against the cap exactly like a sent one.
+    .in("status", ["pending", "processing", "sent"])
     .gte("created_at", since)
     .limit(1);
   if (options?.excludeJobId) {

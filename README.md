@@ -159,6 +159,16 @@ CRON_SECRET=your-secret ./scripts/cron-automation.sh
 
 Set `CRON_SECRET` in `.env.local`. The Campaigns overview has a master switch that pauses every journey that runs on its own; manual broadcasts are unaffected. SMS campaigns are paused for now — use WhatsApp instead.
 
+**The cron is not optional, and its absence is now visible.** Nothing inside the app schedules it, so if the external caller is never wired up, campaigns sit at *Active* and send nothing. Each completed run stamps a heartbeat in `system_heartbeats`; the Campaigns overview shows a red alarm when automation has never run, or has not run for 30 minutes.
+
+Job handling is built for a cron that can overlap itself:
+
+- Jobs are **claimed** before sending (`pending` → `processing` as one conditional update), so two overlapping runs never send the same message twice.
+- A transient failure is **retried** — up to 3 attempts, backing off 5 then 20 minutes, re-snapped into the merchant's send window. Failures that cannot succeed on a retry (no approved template, a retired job type) fail immediately with the reason on the row.
+- A claim left behind by a worker that died mid-run is swept to `failed` after 15 minutes rather than retried: we cannot tell whether Meta already delivered it, and a duplicate marketing message costs more than a missed one.
+
+> Running on Cloudflare Workers: a native Cron Trigger needs a `scheduled` export, which the OpenNext-generated worker does not have. Until a custom worker entry wraps it, use an external caller (Zeabur, cron-job.org) against the URL above.
+
 ## WhatsApp (Meta Cloud API)
 
 Messaging runs directly on Meta's WhatsApp Business Platform — no Twilio.

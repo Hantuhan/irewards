@@ -50,6 +50,9 @@ const postSchema = z.object({
   value: z.number().positive(),
   minSpendCents: z.number().int().min(0).nullable().optional(),
   expiresAt: z.string().nullable().optional(),
+  /** Null means unlimited — only sensible for a code that never leaves the counter. */
+  usageLimit: z.number().int().positive().nullable().optional(),
+  perCustomerLimit: z.number().int().positive().nullable().optional(),
 });
 
 export async function POST(request: Request, context: RouteContext) {
@@ -72,6 +75,10 @@ export async function POST(request: Request, context: RouteContext) {
       value: body.value,
       minSpendCents: body.minSpendCents ?? null,
       expiresAt: body.expiresAt ?? null,
+      usageLimit: body.usageLimit ?? null,
+      // A shared code with no per-member cap can be farmed by one person, so
+      // the form defaults this to 1 and only an explicit null lifts it.
+      perCustomerLimit: body.perCustomerLimit === undefined ? 1 : body.perCustomerLimit,
     });
 
     return NextResponse.json({ id: promo.id, code: promo.code });

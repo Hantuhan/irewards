@@ -24,6 +24,8 @@ type PromoVoucherInventoryViewProps = {
     type: "percentage" | "fixed";
     value: number;
     expiresAt: string | null;
+    usageLimit: number | null;
+    perCustomerLimit: number | null;
   }) => Promise<void>;
   onRevokeVoucher: (promoId: string) => Promise<void>;
 };
@@ -63,6 +65,10 @@ export function PromoVoucherInventoryView({
     type: "percentage" as "percentage" | "fixed",
     value: 20,
     expiresAt: "",
+    // Blank means unlimited. One per member is the safe default for a code
+    // that goes out to more than one person.
+    usageLimit: "",
+    perCustomerLimit: "1",
   });
 
   async function loadInventory() {
@@ -132,8 +138,20 @@ export function PromoVoucherInventoryView({
         type: createForm.type,
         value: createForm.value,
         expiresAt: createForm.expiresAt ? new Date(createForm.expiresAt).toISOString() : null,
+        usageLimit: createForm.usageLimit.trim() ? Number(createForm.usageLimit) : null,
+        perCustomerLimit: createForm.perCustomerLimit.trim()
+          ? Number(createForm.perCustomerLimit)
+          : null,
       });
-      setCreateForm({ name: "", code: "", type: "percentage", value: 20, expiresAt: "" });
+      setCreateForm({
+        name: "",
+        code: "",
+        type: "percentage",
+        value: 20,
+        expiresAt: "",
+        usageLimit: "",
+        perCustomerLimit: "1",
+      });
       setShowCreate(false);
       await loadInventory();
     } finally {
@@ -265,6 +283,30 @@ export function PromoVoucherInventoryView({
               onChange={(e) => setCreateForm((f) => ({ ...f, expiresAt: e.target.value }))}
               className="border border-surface-container-highest bg-surface-container-lowest px-3 py-2 text-body-md"
             />
+            <label className="flex items-center gap-2 text-body-md text-on-surface-variant">
+              Total uses
+              <input
+                type="number"
+                min={1}
+                placeholder="∞"
+                value={createForm.usageLimit}
+                onChange={(e) => setCreateForm((f) => ({ ...f, usageLimit: e.target.value }))}
+                className="w-20 border border-surface-container-highest bg-surface-container-lowest px-3 py-2 text-body-md"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-body-md text-on-surface-variant">
+              Per member
+              <input
+                type="number"
+                min={1}
+                placeholder="∞"
+                value={createForm.perCustomerLimit}
+                onChange={(e) =>
+                  setCreateForm((f) => ({ ...f, perCustomerLimit: e.target.value }))
+                }
+                className="w-20 border border-surface-container-highest bg-surface-container-lowest px-3 py-2 text-body-md"
+              />
+            </label>
             <button
               type="button"
               onClick={handleCreate}

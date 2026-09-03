@@ -30,6 +30,7 @@ import {
 } from "@/lib/campaigns/workflow-templates";
 import { merchantApi } from "@/lib/merchant/fetch";
 import type { ProgramLanguage } from "@/lib/i18n/program-locale";
+import type { AutomationHealth } from "@/lib/services/heartbeat";
 import type { NumberHealthSummary } from "@/lib/whatsapp/number-health";
 
 export type { Campaign } from "@/components/admin/campaigns/types";
@@ -58,6 +59,7 @@ type CampaignManagerViewProps = {
   openCampaignId?: string | null;
   /** Meta quality rating of the sender number. */
   numberHealth?: NumberHealthSummary | null;
+  automationHealth?: AutomationHealth | null;
   /** `?compose=1`: open the AI planner instead of the overview. */
   startCompose?: boolean;
 };
@@ -101,6 +103,7 @@ export function CampaignManagerView({
   programLanguages = ["en"],
   openCampaignId = null,
   numberHealth = null,
+  automationHealth = null,
   startCompose = false,
 }: CampaignManagerViewProps) {
   const [mode, setMode] = useState<ManagerMode>(startCompose ? "compose" : "overview");
@@ -585,6 +588,7 @@ export function CampaignManagerView({
           sendCapHours={sendCapHours}
           onSaveSendHygiene={onSaveSendHygiene}
           numberHealth={numberHealth}
+          automationHealth={automationHealth}
         />
         {createChoiceModal}
       </>
@@ -987,6 +991,7 @@ export function CampaignManagerView({
         sendCapHours={sendCapHours}
         onSaveSendHygiene={onSaveSendHygiene}
         numberHealth={numberHealth}
+        automationHealth={automationHealth}
       />
       {createChoiceModal}
     </>

@@ -101,6 +101,10 @@ export function StorefrontShell({
   const [phoneBusy, setPhoneBusy] = useState(false);
   const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
   const [showLoadPoints, setShowLoadPoints] = useState(false);
+  /** Set once a code has been sent — the form then asks for the code, not the number. */
+  const [joinPhoneSent, setJoinPhoneSent] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinDevCode, setJoinDevCode] = useState<string | null>(null);
   const [stamps, setStamps] = useState<StampSnap | null>(null);
   const [tier, setTier] = useState<TierSnap | null>(null);
   const [upsellDismissed, setUpsellDismissed] = useState(false);
@@ -243,7 +247,7 @@ export function StorefrontShell({
 
     return {
       item: candidate,
-      reason: `Add ${candidate.name} for +1 stamp?`,
+      reason: copy.addForStamp.replace("{item}", candidate.name),
     };
   }, [
     allItems,
@@ -252,22 +256,30 @@ export function StorefrontShell({
     stamps,
     stampsProgramEnabled,
     upsellDismissed,
+    copy.addForStamp,
   ]);
 
   const serviceGuestLine = useMemo(() => {
-    const service = serviceType === "takeaway" ? "Takeaway" : "Dine-in";
-    const who = memberFirst ?? (activeMember ? "Member" : copy.guest);
+    const service = serviceType === "takeaway" ? copy.takeaway : copy.dineIn;
+    const who = memberFirst ?? (activeMember ? copy.member : copy.guest);
     return `${service} · ${who}`.toUpperCase();
-  }, [serviceType, memberFirst, activeMember, copy.guest]);
+  }, [serviceType, memberFirst, activeMember, copy.guest, copy.member, copy.takeaway, copy.dineIn]);
 
+  function normalizedPhoneInput(): string {
+    const raw = phonePrompt.trim();
+    return raw.startsWith("+") || raw.startsWith("0") ? raw : `+60${raw.replace(/\s/g, "")}`;
+  }
+
+  /**
+   * Step one: ask for a WhatsApp code. Nothing about the member comes back
+   * here — typing a stranger's number must not reveal their name or points.
+   */
   function submitLoadPoints(e: React.FormEvent) {
     e.preventDefault();
     if (!phonePrompt.trim() || phoneBusy) return;
     setPhoneBusy(true);
     setPhoneMsg(null);
-    const raw = phonePrompt.trim();
-    const phone =
-      raw.startsWith("+") || raw.startsWith("0") ? raw : `+60${raw.replace(/\s/g, "")}`;
+    const phone = normalizedPhoneInput();
     void fetch("/api/customer/join", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -279,13 +291,43 @@ export function StorefrontShell({
           found?: boolean;
           message?: string;
           error?: string;
-          member?: { id: string; points: number; tierName: string };
+          devCode?: string;
         };
-        if (!res.ok) throw new Error(data.error ?? "Lookup failed");
+        if (!res.ok) throw new Error(data.error ?? copy.lookupFailed);
         if (!data.found) {
           setPhoneMsg(data.message ?? "No member found for that number.");
           return;
         }
+        setJoinPhoneSent(phone);
+        setJoinCode("");
+        setJoinDevCode(data.devCode ?? null);
+        setPhoneMsg(data.message ?? "We sent a 4-digit code on WhatsApp.");
+      })
+      .catch((err) => {
+        setPhoneMsg(err instanceof Error ? err.message : copy.lookupFailed);
+      })
+      .finally(() => setPhoneBusy(false));
+  }
+
+  /** Step two: the code proves the number, and only then do points load. */
+  function submitJoinCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (joinCode.length !== 4 || phoneBusy || !joinPhoneSent) return;
+    setPhoneBusy(true);
+    setPhoneMsg(null);
+    void fetch("/api/customer/join/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ merchantSlug, phone: joinPhoneSent, code: joinCode }),
+    })
+      .then(async (res) => {
+        const data = (await res.json()) as {
+          verified?: boolean;
+          error?: string;
+          member?: { id: string; points: number; tierName: string };
+        };
+        if (!res.ok) throw new Error(data.error ?? copy.verificationFailed);
         if (data.member?.id) {
           try {
             localStorage.setItem(`irewards-member:${merchantSlug}`, data.member.id);
@@ -295,12 +337,23 @@ export function StorefrontShell({
         }
         setShowLoadPoints(false);
         setPhonePrompt("");
+        setJoinPhoneSent(null);
+        setJoinCode("");
+        setJoinDevCode(null);
         await refresh();
       })
       .catch((err) => {
-        setPhoneMsg(err instanceof Error ? err.message : "Lookup failed");
+        setPhoneMsg(err instanceof Error ? err.message : copy.verificationFailed);
       })
       .finally(() => setPhoneBusy(false));
+  }
+
+  function cancelLoadPoints() {
+    setShowLoadPoints(false);
+    setPhoneMsg(null);
+    setJoinPhoneSent(null);
+    setJoinCode("");
+    setJoinDevCode(null);
   }
 
   /** Product detail is a routed page (shared template for every product). */
@@ -408,38 +461,65 @@ export function StorefrontShell({
               onClick={() => setShowLoadPoints(true)}
               className="text-left text-[12px] text-on-surface-variant underline-offset-2 hover:text-on-surface hover:underline"
             >
-              Returning member? Load your points
+              {copy.returningMember}
             </button>
           ) : (
-            <form onSubmit={submitLoadPoints} className="flex flex-col gap-2">
-              <div className="flex gap-1.5">
-                <span className="flex h-9 shrink-0 items-center border border-surface-container-highest bg-white px-2 font-mono text-[11px] text-on-surface-variant">
-                  +60
-                </span>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  autoFocus
-                  placeholder="12 345 6789"
-                  value={phonePrompt}
-                  onChange={(e) => setPhonePrompt(e.target.value)}
-                  className="h-9 min-w-0 flex-1 border border-surface-container-highest bg-white px-2.5 text-[13px] text-on-surface"
-                />
-                <button
-                  type="submit"
-                  disabled={phoneBusy}
-                  className="h-9 shrink-0 bg-primary px-3 text-[12px] font-medium text-on-primary disabled:opacity-50"
-                >
-                  {phoneBusy ? "…" : "Load"}
-                </button>
-              </div>
+            <form
+              onSubmit={joinPhoneSent ? submitJoinCode : submitLoadPoints}
+              className="flex flex-col gap-2"
+            >
+              {!joinPhoneSent ? (
+                <div className="flex gap-1.5">
+                  <span className="flex h-9 shrink-0 items-center border border-surface-container-highest bg-white px-2 font-mono text-[11px] text-on-surface-variant">
+                    +60
+                  </span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoFocus
+                    placeholder="12 345 6789"
+                    value={phonePrompt}
+                    onChange={(e) => setPhonePrompt(e.target.value)}
+                    className="h-9 min-w-0 flex-1 border border-surface-container-highest bg-white px-2.5 text-[13px] text-on-surface"
+                  />
+                  <button
+                    type="submit"
+                    disabled={phoneBusy}
+                    className="h-9 shrink-0 bg-primary px-3 text-[12px] font-medium text-on-primary disabled:opacity-50"
+                  >
+                    {phoneBusy ? "…" : "Send code"}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-1.5">
+                  <input
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    maxLength={4}
+                    placeholder="4-digit code"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    className="h-9 min-w-0 flex-1 border border-surface-container-highest bg-white px-2.5 text-[13px] text-on-surface"
+                  />
+                  <button
+                    type="submit"
+                    disabled={phoneBusy || joinCode.length !== 4}
+                    className="h-9 shrink-0 bg-primary px-3 text-[12px] font-medium text-on-primary disabled:opacity-50"
+                  >
+                    {phoneBusy ? "…" : "Load points"}
+                  </button>
+                </div>
+              )}
               {phoneMsg && <p className="text-[11px] text-on-surface-variant">{phoneMsg}</p>}
+              {joinDevCode && (
+                <p className="text-[11px] text-on-surface-variant">
+                  Dev mode code: <span className="font-mono">{joinDevCode}</span>
+                </p>
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  setShowLoadPoints(false);
-                  setPhoneMsg(null);
-                }}
+                onClick={cancelLoadPoints}
                 className="self-start text-[11px] text-on-surface-variant"
               >
                 Cancel
@@ -471,7 +551,7 @@ export function StorefrontShell({
             className="mb-2.5 flex w-full items-center justify-between gap-2 px-5 text-left"
           >
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant">
-              Your usual
+              {copy.yourUsual}
               <span className="ml-1.5 normal-case tracking-normal text-on-surface-variant/70">
                 ({usualItems.length})
               </span>
@@ -487,7 +567,7 @@ export function StorefrontShell({
               contentClassName="gap-3 pb-1"
               fadeFromClass="from-surface-container-lowest"
               controlClassName="border-surface-container-highest bg-surface-container-lowest"
-              ariaLabel="Your usual order"
+              ariaLabel={copy.yourUsualOrder}
             >
               {usualItems.map((usual) => {
                 const menuItem = allItems.find((m) => m.name === usual.name);
@@ -563,7 +643,7 @@ export function StorefrontShell({
                 <button
                   type="button"
                   onClick={() => setUpsellDismissed(true)}
-                  aria-label="Dismiss suggestion"
+                  aria-label={copy.dismissSuggestion}
                   className="shrink-0 text-white/50 hover:text-white"
                 >
                   <Icon name="close" className="text-[14px]" />

@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/db/admin";
 import { parseJoinMessage } from "@/lib/loyalty/join-token";
 import { fromMetaPhone, shouldSkipMetaVerify, verifyMetaSignature } from "@/lib/meta/client";
 import { JoinError, processWhatsAppJoin } from "@/lib/services/loyalty-join";
+import { isOptOutMessage } from "@/lib/whatsapp/opt-out";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/outbound";
 import { applyPhoneQualityEvent } from "@/lib/whatsapp/number-health";
 import { applyTemplateStatusEvent, recordTemplateQuality } from "@/lib/whatsapp/templates";
@@ -144,7 +145,7 @@ async function handleInbound(message: InboundMessage, value: ChangeValue) {
   const text = messageText(message);
   const externalUserId = value.contacts?.find((c) => c.wa_id === message.from)?.wa_id ?? message.from;
 
-  if (text.toUpperCase() === "STOP") {
+  if (isOptOutMessage(text)) {
     await handleMarketingOptOut(phone);
     await sendWhatsAppMessage(phone, "You have been unsubscribed from marketing messages.");
     return;

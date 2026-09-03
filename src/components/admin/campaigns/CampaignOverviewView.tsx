@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/Icon";
 import { CAMPAIGN_ACTIVE, campaignStatusBadgeClass, campaignStatusLabel } from "@/lib/campaigns/status-styles";
 import { nodeSummary } from "@/lib/campaigns/workflow-spec";
 import { isTemplateSendable } from "@/lib/whatsapp/template-spec";
+import type { AutomationHealth } from "@/lib/services/heartbeat";
 import type { NumberHealthSummary } from "@/lib/whatsapp/number-health";
 import type { Campaign } from "@/components/admin/campaigns/types";
 
@@ -26,6 +27,7 @@ type CampaignOverviewViewProps = {
     campaignSendCapHours?: number;
   }) => Promise<void>;
   numberHealth?: NumberHealthSummary | null;
+  automationHealth?: AutomationHealth | null;
 };
 
 /** Meta review state for WhatsApp campaigns, in merchant words. */
@@ -135,6 +137,7 @@ export function CampaignOverviewView({
   sendCapHours = 48,
   onSaveSendHygiene,
   numberHealth = null,
+  automationHealth = null,
 }: CampaignOverviewViewProps) {
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "live" | "attention" | "drafts">("all");
@@ -295,6 +298,23 @@ export function CampaignOverviewView({
           </div>
         </div>
       </div>
+
+      {automationHealth && !automationHealth.healthy && (
+        <div
+          role="alert"
+          className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-body-md text-red-800"
+        >
+          <Icon name="schedule" className="mt-0.5 text-lg" />
+          <div>
+            <p className="font-medium">
+              {automationHealth.neverRun
+                ? "Automated sending has never run"
+                : "Automated sending has stopped"}
+            </p>
+            <p className="mt-0.5 text-[12px] opacity-90">{automationHealth.message}</p>
+          </div>
+        </div>
+      )}
 
       {numberHealth && numberHealth.qualityRating !== "GREEN" && numberHealth.qualityRating !== "UNKNOWN" && (
         <div

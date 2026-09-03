@@ -8,6 +8,7 @@ import type { Campaign } from "@/components/admin/campaigns/types";
 import { Icon } from "@/components/ui/Icon";
 import { CAMPAIGNS_MAIN_TABS, type CampaignsMainTab } from "@/lib/campaigns/main-tabs";
 import { merchantApi } from "@/lib/merchant/fetch";
+import type { AutomationHealth } from "@/lib/services/heartbeat";
 import type { NumberHealthSummary } from "@/lib/whatsapp/number-health";
 
 type CampaignsAdminShellProps = {
@@ -39,6 +40,7 @@ export function CampaignsAdminShell({
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [focusCampaignId, setFocusCampaignId] = useState<string | null>(openCampaignId);
   const [numberHealth, setNumberHealth] = useState<NumberHealthSummary | null>(null);
+  const [automationHealth, setAutomationHealth] = useState<AutomationHealth | null>(null);
 
   useEffect(() => {
     setMainTab(initialTab);
@@ -49,11 +51,16 @@ export function CampaignsAdminShell({
   }, [openCampaignId]);
 
   const loadCampaigns = useCallback(async () => {
-    const data = await merchantApi<{ campaigns: Campaign[]; numberHealth?: NumberHealthSummary }>(
+    const data = await merchantApi<{
+      campaigns: Campaign[];
+      numberHealth?: NumberHealthSummary;
+      automationHealth?: AutomationHealth | null;
+    }>(
       `/api/merchant/${merchantSlug}/campaigns`,
     );
     setCampaigns(data.campaigns);
     setNumberHealth(data.numberHealth ?? null);
+    setAutomationHealth(data.automationHealth ?? null);
   }, [merchantSlug]);
 
   const loadSettings = useCallback(async () => {
@@ -86,6 +93,8 @@ export function CampaignsAdminShell({
     type: "percentage" | "fixed";
     value: number;
     expiresAt: string | null;
+    usageLimit: number | null;
+    perCustomerLimit: number | null;
   }) {
     await merchantApi(`/api/merchant/${merchantSlug}/promos`, {
       method: "POST",
@@ -196,6 +205,7 @@ export function CampaignsAdminShell({
             programLanguages={programLanguages}
             openCampaignId={focusCampaignId}
             numberHealth={numberHealth}
+            automationHealth={automationHealth}
             startCompose={startCompose}
           />
         </>

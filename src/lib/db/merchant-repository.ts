@@ -1,3 +1,5 @@
+import { CheckoutError } from "@/lib/services/checkout-error";
+import { pendingHoldCutoffIso } from "@/lib/services/order-holds";
 import { adminDb } from "@/lib/db/admin";
 import type { ProgramLanguage, LocalizedMap } from "@/lib/i18n/program-locale";
 import { mergeLocalizedMap, menuLocalizedText } from "@/lib/menu/i18n";
@@ -778,16 +780,28 @@ export async function resolveMenuItemsForCheckout(
     stationId?: string | null;
   }[] = [];
 
+  const serviceLabel = serviceType === "takeaway" ? "takeaway" : "dine-in";
+
   for (const line of lines) {
     const item = bySlug.get(line.id);
-    if (!item) throw new Error(`Unknown item: ${line.id}`);
+    if (!item) throw new CheckoutError("Something in your order is no longer on the menu.");
     if (!isMenuItemAvailableNow(availabilityFromRow(item), timeZone)) {
-      throw new Error(`${item.name} is not available right now`);
+      throw new CheckoutError(`${item.name} is not available right now.`);
+    }
+    // The menu hides items the merchant does not offer on this channel, but the
+    // diner can switch dine-in ⇄ takeaway after filling the cart, so the order
+    // has to be checked against the channel it is actually being placed on.
+    const availableOnChannel =
+      serviceType === "takeaway"
+        ? item.available_takeaway !== false
+        : item.available_dine_in !== false;
+    if (!availableOnChannel) {
+      throw new CheckoutError(`${item.name} is not available for ${serviceLabel} orders.`);
     }
 
     const groups = modifierMap.get(item.id) ?? [];
     const validated = validateSelections(groups, line.selections ?? []);
-    if (!validated.ok) throw new Error(validated.error);
+    if (!validated.ok) throw new CheckoutError(validated.error);
 
     const baseUnitPriceCents = unitPriceWithModifiers(item.price_cents, validated.selections);
     const modifiers = validated.selections.map((s) => ({
@@ -1601,6 +1615,8 @@ export async function createPromo(
     minSpendCents: number | null;
     expiresAt: string | null;
     campaignId?: string | null;
+    usageLimit?: number | null;
+    perCustomerLimit?: number | null;
   },
 ): Promise<PromoRow> {
   const { data, error } = await db()
@@ -1615,6 +1631,8 @@ export async function createPromo(
         min_spend_cents: input.minSpendCents,
         expires_at: input.expiresAt,
         active: true,
+        usage_limit: input.usageLimit ?? null,
+        per_customer_limit: input.perCustomerLimit ?? null,
         ...(input.campaignId ? { campaign_id: input.campaignId } : {}),
       },
     ])
@@ -1629,7 +1647,16 @@ export async function updatePromo(
   merchantId: string,
   promoId: string,
   patch: Partial<
-    Pick<PromoRow, "name" | "active" | "value" | "expires_at" | "campaign_id">
+    Pick<
+      PromoRow,
+      | "name"
+      | "active"
+      | "value"
+      | "expires_at"
+      | "campaign_id"
+      | "usage_limit"
+      | "per_customer_limit"
+    >
   >,
 ): Promise<PromoRow> {
   const { data, error } = await db()
@@ -2169,6 +2196,77 @@ export async function getPromoByCode(
 
   if (error) throw new Error(error.message);
   return data as import("@/lib/db/types").PromoRow | null;
+}
+
+/** Redemptions already banked against a promo (optionally by one member). */
+export async function countPromoRedemptions(
+  promoId: string,
+  customerId?: string | null,
+): Promise<number> {
+  let query = db()
+    .from("promo_redemptions")
+    .select("id", { count: "exact", head: true })
+    .eq("promo_id", promoId);
+  if (customerId) query = query.eq("customer_id", customerId);
+
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/**
+ * Unpaid orders already quoted with this promo. They hold a slot the same way
+ * pending orders reserve points, so two open carts can't both spend the last
+ * use of a limited voucher.
+ */
+export async function countPendingPromoHolds(
+  promoId: string,
+  customerId?: string | null,
+  excludeOrderId?: string | null,
+): Promise<number> {
+  let query = db()
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("promo_id", promoId)
+    .eq("status", "pending")
+    // An abandoned cart must not hold the code forever.
+    .gte("created_at", pendingHoldCutoffIso());
+  if (customerId) query = query.eq("customer_id", customerId);
+  if (excludeOrderId) query = query.neq("id", excludeOrderId);
+
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/** True when this order already banked its promo redemption (webhook replay). */
+export async function hasPromoRedemptionForOrder(orderId: string): Promise<boolean> {
+  const { data, error } = await db()
+    .from("promo_redemptions")
+    .select("id")
+    .eq("order_id", orderId)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.length ?? 0) > 0;
+}
+
+/** Unpaid orders holding this member's stamp reward. */
+export async function countPendingStampRewardHolds(
+  customerId: string,
+  excludeOrderId?: string | null,
+): Promise<number> {
+  let query = db()
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("customer_id", customerId)
+    .eq("status", "pending")
+    .eq("stamp_reward_applied", true)
+    .gte("created_at", pendingHoldCutoffIso());
+  if (excludeOrderId) query = query.neq("id", excludeOrderId);
+
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }
 
 export async function recordPromoRedemption(input: {

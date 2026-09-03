@@ -60,6 +60,16 @@ export function campaignVoucherCode(campaign: CampaignRow, action: CampaignNode)
   return `${name}${discount}${short}`;
 }
 
+/**
+ * Total redemptions allowed for a campaign voucher. The merchant can set one
+ * on the voucher action; otherwise it is uncapped per-campaign but still
+ * one-per-member, which is what stops a leaked code being farmed.
+ */
+export function campaignVoucherUsageLimit(action: CampaignNode): number | null {
+  const raw = Number(action.config.usageLimit ?? 0);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null;
+}
+
 function voucherFields(campaign: CampaignRow, action: CampaignNode) {
   const expiryDays = Math.max(1, Number(action.config.expiryDays ?? 14));
   return {
@@ -96,6 +106,10 @@ export async function ensureCampaignVoucher(
       minSpendCents: null,
       expiresAt: fields.expiresAt,
       campaignId: campaign.id,
+      // A campaign code goes out to every member on the list at once. Without
+      // a cap, one screenshot in a group chat is unlimited free discount.
+      perCustomerLimit: 1,
+      usageLimit: campaignVoucherUsageLimit(action),
     });
     return { code: fields.code, promo, created: true };
   }

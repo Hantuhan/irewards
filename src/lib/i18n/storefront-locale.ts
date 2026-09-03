@@ -47,6 +47,63 @@ export type StorefrontCopy = {
   backToMenu: string;
   productUnavailable: string;
   viewCart: string;
+  orderType: string;
+  packToGo: string;
+  subtotal: string;
+  total: string;
+  discounts: string;
+  promoAndPoints: string;
+  promoCode: string;
+  paymentMethod: string;
+  redeemPoints: string;
+  max: string;
+  browseMenu: string;
+  cartEmpty: string;
+  continueLabel: string;
+  continueHint: string;
+  backToSuggestions: string;
+  inclTakeaway: string;
+  each: string;
+  itemOne: string;
+  itemMany: string;
+  loadingCart: string;
+  youHave: string;
+  available: string;
+  reservedOnUnpaid: string;
+  notMemberYet: string;
+  verifyToSpend: string;
+  sendWhatsAppCode: string;
+  sending: string;
+  fourDigitCode: string;
+  verify: string;
+  verifiedCanSpend: string;
+  payWithDuitnow: string;
+  payWithCard: string;
+  payWithWallet: string;
+  starting: string;
+  duitnowLabel: string;
+  duitnowHint: string;
+  cardLabel: string;
+  cardHint: string;
+  walletLabel: string;
+  walletHint: string;
+  popular: string;
+  duitnowNote: string;
+  cardNote: string;
+  walletNote: string;
+  serviceCharge: string;
+  tax: string;
+  checkoutFailed: string;
+  couldNotSendCode: string;
+  verificationFailed: string;
+  enterFourDigit: string;
+  returningMember: string;
+  yourUsual: string;
+  yourUsualOrder: string;
+  dismissSuggestion: string;
+  member: string;
+  addForStamp: string;
+  lookupFailed: string;
 };
 
 const COPY: Record<ProgramLanguage, StorefrontCopy> = {
@@ -96,6 +153,63 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     backToMenu: "Back to menu",
     productUnavailable: "This product is not available right now.",
     viewCart: "View cart",
+    orderType: "Order type",
+    packToGo: "Pack this item to go",
+    subtotal: "Subtotal",
+    total: "Total",
+    discounts: "Discounts",
+    promoAndPoints: "Promo & points",
+    promoCode: "Promo code",
+    paymentMethod: "Payment method",
+    redeemPoints: "Redeem points",
+    max: "max",
+    browseMenu: "Browse menu",
+    cartEmpty: "Your cart is empty.",
+    continueLabel: "Continue",
+    continueHint: "Tap continue to review add-ons before payment.",
+    backToSuggestions: "Back to suggestions",
+    inclTakeaway: "incl. takeaway",
+    each: "each",
+    itemOne: "item",
+    itemMany: "items",
+    loadingCart: "Loading cart…",
+    youHave: "You have",
+    available: "available",
+    reservedOnUnpaid: "reserved on an unpaid order",
+    notMemberYet: "Not a member yet? Order & pay, then join on WhatsApp. Redeem next visit.",
+    verifyToSpend: "Verify on WhatsApp to spend them.",
+    sendWhatsAppCode: "Send WhatsApp code",
+    sending: "Sending…",
+    fourDigitCode: "4-digit code",
+    verify: "Verify",
+    verifiedCanSpend: "Verified — you can spend points on this order.",
+    payWithDuitnow: "Pay with DuitNow",
+    payWithCard: "Pay with card",
+    payWithWallet: "Pay with e-wallet",
+    starting: "Starting…",
+    duitnowLabel: "DuitNow QR",
+    duitnowHint: "Scan with any banking app",
+    cardLabel: "Card",
+    cardHint: "Visa, Mastercard, Amex",
+    walletLabel: "E-wallet",
+    walletHint: "Touch ’n Go, GrabPay, ShopeePay",
+    popular: "Popular",
+    duitnowNote: "You’ll see a QR after confirming — pay in your bank app.",
+    cardNote: "Card details are entered on a secure payment page.",
+    walletNote: "Choose your wallet on the next screen.",
+    serviceCharge: "Service charge",
+    tax: "Tax",
+    checkoutFailed: "Checkout failed",
+    couldNotSendCode: "Could not send code",
+    verificationFailed: "Verification failed",
+    enterFourDigit: "Enter the 4-digit code from WhatsApp.",
+    returningMember: "Returning member? Load your points",
+    yourUsual: "Your usual",
+    yourUsualOrder: "Your usual order",
+    dismissSuggestion: "Dismiss suggestion",
+    member: "Member",
+    addForStamp: "Add {item} for +1 stamp?",
+    lookupFailed: "Lookup failed",
   },
   zh: {
     table: "桌号",
@@ -143,6 +257,63 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     backToMenu: "返回菜单",
     productUnavailable: "此商品目前暂不供应。",
     viewCart: "查看购物车",
+    orderType: "用餐方式",
+    packToGo: "此项打包",
+    subtotal: "小计",
+    total: "总计",
+    discounts: "优惠",
+    promoAndPoints: "优惠码与积分",
+    promoCode: "优惠码",
+    paymentMethod: "付款方式",
+    redeemPoints: "使用积分",
+    max: "最多",
+    browseMenu: "浏览菜单",
+    cartEmpty: "购物车是空的。",
+    continueLabel: "继续",
+    continueHint: "点击继续，付款前查看加购建议。",
+    backToSuggestions: "返回加购建议",
+    inclTakeaway: "含打包费",
+    each: "每份",
+    itemOne: "件",
+    itemMany: "件",
+    loadingCart: "加载购物车中…",
+    youHave: "您有",
+    available: "可用",
+    reservedOnUnpaid: "已保留于未付款的订单",
+    notMemberYet: "还不是会员？先下单付款，然后在 WhatsApp 加入，下次消费即可使用。",
+    verifyToSpend: "通过 WhatsApp 验证后即可使用。",
+    sendWhatsAppCode: "发送 WhatsApp 验证码",
+    sending: "发送中…",
+    fourDigitCode: "4 位验证码",
+    verify: "验证",
+    verifiedCanSpend: "已验证 — 本次订单可使用积分。",
+    payWithDuitnow: "使用 DuitNow 付款",
+    payWithCard: "使用银行卡付款",
+    payWithWallet: "使用电子钱包付款",
+    starting: "处理中…",
+    duitnowLabel: "DuitNow 二维码",
+    duitnowHint: "使用任何银行 App 扫码",
+    cardLabel: "银行卡",
+    cardHint: "Visa、Mastercard、Amex",
+    walletLabel: "电子钱包",
+    walletHint: "Touch ’n Go、GrabPay、ShopeePay",
+    popular: "热门",
+    duitnowNote: "确认后会显示二维码，请在银行 App 中付款。",
+    cardNote: "银行卡信息将在安全付款页面输入。",
+    walletNote: "在下一个页面选择您的电子钱包。",
+    serviceCharge: "服务费",
+    tax: "税",
+    checkoutFailed: "结账失败",
+    couldNotSendCode: "无法发送验证码",
+    verificationFailed: "验证失败",
+    enterFourDigit: "请输入 WhatsApp 收到的 4 位验证码。",
+    returningMember: "老会员？载入您的积分",
+    yourUsual: "您的常点",
+    yourUsualOrder: "您的常点订单",
+    dismissSuggestion: "忽略建议",
+    member: "会员",
+    addForStamp: "加点 {item}，多得 1 个印章？",
+    lookupFailed: "查询失败",
   },
   ms: {
     table: "Meja",
@@ -190,6 +361,63 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     backToMenu: "Kembali ke menu",
     productUnavailable: "Produk ini tidak tersedia buat masa ini.",
     viewCart: "Lihat troli",
+    orderType: "Jenis pesanan",
+    packToGo: "Bungkus item ini",
+    subtotal: "Jumlah kecil",
+    total: "Jumlah",
+    discounts: "Diskaun",
+    promoAndPoints: "Kod promosi & mata",
+    promoCode: "Kod promosi",
+    paymentMethod: "Cara pembayaran",
+    redeemPoints: "Tebus mata",
+    max: "maks",
+    browseMenu: "Lihat menu",
+    cartEmpty: "Troli anda kosong.",
+    continueLabel: "Teruskan",
+    continueHint: "Tekan teruskan untuk lihat tambahan sebelum bayar.",
+    backToSuggestions: "Kembali ke cadangan",
+    inclTakeaway: "termasuk bungkus",
+    each: "setiap satu",
+    itemOne: "item",
+    itemMany: "item",
+    loadingCart: "Memuatkan troli…",
+    youHave: "Anda ada",
+    available: "tersedia",
+    reservedOnUnpaid: "ditempah pada pesanan belum dibayar",
+    notMemberYet: "Belum jadi ahli? Pesan & bayar dahulu, kemudian sertai di WhatsApp. Tebus pada lawatan akan datang.",
+    verifyToSpend: "Sahkan melalui WhatsApp untuk menggunakannya.",
+    sendWhatsAppCode: "Hantar kod WhatsApp",
+    sending: "Menghantar…",
+    fourDigitCode: "Kod 4 digit",
+    verify: "Sahkan",
+    verifiedCanSpend: "Disahkan — anda boleh guna mata untuk pesanan ini.",
+    payWithDuitnow: "Bayar dengan DuitNow",
+    payWithCard: "Bayar dengan kad",
+    payWithWallet: "Bayar dengan e-dompet",
+    starting: "Memulakan…",
+    duitnowLabel: "DuitNow QR",
+    duitnowHint: "Imbas dengan mana-mana app bank",
+    cardLabel: "Kad",
+    cardHint: "Visa, Mastercard, Amex",
+    walletLabel: "E-dompet",
+    walletHint: "Touch ’n Go, GrabPay, ShopeePay",
+    popular: "Popular",
+    duitnowNote: "Anda akan lihat QR selepas sah — bayar dalam app bank anda.",
+    cardNote: "Butiran kad dimasukkan di halaman pembayaran selamat.",
+    walletNote: "Pilih e-dompet anda di skrin seterusnya.",
+    serviceCharge: "Caj perkhidmatan",
+    tax: "Cukai",
+    checkoutFailed: "Pembayaran gagal",
+    couldNotSendCode: "Tidak dapat hantar kod",
+    verificationFailed: "Pengesahan gagal",
+    enterFourDigit: "Masukkan kod 4 digit dari WhatsApp.",
+    returningMember: "Ahli lama? Muatkan mata anda",
+    yourUsual: "Pesanan biasa anda",
+    yourUsualOrder: "Pesanan biasa anda",
+    dismissSuggestion: "Tolak cadangan",
+    member: "Ahli",
+    addForStamp: "Tambah {item} untuk +1 cop?",
+    lookupFailed: "Carian gagal",
   },
 };
 

@@ -1,5 +1,6 @@
 import { recordManualVoucherIssue } from "@/lib/db/automation-repository";
 import {
+  countPendingStampRewardHolds,
   createPromo,
   getOrderItemsForOrder,
   listCustomerActiveVouchers,
@@ -428,7 +429,14 @@ export async function staffAdjustStamps(input: {
 }
 
 /** @deprecated Prefer stamp vouchers; kept for cards that could not issue a promo. */
-export async function consumePendingStampRewardDiscount(input: {
+/**
+ * What the member's stamp reward is worth on this order — without spending it.
+ *
+ * Checkout only quotes the discount; the reward is not consumed until the
+ * order is actually paid (see `consumeStampRewardForPaidOrder`). Abandoning
+ * the payment screen used to burn the reward outright.
+ */
+export async function previewPendingStampRewardDiscount(input: {
   customer: CustomerRow;
   merchantId: string;
   subtotalCents: number;
@@ -444,6 +452,10 @@ export async function consumePendingStampRewardDiscount(input: {
 
   const card = await getCustomerStampCard(input.merchantId, input.customer.id);
   if (!card?.pending_reward) return { discountCents: 0, label: null };
+
+  // Another unpaid order already holds this reward — one reward, one order.
+  const held = await countPendingStampRewardHolds(input.customer.id);
+  if (held > 0) return { discountCents: 0, label: null };
 
   let rewardItemPriceCents: number | null = null;
   if (program.rewardMenuItemId) {
@@ -465,14 +477,29 @@ export async function consumePendingStampRewardDiscount(input: {
     return { discountCents: 0, label: null };
   }
 
+  return { discountCents, label: program.rewardLabel };
+}
+
+/**
+ * Spends the stamp reward an order was quoted with. Called once payment is
+ * confirmed. Safe to call twice — the card's `pending_reward` flag is the
+ * guard, so a replayed payment webhook is a no-op.
+ */
+export async function consumeStampRewardForPaidOrder(input: {
+  merchantId: string;
+  customerId: string;
+  orderId: string;
+}): Promise<boolean> {
+  const card = await getCustomerStampCard(input.merchantId, input.customerId);
+  if (!card?.pending_reward) return false;
+
   await updateCustomerStampCard(card.id, { pending_reward: false });
   await appendStampsLedger({
     merchantId: input.merchantId,
-    customerId: input.customer.id,
-    orderId: null,
+    customerId: input.customerId,
+    orderId: input.orderId,
     delta: 0,
     reason: "reward_applied",
   });
-
-  return { discountCents, label: program.rewardLabel };
+  return true;
 }

@@ -1,3 +1,4 @@
+import { pendingHoldCutoffIso } from "@/lib/services/order-holds";
 import { adminDb } from "@/lib/db/admin";
 import type {
   CustomerRow,
@@ -62,6 +63,8 @@ export async function createPendingOrder(input: {
   promoId?: string | null;
   pointsRedeemed?: number;
   serviceType?: "dine_in" | "takeaway";
+  /** Quoted with the member's stamp reward; spent when the order is paid. */
+  stampRewardApplied?: boolean;
 }): Promise<OrderRow> {
   const discountCents = input.discountCents ?? 0;
   const serviceChargeCents = input.serviceChargeCents ?? 0;
@@ -89,6 +92,7 @@ export async function createPendingOrder(input: {
         promo_id: input.promoId ?? null,
         points_redeemed: input.pointsRedeemed ?? 0,
         service_type: input.serviceType ?? "dine_in",
+        stamp_reward_applied: input.stampRewardApplied ?? false,
       },
     ])
     .select("*")
@@ -208,7 +212,10 @@ export async function sumPendingPointsRedeemed(
     .select("points_redeemed")
     .eq("customer_id", customerId)
     .eq("status", "pending")
-    .gt("points_redeemed", 0);
+    .gt("points_redeemed", 0)
+    // Without this an abandoned payment screen reserves the member's points
+    // permanently — pending orders are never expired.
+    .gte("created_at", pendingHoldCutoffIso());
 
   if (excludeOrderId) {
     query = query.neq("id", excludeOrderId);

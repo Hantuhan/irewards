@@ -44,7 +44,6 @@ import {
   type SalesReport,
 } from "@/lib/merchant/sales-report";
 import {
-  displayLineName,
   normalizeLineNote,
   unitPriceWithModifiers,
   validateSelections,
@@ -807,7 +806,7 @@ export async function resolveMenuItemsForCheckout(
     subtotalCents += unitPriceCents * line.quantity;
     orderLines.push({
       menuItemId: item.id,
-      name: displayLineName(item.name, validated.selections),
+      name: item.name,
       quantity: line.quantity,
       unitPriceCents,
       modifiers,

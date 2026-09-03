@@ -7,6 +7,17 @@ import { merchantApi } from "@/lib/merchant/fetch";
 import { Icon } from "@/components/ui/Icon";
 import { manusHeaderBtnClass, manusHeaderPrimaryBtnClass } from "@/lib/ui/manus";
 import {
+  KitchenTableCard,
+  elapsedMs,
+  severityRank,
+  waitSeverity,
+  orderIsTakeaway,
+  type KitchenOrder,
+  type KitchenTableGroup,
+} from "@/components/admin/KitchenBoard";
+
+type BoardFilter = "active" | "completed";
+import {
   DEFAULT_KITCHEN_FLOW,
   flowSummary,
   getStepMeta,
@@ -23,262 +34,6 @@ import {
 type AdminDashboardShellProps = {
   merchantSlug: string;
 };
-
-type OrderCard = {
-  id: string;
-  tableNumber: string | null;
-  customerDisplay: string | null;
-  kitchenStatus: string | null;
-  paidAt: string | null;
-  items: {
-    name: string;
-    quantity: number;
-    /** Diner's kitchen / barista note for this line. */
-    note?: string | null;
-    packedForTakeaway?: boolean;
-  }[];
-};
-
-type BoardFilter = "active" | "completed";
-
-const COLLAPSED_ORDER_LIMIT = 3;
-
-function elapsedMs(paidAt: string | null, now: number) {
-  if (!paidAt) return 0;
-  return Math.max(0, now - new Date(paidAt).getTime());
-}
-
-function formatElapsed(ms: number) {
-  const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return "< 1 min";
-  if (mins < 60) return `${mins} min`;
-  const hours = Math.floor(mins / 60);
-  const remainder = mins % 60;
-  return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
-}
-
-function waitSeverity(
-  minutes: number,
-  stepIndex: number,
-  totalSteps: number,
-  isTerminal: boolean,
-): "ok" | "warn" | "late" {
-  if (isTerminal) return "ok";
-  if (stepIndex <= 0) {
-    if (minutes >= 10) return "late";
-    if (minutes >= 5) return "warn";
-    return "ok";
-  }
-  if (stepIndex >= totalSteps - 2) {
-    if (minutes >= 20) return "late";
-    if (minutes >= 10) return "warn";
-    return "ok";
-  }
-  if (minutes >= 25) return "late";
-  if (minutes >= 15) return "warn";
-  return "ok";
-}
-
-function severityStyles(severity: "ok" | "warn" | "late") {
-  if (severity === "late") {
-    return {
-      card: "border-red-400 bg-red-50/40",
-      badge: "border-red-600 bg-red-600 text-white",
-      label: "Long wait",
-    };
-  }
-  if (severity === "warn") {
-    return {
-      card: "border-amber-400 bg-amber-50/30",
-      badge: "border-amber-600 bg-amber-500 text-white",
-      label: "Taking a while",
-    };
-  }
-  return {
-    card: "border-surface-container-highest bg-surface-container-lowest",
-    badge: "border-surface-container-highest bg-surface-container text-on-surface-variant",
-    label: null,
-  };
-}
-
-function severityRank(severity: "ok" | "warn" | "late") {
-  if (severity === "late") return 3;
-  if (severity === "warn") return 2;
-  return 1;
-}
-
-type TableGroup = {
-  tableKey: string;
-  tableNumber: string | null;
-  orders: OrderCard[];
-};
-
-function TableKitchenCard({
-  group,
-  flow,
-  now,
-  expanded,
-  onToggleExpand,
-  onAdvance,
-  formatTime,
-}: {
-  group: TableGroup;
-  flow: KitchenFlow;
-  now: number;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  onAdvance: (orderId: string, nextStatus: string) => void;
-  formatTime: (iso: string | null) => string;
-}) {
-  const orders = group.orders;
-  const oldestPaidAt = orders.reduce<string | null>((oldest, o) => {
-    if (!o.paidAt) return oldest;
-    if (!oldest || o.paidAt < oldest) return o.paidAt;
-    return oldest;
-  }, null);
-  const elapsed = elapsedMs(oldestPaidAt, now);
-  const worstSeverity = orders.reduce<"ok" | "warn" | "late">((worst, o) => {
-    const meta = o.kitchenStatus ? getStepMeta(flow, o.kitchenStatus) : null;
-    const mins = Math.floor(elapsedMs(o.paidAt, now) / 60_000);
-    const s = waitSeverity(
-      mins,
-      meta?.index ?? 0,
-      flow.length,
-      meta?.isTerminal ?? false,
-    );
-    return severityRank(s) > severityRank(worst) ? s : worst;
-  }, "ok");
-  const styles = severityStyles(worstSeverity);
-  const hasMany = orders.length > COLLAPSED_ORDER_LIMIT;
-  const visibleOrders = expanded || !hasMany ? orders : orders.slice(0, COLLAPSED_ORDER_LIMIT);
-  const hiddenCount = orders.length - visibleOrders.length;
-
-  return (
-    <article className={`flex flex-col border p-4 ${styles.card}`}>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="font-display text-headline-sm font-bold text-primary">
-            Table {group.tableNumber ?? "—"}
-          </p>
-          <p className="mt-1 font-mono text-label-mono text-on-surface-variant">
-            {orders.length} order{orders.length === 1 ? "" : "s"}
-            {oldestPaidAt ? ` · oldest ${formatTime(oldestPaidAt)}` : ""}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          {worstSeverity !== "ok" && styles.label && (
-            <span className="font-mono text-[10px] uppercase tracking-wide text-red-700">
-              {styles.label}
-            </span>
-          )}
-          <span
-            className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${styles.badge}`}
-            title="Longest wait at this table"
-          >
-            {formatElapsed(elapsed)}
-          </span>
-        </div>
-      </div>
-
-      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-        {visibleOrders.map((order) => {
-          const status = order.kitchenStatus ?? flow[0]!.id;
-          const meta = getStepMeta(flow, status);
-          const isTerminal = meta?.isTerminal ?? isTerminalStatus(status, flow);
-          const orderElapsed = elapsedMs(order.paidAt, now);
-          const orderMins = Math.floor(orderElapsed / 60_000);
-          const orderSeverity = waitSeverity(
-            orderMins,
-            meta?.index ?? 0,
-            flow.length,
-            isTerminal,
-          );
-
-          return (
-            <div
-              key={order.id}
-              className={`border p-3 ${isTerminal ? "opacity-70" : ""} ${
-                orderSeverity !== "ok"
-                  ? orderSeverity === "late"
-                    ? "border-red-300 bg-white/60"
-                    : "border-amber-300 bg-white/60"
-                  : "border-surface-container-highest bg-surface-container-lowest"
-              }`}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`border px-1.5 py-0.5 font-mono text-[9px] uppercase ${
-                      meta?.index === 0
-                        ? "border-primary bg-primary text-on-primary"
-                        : !isTerminal
-                          ? "border-primary text-primary"
-                          : "border-surface-container-highest text-on-surface-variant"
-                    }`}
-                  >
-                    {meta?.label ?? status}
-                  </span>
-                  <span className="font-mono text-[10px] text-on-surface-variant">
-                    {formatTime(order.paidAt)}
-                  </span>
-                  {!isTerminal && (
-                    <span className="font-mono text-[10px] text-on-surface-variant">
-                      {formatElapsed(orderElapsed)}
-                    </span>
-                  )}
-                </div>
-                {meta?.nextId && meta.actionLabel && (
-                  <button
-                    type="button"
-                    onClick={() => onAdvance(order.id, meta.nextId!)}
-                    className={`shrink-0 px-2 py-1 font-mono text-[9px] uppercase ${
-                      meta.index === 0
-                        ? "border border-primary text-primary"
-                        : "bg-primary text-on-primary"
-                    }`}
-                  >
-                    {meta.actionLabel}
-                  </button>
-                )}
-              </div>
-              <ul className="space-y-1 text-body-md">
-                {order.items.map((item) => (
-                  <li key={`${order.id}-${item.name}`}>
-                    <div className="flex items-start gap-1.5">
-                      <span className="font-mono text-label-mono">{item.quantity}×</span>
-                      <span className="min-w-0 flex-1">{item.name}</span>
-                      {item.packedForTakeaway ? (
-                        <span className="shrink-0 bg-surface-container-high px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">
-                          To go
-                        </span>
-                      ) : null}
-                    </div>
-                    {item.note ? (
-                      <p className="mt-1 flex items-start gap-1.5 border-l-2 border-red-700 bg-red-50 px-2 py-1 text-[12px] leading-snug text-red-900">
-                        <Icon name="priority_high" className="mt-px shrink-0 text-[14px]" />
-                        <span>{item.note}</span>
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-
-      {hasMany && (
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          className="mt-3 w-full border border-surface-container-highest py-2 font-mono text-[10px] uppercase text-primary"
-        >
-          {expanded ? "Show fewer" : `Show all ${orders.length} orders (${hiddenCount} hidden)`}
-        </button>
-      )}
-    </article>
-  );
-}
 
 function KitchenFlowEditor({
   flow,
@@ -449,7 +204,7 @@ function KitchenFlowEditor({
 }
 
 export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) {
-  const [orders, setOrders] = useState<OrderCard[]>([]);
+  const [orders, setOrders] = useState<KitchenOrder[]>([]);
   const [kitchenFlow, setKitchenFlow] = useState<KitchenFlow>(DEFAULT_KITCHEN_FLOW);
   const [completedStepId, setCompletedStepId] = useState("served");
   const [loading, setLoading] = useState(true);
@@ -473,7 +228,7 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
     setError(null);
     try {
       const data = await merchantApi<{
-        orders: OrderCard[];
+        orders: KitchenOrder[];
         kitchenFlow: KitchenFlowStep[];
         terminalStepId: string;
       }>(`/api/merchant/${merchantSlug}/orders`);
@@ -540,8 +295,8 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
     });
   }, [orders, filter, kitchenFlow]);
 
-  const tableGroups = useMemo((): TableGroup[] => {
-    const map = new Map<string, OrderCard[]>();
+  const tableGroups = useMemo((): KitchenTableGroup[] => {
+    const map = new Map<string, KitchenOrder[]>();
     for (const order of visibleOrders) {
       const key = order.tableNumber ?? `order-${order.id}`;
       const list = map.get(key) ?? [];
@@ -724,7 +479,7 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
               ) : (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {tableGroups.map((group) => (
-                    <TableKitchenCard
+                    <KitchenTableCard
                       key={group.tableKey}
                       group={group}
                       flow={kitchenFlow}

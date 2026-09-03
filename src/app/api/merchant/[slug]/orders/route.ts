@@ -74,6 +74,10 @@ export async function GET(request: Request, context: RouteContext) {
           quantity: item.quantity,
           note: item.note ?? null,
           packedForTakeaway: item.packed_for_takeaway ?? false,
+          modifiers: (item.modifiers ?? []).map((mod) => ({
+            groupName: mod.groupName,
+            optionName: mod.optionName,
+          })),
         })),
       })),
     });

@@ -11,7 +11,7 @@
     "test:smoke": "sh scripts/smoke-test.sh",
     "test:smoke:campaigns": "sh scripts/smoke-campaigns.sh",
     "test:smoke:stamps": "sh scripts/smoke-stamps.sh",
-    "verify": "npm run typecheck && npm run lint && npm run build && npm run test",
+    "verify": "npm run typecheck && npm run lint && npm run test:alerts && npm run build && npm run test",
     "typecheck": "tsc --noEmit",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
     "docker:dev:detach": "docker compose -f docker-compose.dev.yml up --build -d",
@@ -31,7 +31,8 @@
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload"
+    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "test:alerts": "node scripts/test-kitchen-alerts.mjs"
   },
   "dependencies": {
     "@insforge/sdk": "^1.5.2",

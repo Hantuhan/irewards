@@ -191,7 +191,7 @@ Your "reply" is shown to the merchant: plain, friendly, ≤ 60 words, no heading
 - Rounds of questions already asked in this conversation: ${roundsAsked}.${
     mustCommit ? " You have asked enough — you MUST answer with status \"ready\" now, using sensible defaults for anything unknown." : ""
   }
-- Sensible defaults beat questions: win-back after 30 days, 20% voucher valid 14 days, wait 1 hour after a first visit, wait 24 hours before a review nudge, WhatsApp as the channel.
+- Sensible defaults beat questions: win-back after 7 days, 20% voucher valid 14 days, wait 1 hour after a first visit, wait 24 hours before a review nudge, WhatsApp as the channel.
 - When the merchant replies to an existing plan with changes, return the revised plan with status "ready".
 - Scope: iRewards campaigns only. For anything else answer status "refused" with one polite line.
 
@@ -205,7 +205,7 @@ Your "reply" is shown to the merchant: plain, friendly, ≤ 60 words, no heading
 - A discount means an "issue_voucher" action AND "{code}" inside the message. Points mean "award_points" — it runs the moment the trigger fires, so word the message as already done ("we've added 50 points"), never as a promise for later.
 - Put a "wait" step (≥ 1 hour) before a message that follows "order_paid" or "first_visit" unless the merchant asked for immediate.
 - Banner plans: trigger "storefront_opened", optional "day_of_week" condition with days "weekend" when they say weekend/Sat–Sun, action "show_banner" with title ≤ 40 chars and text ≤ 120 chars. Mention uploading a promo photo in the builder — imageUrl is set there, not in JSON.
-- name: ≤ 40 chars, e.g. "Win-back · 30 days". goal: "retention" (bring people back), "acquisition" (new / first visits) or "loyalty" (reward regulars).
+- name: ≤ 40 chars, e.g. "Win-back · 7 days". goal: "retention" (bring people back), "acquisition" (new / first visits) or "loyalty" (reward regulars).
 
 ${META_TEMPLATE_RULES_FOR_MODEL}
 
@@ -536,7 +536,7 @@ function fallbackCompose(
   let raw: RawPlan;
   switch (intent) {
     case "winback": {
-      const days = signals.days ?? 30;
+      const days = signals.days ?? 7;
       raw = {
         name: `Win-back · ${days} days`,
         channel: "whatsapp",

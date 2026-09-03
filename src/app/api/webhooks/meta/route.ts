@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateCustomer } from "@/lib/db/repository";
 import { findTemplateByMetaId } from "@/lib/db/whatsapp-template-repository";
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import { parseJoinMessage } from "@/lib/loyalty/join-token";
 import { fromMetaPhone, shouldSkipMetaVerify, verifyMetaSignature } from "@/lib/meta/client";
 import { JoinError, processWhatsAppJoin } from "@/lib/services/loyalty-join";
@@ -187,8 +187,7 @@ async function handleInbound(message: InboundMessage, value: ChangeValue) {
 }
 
 async function handleReviewReply(phone: string, rating: number) {
-  const admin = createInsforgeAdmin();
-  const { data } = await admin.database
+  const { data } = await adminDb()
     .from("customers")
     .select("id, merchant_id, display_name")
     .eq("phone", phone)
@@ -201,9 +200,18 @@ async function handleReviewReply(phone: string, rating: number) {
     return;
   }
 
+  const { recordMemberFeedback } = await import("@/lib/db/member-feedback-repository");
+
   for (const customer of customers) {
+    await recordMemberFeedback({
+      merchantId: customer.merchant_id,
+      customerId: customer.id,
+      rating,
+      note: rating <= 4 ? `Private feedback rating ${rating}` : null,
+    }).catch((err) => console.error("Failed to store member feedback:", err));
+
     if (rating === 5) {
-      const { data: merchant } = await admin.database
+      const { data: merchant } = await adminDb()
         .from("merchants")
         .select("name, google_url")
         .eq("id", customer.merchant_id)
@@ -221,19 +229,12 @@ async function handleReviewReply(phone: string, rating: number) {
         phone,
         "Thanks for telling us — a manager will follow up privately. We appreciate your honesty.",
       );
-      console.info("[review:complaint]", {
-        customerId: customer.id,
-        merchantId: customer.merchant_id,
-        rating,
-        name: customer.display_name,
-      });
     }
   }
 }
 
 async function handleMarketingOptOut(phone: string) {
-  const admin = createInsforgeAdmin();
-  const { data } = await admin.database.from("customers").select("id").eq("phone", phone).limit(20);
+  const { data } = await adminDb().from("customers").select("id").eq("phone", phone).limit(20);
 
   for (const row of data ?? []) {
     await updateCustomer((row as { id: string }).id, { marketing_opt_out: true });

@@ -5,11 +5,11 @@
  */
 
 import type { WhatsAppNumberHealthRow } from "@/lib/db/types";
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import { getMetaConfig, graphFetch, isWhatsAppDevMode } from "@/lib/meta/client";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 const POLL_INTERVAL_MS = 6 * 60 * 60 * 1000;

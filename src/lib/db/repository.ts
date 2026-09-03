@@ -1,4 +1,4 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import type {
   CustomerRow,
   JoinTokenRow,
@@ -9,7 +9,7 @@ import type {
 } from "@/lib/db/types";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 export async function getMerchantBySlug(slug: string): Promise<MerchantRow | null> {

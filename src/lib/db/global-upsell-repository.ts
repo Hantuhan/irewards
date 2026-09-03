@@ -1,4 +1,4 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import {
   promoPriceToRow,
   type UpsellLinkConfig,
@@ -6,7 +6,7 @@ import {
 } from "@/lib/menu/upsell-rules";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 type GlobalUpsellRow = {

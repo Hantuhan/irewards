@@ -4,6 +4,15 @@ set -eu
 
 BASE_URL="${BASE_URL:-http://localhost:3002}"
 MERCHANT_SLUG="${MERCHANT_SLUG:-demo-cafe}"
+
+if [ -f "$(cd "$(dirname "$0")/.." && pwd)/.env.smoke" ]; then
+  # shellcheck disable=SC1091
+  set -a
+  . "$(cd "$(dirname "$0")/.." && pwd)/.env.smoke"
+  set +a
+fi
+SMOKE_OWNER_EMAIL="${SMOKE_OWNER_EMAIL:?Set SMOKE_OWNER_EMAIL (e.g. in .env.smoke)}"
+SMOKE_OWNER_PASSWORD="${SMOKE_OWNER_PASSWORD:?Set SMOKE_OWNER_PASSWORD (e.g. in .env.smoke)}"
 COOKIE_JAR="$(mktemp)"
 trap 'rm -f "$COOKIE_JAR"' EXIT
 
@@ -33,7 +42,7 @@ echo ""
 # --- Login ---
 login_resp=$(curl -s -X POST "$BASE_URL/api/merchant/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"owner@demo-cafe.com","password":"demo123"}' \
+  -d "{\"email\":\"${SMOKE_OWNER_EMAIL}\",\"password\":\"${SMOKE_OWNER_PASSWORD}\"}" \
   -c "$COOKIE_JAR" -w "\n%{http_code}")
 login_body=$(printf '%s' "$login_resp" | sed '$d')
 login_code=$(printf '%s' "$login_resp" | tail -n 1)

@@ -20,11 +20,23 @@
     "insforge:up": "cd infra/insforge && docker compose up -d",
     "insforge:down": "cd infra/insforge && docker compose down",
     "insforge:sync-env": "sh scripts/insforge-sync-env.sh",
-    "db:migrate": "sh scripts/db-migrate.sh"
+    "db:migrate": "sh scripts/db-migrate.sh",
+    "db:migrate:supabase": "sh scripts/db-migrate-supabase.sh",
+    "cf:supabase:setup": "sh scripts/cf-supabase-setup.sh",
+    "zeabur:setup": "sh scripts/zeabur-setup.sh",
+    "check:production-env": "sh scripts/check-production-env.sh",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload"
   },
   "dependencies": {
     "@insforge/sdk": "^1.5.2",
+    "@opennextjs/cloudflare": "^1.20.6",
+    "@supabase/supabase-js": "^2.109.0",
     "next": "^15.2.0",
+    "pg": "^8.23.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -35,6 +47,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.13.5",
+    "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
@@ -43,6 +56,7 @@
     "eslint-config-next": "^15.2.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "wrangler": "^4.128.0"
   }
 }

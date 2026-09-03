@@ -7,6 +7,7 @@ import { DinerFlowPreview } from "@/components/admin/DinerFlowPreview";
 import { UpsellRuleEditor } from "@/components/admin/UpsellRuleEditor";
 import type { UpsellLinkConfig } from "@/lib/menu/upsell-rules";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { TeamSettingsPanel } from "@/components/admin/TeamSettingsPanel";
 import { ReceiptEditor, createDefaultReceiptLayout } from "@/components/receipt/ReceiptEditor";
 import { AiAssistTextarea } from "@/components/ui/AiAssistTextarea";
 import { Icon } from "@/components/ui/Icon";
@@ -20,7 +21,7 @@ import { parseReceiptLayout, type ReceiptLayout } from "@/lib/receipt/layout";
 
 type SettingsAdminShellProps = { merchantSlug: string };
 
-type TabId = "store" | "checkout" | "online" | "receipt" | "legal" | "flow";
+type TabId = "store" | "checkout" | "online" | "receipt" | "legal" | "flow" | "team";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "store", label: "Store" },
@@ -29,6 +30,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "receipt", label: "Receipt" },
   { id: "legal", label: "Legal" },
   { id: "flow", label: "Diner flow" },
+  { id: "team", label: "Team" },
 ];
 
 type SettingsData = {
@@ -1177,6 +1179,8 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
             </div>
           </section>
         )}
+
+        {tab === "team" && <TeamSettingsPanel merchantSlug={merchantSlug} />}
 
       </div>
     </AdminShell>

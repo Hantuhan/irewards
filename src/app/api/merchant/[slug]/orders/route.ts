@@ -40,7 +40,7 @@ function serializeFlow(flow: KitchenFlow) {
 export async function GET(request: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
-    if (!verifyMerchantAccess(request, slug)) {
+    if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -93,7 +93,7 @@ const patchFlowSchema = z.object({
 export async function PATCH(request: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
-    if (!verifyMerchantAccess(request, slug)) {
+    if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

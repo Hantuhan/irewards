@@ -200,13 +200,13 @@ export function analyzeWorkflow(workflow: CampaignWorkflow, channel: string): Wo
   }
 
   if (trigger === "no_visit_days") {
-    const days = Math.max(1, Number(workflow.trigger.config.days ?? 30));
-    if (days < 21) {
+    const days = Math.max(1, Number(workflow.trigger.config.days ?? 7));
+    if (days < 7) {
       hints.push({
         id: "winback-window",
         severity: "tip",
-        message: `Win-back at ${days} days is aggressive for cafes — 30 days is the usual sweet spot (60–90 for quiet members).`,
-        fixLabel: "Set to 30 days",
+        message: `Win-back at ${days} days is very early — the iRewards default is 7 days (try 14–30 for quieter cafes).`,
+        fixLabel: "Set to 7 days",
       });
     }
     if (sendsMessage(workflow) && !hasAction(workflow, "issue_voucher")) {
@@ -511,7 +511,7 @@ export function applyWorkflowHintFix(
       ...workflow,
       trigger: {
         ...workflow.trigger,
-        config: { ...workflow.trigger.config, days: 30 },
+        config: { ...workflow.trigger.config, days: 7 },
       },
     };
   }

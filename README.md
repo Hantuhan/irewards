@@ -5,9 +5,9 @@ Smart table storefront + WhatsApp retention for cafes and F&B merchants in Malay
 ## Stack
 
 - **Next.js 15** — storefront + API routes
-- **Docker** — local development containers
-- **Cloudflare** — production hosting (Workers via OpenNext) and cron triggers
-- **InsForge** — dedicated Postgres + API (`infra/insforge/`)
+- **Docker** — production image for [Zeabur](docs/ZEABUR.md); local dev containers
+- **Supabase** — production Postgres (`DATABASE_PROVIDER=supabase`)
+- **InsForge** — dedicated local Postgres + API (`infra/insforge/`)
 - **Meta WhatsApp Cloud API** — inbound webhooks, outbound messages, template approvals
 - **HitPay** — payment requests + webhooks (dev mode for local testing)
 
@@ -16,9 +16,10 @@ Smart table storefront + WhatsApp retention for cafes and F&B merchants in Malay
 | Audience | Entry | Example |
 |----------|--------|---------|
 | **Merchant SaaS** | `/` → **Open merchant dashboard** | http://localhost:3002/dashboard/demo-cafe |
-| **Diner storefront** | Table QR only | http://localhost:3002/m/demo-cafe/table/1 |
+| **Diner storefront** | Table QR or cafe subdomain | http://localhost:3002/m/demo-cafe/table/1 · `http://demo-cafe.localhost:3002/` |
+| **Multi-staff login** | `/login` | Owner / manager / staff accounts per cafe |
 
-Merchants configure menus, loyalty, and QR codes in the dashboard. Customers only see the mobile storefront after scanning a table QR.
+Merchants configure menus, loyalty, and QR codes in the dashboard. Customers only see the mobile storefront after scanning a table QR (or opening the cafe subdomain).
 
 Dev-only combined sitemap: http://localhost:3002/demo (not for production).
 
@@ -88,10 +89,9 @@ Set `INSFORGE_URL=http://host.docker.internal:7230` in `.env.local` when InsForg
 
 ## Merchant dashboard
 
-Sign in at http://localhost:3002/login
+Sign in at http://localhost:3002/login (use your merchant account — no demo credentials are published in the UI or docs).
 
-- **Demo login:** `owner@demo-cafe.com` / `demo123`
-- **Dashboard:** http://localhost:3002/dashboard/demo-cafe
+- **Dashboard example:** http://localhost:3002/dashboard/demo-cafe
 
 After `npm run db:migrate`, merchant features use the database (menu, orders, members, campaigns, analytics, tables, settings).
 
@@ -154,7 +154,7 @@ Smoke tests default to `http://localhost:3002`. Override with `BASE_URL=... npm 
 Every automated journey is a campaign with a trigger (order paid, first visit, no visit for N days, points milestone, member opted in). The cron drains the job queue, runs the daily inactivity sweep and polls Meta for template verdicts:
 
 ```bash
-# Every minute in production (cron / Cloud Scheduler)
+# Every minute in production (external cron — Zeabur, cron-job.org, etc.)
 CRON_SECRET=your-secret ./scripts/cron-automation.sh
 ```
 
@@ -179,19 +179,24 @@ Meta only delivers business-initiated messages (broadcasts, win-back, review nud
 - A campaign cannot go live, and a broadcast cannot be queued, until the *current* copy is approved. Editing the copy after approval requires a resubmission; sends keep using the last approved version only while it still matches.
 - The sender picks the approved template automatically and fills the variables per member (store name, member name, promo code).
 
-## Deploying on Cloudflare
+## Deploying on Zeabur (Docker)
 
-The app targets Cloudflare Workers through the OpenNext adapter; the database stays on the InsForge Postgres instance.
+Production runs on **Zeabur** from the root `Dockerfile`, with **Supabase** as the database.
 
 ```bash
-npm install --save-dev @opennextjs/cloudflare wrangler
-npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
+cp .env.zeabur.example .env.zeabur
+# fill Supabase credentials + secrets
+npm run zeabur:setup          # apply migrations
+# connect repo in Zeabur dashboard → auto-detects Dockerfile
 ```
 
-- `wrangler.toml` needs `compatibility_flags = ["nodejs_compat"]` and a `[triggers] crons = ["* * * * *"]` entry; the scheduled handler should `POST /api/cron/automation` with `Authorization: Bearer $CRON_SECRET` (equivalent to `scripts/cron-automation.sh`).
-- Store `META_*`, `INSFORGE_API_KEY`, `CRON_SECRET`, `PAYMENT_*` and `DEEPSEEK_API_KEY` as Worker secrets (`wrangler secret put NAME`); non-secret values go in `[vars]`.
-- Point the Meta webhook and the HitPay webhook at the Worker's custom domain. Uploaded menu and banner images must be served from a public URL (Cloudflare R2 or the InsForge storage) so Meta can fetch template headers.
-- The WhatsApp client and webhook signature check use `fetch` and Web Crypto only, so they run unchanged on Workers.
+Full guide: [docs/ZEABUR.md](docs/ZEABUR.md)
+
+- Set `PORT=8080` in Zeabur Variables (app reads `process.env.PORT`)
+- Domains: `irewards.store` + `*.irewards.store`
+- Cron: external scheduler → `POST /api/cron/automation` with `Authorization: Bearer $CRON_SECRET`
+- Meta webhook: `https://irewards.store/api/webhooks/meta`
+- Attach a persistent volume at `/app/public/uploads` for menu/banner images
 
 ## DeepSeek AI (merchant assistant)
 
@@ -220,8 +225,11 @@ Redemption now uses each merchant's `points_redeem_cents_per_point` from the Poi
 
 ## Docs
 
+- [docs/ZEABUR.md](docs/ZEABUR.md) — Zeabur + Supabase production deploy
 - [docs/PRD.md](docs/PRD.md) — product requirements + Zenith UI spec (menu management)
-- [docs/DOCKER.md](docs/DOCKER.md) — Docker + InsForge setup
+- [docs/DOCKER.md](docs/DOCKER.md) — Docker + InsForge local setup
 - [infra/insforge/README.md](infra/insforge/README.md) — dedicated InsForge stack
 - [docs/PRODUCT_FLOW.md](docs/PRODUCT_FLOW.md) — customer journey
 - [docs/SECURITY.md](docs/SECURITY.md) — anti-fraud checklist
+- [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) — go-live gates
+

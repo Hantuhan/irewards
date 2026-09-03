@@ -1,4 +1,4 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import { getMerchantBySlug } from "@/lib/db/repository";
 import {
   getMerchantPaidOrdersForReports,
@@ -88,7 +88,7 @@ export async function loadMerchantRoiActuals(merchantSlug: string): Promise<Merc
 
   const d90 = now - 90 * dayMs;
   const fromIso90 = new Date(d90).toISOString();
-  const { data: memberOrderRows } = await createInsforgeAdmin().database
+  const { data: memberOrderRows } = await adminDb()
     .from("orders")
     .select("customer_id")
     .eq("merchant_id", merchant.id)

@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { clearCookieSecurityAttrs, cookieSecurityAttrs } from "@/lib/auth/cookie-attrs";
 
 const COOKIE_NAME = "irewards_member_session";
 const MAX_AGE_SEC = 60 * 60 * 24 * 365;
@@ -68,10 +69,9 @@ export function getMemberSessionFromRequest(request: Request): MemberSession | n
 }
 
 export function memberSessionCookieHeader(token: string): string {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_SEC}${secure}`;
+  return `${COOKIE_NAME}=${encodeURIComponent(token)}; ${cookieSecurityAttrs(MAX_AGE_SEC)}`;
 }
 
 export function clearMemberSessionCookieHeader(): string {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${COOKIE_NAME}=; ${clearCookieSecurityAttrs()}`;
 }

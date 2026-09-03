@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { clearCookieSecurityAttrs, cookieSecurityAttrs } from "@/lib/auth/cookie-attrs";
 
 const COOKIE_NAME = "irewards_merchant_session";
 const MAX_AGE_SEC = 60 * 60 * 24 * 7;
@@ -8,8 +9,24 @@ export type MerchantSession = {
   merchantId: string;
   merchantSlug: string;
   email: string;
+  userId: string;
+  role: "owner" | "manager" | "staff";
+  name: string | null;
   exp: number;
 };
+
+function normalizeSession(raw: Partial<MerchantSession> & { merchantId: string; merchantSlug: string; email: string; exp: number }): MerchantSession | null {
+  if (raw.exp < Math.floor(Date.now() / 1000)) return null;
+  return {
+    merchantId: raw.merchantId,
+    merchantSlug: raw.merchantSlug,
+    email: raw.email,
+    userId: raw.userId ?? "",
+    role: raw.role === "manager" || raw.role === "staff" ? raw.role : "owner",
+    name: raw.name ?? null,
+    exp: raw.exp,
+  };
+}
 
 function secret() {
   const value =
@@ -48,11 +65,15 @@ export function parseSessionToken(token: string): MerchantSession | null {
     return null;
   }
   try {
-    const session = JSON.parse(
+    const raw = JSON.parse(
       Buffer.from(payload, "base64url").toString("utf8"),
-    ) as MerchantSession;
-    if (session.exp < Math.floor(Date.now() / 1000)) return null;
-    return session;
+    ) as Partial<MerchantSession> & {
+      merchantId: string;
+      merchantSlug: string;
+      email: string;
+      exp: number;
+    };
+    return normalizeSession(raw);
   } catch {
     return null;
   }
@@ -74,10 +95,9 @@ export async function getSessionFromCookies(): Promise<MerchantSession | null> {
 }
 
 export function sessionCookieHeader(token: string): string {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_SEC}${secure}`;
+  return `${COOKIE_NAME}=${encodeURIComponent(token)}; ${cookieSecurityAttrs(MAX_AGE_SEC)}`;
 }
 
 export function clearSessionCookieHeader(): string {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${COOKIE_NAME}=; ${clearCookieSecurityAttrs()}`;
 }

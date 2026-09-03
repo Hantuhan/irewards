@@ -13,7 +13,7 @@ const categorySchema = z.object({
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
-    if (!verifyMerchantAccess(request, slug)) {
+    if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -43,7 +43,7 @@ const deleteCategorySchema = z.object({
 export async function DELETE(request: Request, context: RouteContext) {
   try {
     const { slug: merchantSlug } = await context.params;
-    if (!verifyMerchantAccess(request, merchantSlug)) {
+    if (!(await verifyMerchantAccess(request, merchantSlug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

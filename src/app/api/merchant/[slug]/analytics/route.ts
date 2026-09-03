@@ -8,7 +8,7 @@ type RouteContext = { params: Promise<{ slug: string }> };
 export async function GET(request: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
-    if (!verifyMerchantAccess(request, slug)) {
+    if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

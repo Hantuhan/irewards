@@ -5,6 +5,8 @@ node_modules/
 
 # build
 .next/
+.open-next/
+.wrangler/
 out/
 dist/
 build/
@@ -13,6 +15,15 @@ build/
 .env
 .env.local
 .env.*.local
+.env.smoke
+.env.supabase
+.env.zeabur
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+!.env.smoke.example
+!.env.supabase.example
+!.env.zeabur.example
 infra/insforge/.env
 
 # debug

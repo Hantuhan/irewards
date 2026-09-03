@@ -128,7 +128,7 @@ cross join (values
 where m.slug = 'demo-cafe'
   and not exists (select 1 from campaigns c where c.merchant_id = m.id);
 
--- Demo merchant login: owner@demo-cafe.com / demo123
+-- Demo merchant login (password set via local ops; not published in UI/docs)
 insert into merchant_users (merchant_id, email, password_hash, name)
 select m.id, 'owner@demo-cafe.com',
   '372e15c18c957029b9d77f332579dcd2:c058a1c48e6155e95bd650d7dc04ec3e893ab106cecb76d48bc3a2f81e235ca4c3fb35a9cda0a523f1aba67879abae40c23a4270c090ae18ad82157e063a070c',

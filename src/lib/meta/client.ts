@@ -17,9 +17,9 @@ export type MetaConfig = {
   appSecret: string | null;
 };
 
-/** Dev mode: log instead of calling Meta, and simulate template review. */
+/** Dev mode: log instead of calling Meta. Controlled only by WHATSAPP_SKIP_SEND. */
 export function isWhatsAppDevMode(): boolean {
-  return process.env.WHATSAPP_SKIP_SEND === "true" || process.env.PAYMENT_PROVIDER === "dev";
+  return process.env.WHATSAPP_SKIP_SEND === "true";
 }
 
 export function getMetaConfig(): MetaConfig {

@@ -9,5 +9,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     merchantSlug: session.merchantSlug,
     email: session.email,
+    userId: session.userId,
+    role: session.role,
+    name: session.name,
   });
 }

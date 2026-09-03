@@ -41,7 +41,7 @@ const bodySchema = z.object({
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
-    if (!verifyMerchantAccess(request, slug)) {
+    if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

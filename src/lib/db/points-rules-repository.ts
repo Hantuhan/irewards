@@ -1,9 +1,9 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import type { PointsRule } from "@/lib/loyalty/points-rules";
 import { parsePointsRuleRow } from "@/lib/loyalty/points-rules";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 export async function listPointsRules(merchantId: string): Promise<PointsRule[]> {

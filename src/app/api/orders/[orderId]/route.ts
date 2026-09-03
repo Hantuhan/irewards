@@ -6,7 +6,7 @@ import {
 } from "@/lib/db/repository";
 import { getOrderItems } from "@/lib/db/merchant-repository";
 import { buildWhatsAppJoinUrl } from "@/lib/loyalty/join-token";
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import { getCustomerTierForMerchant } from "@/lib/services/loyalty-points";
 import { buildReceiptOrderFromDb } from "@/lib/receipt/build-order-from-db";
 
@@ -20,8 +20,7 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const admin = createInsforgeAdmin();
-    const { data: merchant } = await admin.database
+    const { data: merchant } = await adminDb()
       .from("merchants")
       .select(
         "slug, name, whatsapp_number, currency, logo_url, address, landline_number, registration_number, sst_number, gst_number, receipt_footer_text, receipt_show_registration, receipt_layout_json, service_charge_enabled, service_charge_percent, sst_enabled, sst_rate_percent, gst_enabled, gst_rate_percent",
@@ -33,7 +32,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     let tableNumber: string | null = null;
     if (order.venue_table_id) {
-      const { data: table } = await admin.database
+      const { data: table } = await adminDb()
         .from("venue_tables")
         .select("table_number")
         .eq("id", order.venue_table_id)

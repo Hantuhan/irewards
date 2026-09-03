@@ -55,6 +55,9 @@ export type MerchantRow = {
   weekly_revenue_target_cents?: number | null;
   monthly_revenue_target_cents?: number | null;
   kitchen_flow_json?: unknown;
+  /** Public SaaS subdomain (defaults to slug), e.g. cafe1 → cafe1.irewards.store */
+  subdomain?: string;
+  suspended_at?: string | null;
 };
 
 export type VenueTableRow = {
@@ -228,6 +231,10 @@ export type MerchantUserRow = {
   email: string;
   password_hash: string;
   name: string | null;
+  role?: "owner" | "manager" | "staff";
+  active?: boolean;
+  invited_at?: string | null;
+  last_login_at?: string | null;
 };
 
 export type WhatsAppTemplateStatus =

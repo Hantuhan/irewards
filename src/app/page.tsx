@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
+import { apexDomain } from "@/lib/tenancy/host";
 
 export default function MerchantHomePage() {
+  const apex = apexDomain();
   return (
     <main className="flex min-h-screen flex-col items-center bg-surface p-6">
       <div className="w-full max-w-lg">
@@ -49,6 +51,16 @@ export default function MerchantHomePage() {
             <Icon name="login" />
             Merchant sign in
           </Link>
+          <Link
+            href="/signup"
+            className="flex items-center justify-center gap-2 border border-primary py-3 font-display text-headline-sm text-primary"
+          >
+            Create cafe portal
+          </Link>
+          <p className="text-center text-body-md text-on-surface-variant">
+            Each cafe gets{" "}
+            <span className="font-mono text-label-mono">cafe.{apex}</span>
+          </p>
         </div>
 
         {process.env.NODE_ENV === "development" && (

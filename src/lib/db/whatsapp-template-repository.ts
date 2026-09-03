@@ -1,8 +1,8 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import type { WhatsAppTemplateRow, WhatsAppTemplateStatus } from "@/lib/db/types";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 export async function createWhatsAppTemplate(input: {

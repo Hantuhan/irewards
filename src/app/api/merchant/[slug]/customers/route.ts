@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMerchantBySlug, getRewardLevels } from "@/lib/db/repository";
 import { listCustomersForMerchant } from "@/lib/db/merchant-repository";
+import { listRecentMemberFeedback } from "@/lib/db/member-feedback-repository";
 import { resolveCustomerLevel } from "@/lib/loyalty/tiers";
 import { verifyMerchantAccess } from "@/lib/merchant/access";
 
@@ -9,7 +10,7 @@ type RouteContext = { params: Promise<{ slug: string }> };
 export async function GET(request: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
-    if (!verifyMerchantAccess(request, slug)) {
+    if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -21,9 +22,10 @@ export async function GET(request: Request, context: RouteContext) {
     const url = new URL(request.url);
     const search = url.searchParams.get("q") ?? undefined;
 
-    const [customers, levels] = await Promise.all([
+    const [customers, levels, feedback] = await Promise.all([
       listCustomersForMerchant(merchant.id, search),
       getRewardLevels(merchant.id),
+      listRecentMemberFeedback(merchant.id, 25),
     ]);
 
     return NextResponse.json({
@@ -40,6 +42,15 @@ export async function GET(request: Request, context: RouteContext) {
           lastVisit: c.last_visit_at,
         };
       }),
+      feedback: feedback.map((f) => ({
+        id: f.id,
+        rating: f.rating,
+        note: f.note,
+        createdAt: f.created_at,
+        memberName: f.customers?.display_name ?? null,
+        phone: f.customers?.phone ?? null,
+        needsFollowUp: f.rating >= 1 && f.rating <= 4,
+      })),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load members";

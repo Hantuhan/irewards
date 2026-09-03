@@ -1,4 +1,4 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import type { CampaignRow, CustomerRow } from "@/lib/db/types";
 import { enqueueAutomationJob } from "@/lib/db/automation-repository";
 import { createPromo, getPromoByCode } from "@/lib/db/merchant-repository";
@@ -14,7 +14,7 @@ import {
 } from "@/lib/campaigns/workflow-spec";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 export type TriggerContext = {

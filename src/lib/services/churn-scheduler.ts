@@ -1,10 +1,10 @@
 import { runCampaignTrigger } from "@/lib/campaigns/workflow-runtime";
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import { listMarketingMembers } from "@/lib/services/campaign-send";
 import { isAutomationEnabled } from "@/lib/services/automation";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 const SWEEP_INTERVAL_MS = 23 * 60 * 60 * 1000;

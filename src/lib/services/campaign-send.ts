@@ -1,10 +1,10 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import type { CampaignRow, CustomerRow } from "@/lib/db/types";
 import { enqueueAutomationJob } from "@/lib/db/automation-repository";
 import { resolveApprovedTemplate } from "@/lib/whatsapp/templates";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 export async function getCampaignById(

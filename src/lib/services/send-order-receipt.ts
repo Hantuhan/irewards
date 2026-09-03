@@ -1,6 +1,6 @@
 import { getCustomerById, getMerchantById, getOrderById } from "@/lib/db/repository";
 import { getOrderItems } from "@/lib/db/merchant-repository";
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import { buildReceiptOrderFromDb } from "@/lib/receipt/build-order-from-db";
 import type { ReceiptMerchant } from "@/lib/receipt/types";
 import {
@@ -31,8 +31,7 @@ export async function sendOrderReceipt(input: {
   const items = await getOrderItems(order.id);
   let tableNumber: string | null = null;
   if (order.venue_table_id) {
-    const admin = createInsforgeAdmin();
-    const { data: table } = await admin.database
+    const { data: table } = await adminDb()
       .from("venue_tables")
       .select("table_number")
       .eq("id", order.venue_table_id)
@@ -75,8 +74,7 @@ export async function sendOrderReceipt(input: {
     tableNumber,
   });
 
-  const admin = createInsforgeAdmin();
-  const { error } = await admin.database
+  const { error } = await adminDb()
     .from("orders")
     .update({
       receipt_requested: true,

@@ -5,6 +5,19 @@ set -eu
 BASE_URL="${BASE_URL:-http://localhost:3002}"
 MERCHANT_SLUG="${MERCHANT_SLUG:-demo-cafe}"
 TABLE_ID="${TABLE_ID:-1}"
+
+# Credentials: set in env or gitignored `.env.smoke` (see `.env.smoke.example`). Never commit passwords.
+if [ -f "$(cd "$(dirname "$0")/.." && pwd)/.env.smoke" ]; then
+  # shellcheck disable=SC1091
+  set -a
+  . "$(cd "$(dirname "$0")/.." && pwd)/.env.smoke"
+  set +a
+fi
+SMOKE_OWNER_EMAIL="${SMOKE_OWNER_EMAIL:?Set SMOKE_OWNER_EMAIL (e.g. in .env.smoke)}"
+SMOKE_OWNER_PASSWORD="${SMOKE_OWNER_PASSWORD:?Set SMOKE_OWNER_PASSWORD (e.g. in .env.smoke)}"
+SMOKE_STAFF_EMAIL="${SMOKE_STAFF_EMAIL:-}"
+SMOKE_STAFF_PASSWORD="${SMOKE_STAFF_PASSWORD:-}"
+PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD:?Set PLATFORM_ADMIN_PASSWORD (e.g. in .env.smoke or .env.local)}"
 COOKIE_JAR="$(mktemp)"
 trap 'rm -f "$COOKIE_JAR"' EXIT
 
@@ -52,19 +65,71 @@ item_count=$(node -e "
 # --- Merchant login ---
 login_resp=$(curl -s -X POST "$BASE_URL/api/merchant/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"owner@demo-cafe.com","password":"demo123"}' \
+  -d "{\"email\":\"${SMOKE_OWNER_EMAIL}\",\"password\":\"${SMOKE_OWNER_PASSWORD}\"}" \
   -c "$COOKIE_JAR" -w "\n%{http_code}")
 login_body=$(printf '%s' "$login_resp" | sed '$d')
 login_code=$(printf '%s' "$login_resp" | tail -n 1)
 [ "$login_code" = "200" ] && pass "Merchant login ($login_code)" || fail "Merchant login failed: $login_body"
 
+# --- Multi-user staff login (same cafe) ---
+if [ -n "${SMOKE_STAFF_EMAIL}" ] && [ -n "${SMOKE_STAFF_PASSWORD}" ]; then
+  staff_resp=$(curl -s -X POST "$BASE_URL/api/merchant/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\":\"${SMOKE_STAFF_EMAIL}\",\"password\":\"${SMOKE_STAFF_PASSWORD}\"}" \
+    -w "\n%{http_code}")
+  staff_body=$(printf '%s' "$staff_resp" | sed '$d')
+  staff_code=$(printf '%s' "$staff_resp" | tail -n 1)
+  staff_role=$(node -e "const d=JSON.parse(process.argv[1]); console.log(d.user?.role||'')" "$staff_body" 2>/dev/null || true)
+  [ "$staff_code" = "200" ] && [ "$staff_role" = "staff" ] && pass "Staff login (role=$staff_role)" || fail "Staff login failed: $staff_body"
+else
+  pass "Staff login skipped (SMOKE_STAFF_* not set)"
+fi
+
 auth() { curl -s -b "$COOKIE_JAR" "$@"; }
 
 # --- Merchant APIs ---
-for path in settings menu orders customers analytics campaigns tables reward-levels reports "reports/compare?periodDays=7" reports/intelligence; do
+for path in settings menu orders customers analytics campaigns tables reward-levels reports "reports/compare?periodDays=7" reports/intelligence team; do
   code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$BASE_URL/api/merchant/$MERCHANT_SLUG/$path")
   [ "$code" = "200" ] && pass "GET /api/merchant/$MERCHANT_SLUG/$path ($code)" || fail "GET $path expected 200 got $code"
 done
+
+# --- Subdomain rewrite (Host: demo-cafe.localhost) ---
+sub_code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: demo-cafe.localhost" "$BASE_URL/")
+[ "$sub_code" = "200" ] && pass "Subdomain storefront rewrite ($sub_code)" || fail "Subdomain rewrite expected 200 got $sub_code"
+
+# --- Platform admin ---
+plat_resp=$(curl -s -X POST "$BASE_URL/api/platform/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"password\":$(node -e "console.log(JSON.stringify(process.env.PLATFORM_ADMIN_PASSWORD||''))" )}" \
+  -c /tmp/irewards-platform-cookies.txt -w "\n%{http_code}")
+plat_code=$(printf '%s' "$plat_resp" | tail -n 1)
+[ "$plat_code" = "200" ] && pass "Platform admin login ($plat_code)" || fail "Platform admin login failed"
+tenants_code=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/irewards-platform-cookies.txt "$BASE_URL/api/platform/tenants")
+[ "$tenants_code" = "200" ] && pass "Platform tenants list ($tenants_code)" || fail "Platform tenants expected 200 got $tenants_code"
+
+# --- Signup page + weak password rejected ---
+signup_page=$(http_code "$BASE_URL/signup")
+[ "$signup_page" = "200" ] && pass "Signup page ($signup_page)" || fail "Signup page expected 200"
+weak_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/merchant/signup" \
+  -H "Content-Type: application/json" \
+  -d '{"cafeName":"Weak Cafe","currency":"MYR","ownerName":"A","ownerEmail":"weak-'$(date +%s)'@example.com","ownerPassword":"demo123"}')
+[ "$weak_code" = "400" ] && pass "Weak signup password rejected ($weak_code)" || fail "Weak signup expected 400 got $weak_code"
+
+# --- Signup auto-provision (unique cafe) ---
+SIGNUP_TS=$(date +%s)
+SIGNUP_EMAIL="owner-smoke-${SIGNUP_TS}@example.com"
+SIGNUP_SUB="smokecafe${SIGNUP_TS}"
+signup_resp=$(curl -s -X POST "$BASE_URL/api/merchant/signup" \
+  -H "Content-Type: application/json" \
+  -c /tmp/irewards-signup-cookies.txt \
+  -d "{\"cafeName\":\"Smoke Cafe ${SIGNUP_TS}\",\"currency\":\"MYR\",\"ownerName\":\"Smoke Owner\",\"ownerEmail\":\"${SIGNUP_EMAIL}\",\"ownerPassword\":\"SmokeCafe2026!x\",\"subdomain\":\"${SIGNUP_SUB}\"}" \
+  -w "\n%{http_code}")
+signup_body=$(printf '%s' "$signup_resp" | sed '$d')
+signup_code=$(printf '%s' "$signup_resp" | tail -n 1)
+signup_slug=$(node -e "const d=JSON.parse(process.argv[1]); console.log(d.merchant?.slug||'')" "$signup_body" 2>/dev/null || true)
+[ "$signup_code" = "200" ] && [ -n "$signup_slug" ] && pass "Signup provisioned ($signup_slug)" || fail "Signup provision failed: $signup_body"
+dash_code=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/irewards-signup-cookies.txt "$BASE_URL/dashboard/$signup_slug")
+[ "$dash_code" = "200" ] && pass "New merchant dashboard ($dash_code)" || fail "New merchant dashboard expected 200 got $dash_code"
 
 # --- Menu catalogue (merchant admin) ---
 menu_admin_resp=$(auth "$BASE_URL/api/merchant/$MERCHANT_SLUG/menu")

@@ -1,8 +1,8 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import type { ModifierGroup, ModifierOption } from "@/lib/menu/modifiers";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 type GroupRow = {

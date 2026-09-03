@@ -19,7 +19,7 @@
 - [x] Redeem points requires verified member session
 - [x] STOP opt-out on outbound WhatsApp
 - [x] PDPA notice on storefront footer
-- [x] Review nudge replies: 5 → Google link, 1–4 → private manager follow-up log
+- [x] Review nudge replies: 5 → Google link, 1–4 → private thank-you + `member_feedback` (Members follow-up)
 
 ## Identity
 

@@ -16,7 +16,7 @@ import {
 import { getMetaConfig, graphFetch, isWhatsAppDevMode, MetaApiError } from "@/lib/meta/client";
 import { asWhatsAppTemplate, asWorkflow, whatsAppCompliance } from "@/lib/campaigns/workflow-spec";
 import { describeBlockers, lintWhatsAppTemplate, type ComplianceReport } from "@/lib/whatsapp/meta-compliance";
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import {
   buildTemplateComponents,
   statusFromMeta,
@@ -257,7 +257,7 @@ const BLOCKING_STATUSES = new Set<WhatsAppTemplateRow["status"]>(["paused", "dis
  */
 export async function pauseCampaignsForTemplate(row: WhatsAppTemplateRow, reasonText: string) {
   if (!row.campaign_id || !BLOCKING_STATUSES.has(row.status)) return;
-  const db = createInsforgeAdmin().database;
+  const db = adminDb();
   const { data } = await db
     .from("campaigns")
     .select("id, status")

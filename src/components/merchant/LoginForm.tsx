@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
@@ -7,10 +8,10 @@ import { Icon } from "@/components/ui/Icon";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/dashboard/demo-cafe";
+  const next = searchParams.get("next");
 
-  const [email, setEmail] = useState("owner@demo-cafe.com");
-  const [password, setPassword] = useState("demo123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -30,11 +31,14 @@ export function LoginForm() {
         merchant?: { slug: string };
       };
       if (!response.ok) throw new Error(json.error ?? "Login failed");
-      router.push(
-        next.startsWith("/dashboard/")
+      const dest =
+        next && next.startsWith("/dashboard/")
           ? next
-          : `/dashboard/${json.merchant?.slug ?? "demo-cafe"}`,
-      );
+          : `/dashboard/${json.merchant?.slug ?? ""}`;
+      if (!json.merchant?.slug && !next?.startsWith("/dashboard/")) {
+        throw new Error("Login succeeded but merchant was missing");
+      }
+      router.push(dest);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -54,7 +58,7 @@ export function LoginForm() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="zenith-surface flex flex-col gap-4 p-8">
+        <form onSubmit={(e) => void handleSubmit(e)} className="zenith-surface flex flex-col gap-4 p-8">
           <label className="block">
             <span className="font-display text-eyebrow uppercase text-on-surface-variant">
               Email
@@ -63,6 +67,7 @@ export function LoginForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
               className="mt-2 w-full border border-surface-container-highest px-3 py-2"
               required
             />
@@ -75,6 +80,7 @@ export function LoginForm() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               className="mt-2 w-full border border-surface-container-highest px-3 py-2"
               required
             />
@@ -96,7 +102,9 @@ export function LoginForm() {
           </button>
 
           <p className="text-center text-body-md text-on-surface-variant">
-            Demo: owner@demo-cafe.com / demo123
+            <Link href="/signup" className="underline">
+              Create a cafe
+            </Link>
           </p>
         </form>
       </div>

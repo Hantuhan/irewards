@@ -1,7 +1,7 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 export type AutomationJobRow = {

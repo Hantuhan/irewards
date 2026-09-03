@@ -1,4 +1,4 @@
-import { createInsforgeAdmin } from "@/lib/insforge/client";
+import { adminDb } from "@/lib/db/admin";
 import type { ProgramLanguage, LocalizedMap } from "@/lib/i18n/program-locale";
 import { mergeLocalizedMap, menuLocalizedText } from "@/lib/menu/i18n";
 import {
@@ -60,7 +60,7 @@ import type {
 } from "@/lib/db/types";
 
 function db() {
-  return createInsforgeAdmin().database;
+  return adminDb();
 }
 
 export async function getMerchantUserByEmail(
@@ -76,7 +76,74 @@ export async function getMerchantUserByEmail(
   if (!data) return null;
 
   const row = data as MerchantUserRow & { merchants: MerchantRow };
+  if (row.active === false) return null;
   return { ...row, merchant: row.merchants };
+}
+
+export async function listMerchantUsers(merchantId: string): Promise<MerchantUserRow[]> {
+  const { data, error } = await db()
+    .from("merchant_users")
+    .select("id, merchant_id, email, password_hash, name, role, active, invited_at, last_login_at")
+    .eq("merchant_id", merchantId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as MerchantUserRow[];
+}
+
+export async function createMerchantUser(input: {
+  merchantId: string;
+  email: string;
+  passwordHash: string;
+  name: string | null;
+  role: "owner" | "manager" | "staff";
+}): Promise<MerchantUserRow> {
+  const { data, error } = await db()
+    .from("merchant_users")
+    .insert([
+      {
+        merchant_id: input.merchantId,
+        email: input.email.toLowerCase(),
+        password_hash: input.passwordHash,
+        name: input.name,
+        role: input.role,
+        active: true,
+        invited_at: new Date().toISOString(),
+      },
+    ])
+    .select("id, merchant_id, email, password_hash, name, role, active, invited_at, last_login_at")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as MerchantUserRow;
+}
+
+export async function setMerchantUserActive(
+  merchantId: string,
+  userId: string,
+  active: boolean,
+): Promise<void> {
+  const { error } = await db()
+    .from("merchant_users")
+    .update({ active })
+    .eq("merchant_id", merchantId)
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+}
+
+export async function touchMerchantUserLogin(userId: string): Promise<void> {
+  await db()
+    .from("merchant_users")
+    .update({ last_login_at: new Date().toISOString() })
+    .eq("id", userId);
+}
+
+export async function getMerchantBySubdomain(subdomain: string): Promise<MerchantRow | null> {
+  const key = subdomain.toLowerCase();
+  const bySub = await db().from("merchants").select("*").eq("subdomain", key).maybeSingle();
+  if (bySub.error) throw new Error(bySub.error.message);
+  if (bySub.data) return bySub.data as MerchantRow;
+  const bySlug = await db().from("merchants").select("*").eq("slug", key).maybeSingle();
+  if (bySlug.error) throw new Error(bySlug.error.message);
+  return (bySlug.data as MerchantRow | null) ?? null;
 }
 
 export async function updateMerchant(

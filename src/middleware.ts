@@ -1,25 +1,36 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifySignedSessionToken } from "@/lib/auth/edge-session";
+import { rewritePathForTenant, tenantSubdomainFromHost } from "@/lib/tenancy/host";
 
-function decodeSessionPayload(token: string): { merchantSlug: string; exp: number } | null {
-  const [payload] = token.split(".");
-  if (!payload) return null;
-  try {
-    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-    const json = atob(padded);
-    const session = JSON.parse(json) as { merchantSlug: string; exp: number };
-    if (session.exp < Math.floor(Date.now() / 1000)) return null;
-    return session;
-  } catch {
-    return null;
-  }
-}
-
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  const host = request.headers.get("host");
+  const tenant = tenantSubdomainFromHost(host);
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/platform") && pathname !== "/platform/login") {
+    const token = request.cookies.get("irewards_platform_session")?.value;
+    const session = token ? await verifySignedSessionToken(token, "platform") : null;
+    if (!session || session.role !== "platform_admin") {
+      return NextResponse.redirect(new URL("/platform/login", request.url));
+    }
+  }
+
+  if (tenant) {
+    const rewriteTo = rewritePathForTenant(pathname, tenant);
+    if (rewriteTo) {
+      const url = request.nextUrl.clone();
+      url.pathname = rewriteTo;
+      const response = NextResponse.rewrite(url);
+      response.headers.set("x-irewards-tenant", tenant);
+      return response;
+    }
+  }
+
   if (!pathname.startsWith("/dashboard/")) {
-    return NextResponse.next();
+    const res = NextResponse.next();
+    if (tenant) res.headers.set("x-irewards-tenant", tenant);
+    return res;
   }
 
   if (
@@ -30,8 +41,14 @@ export function middleware(request: NextRequest) {
   }
 
   const slug = pathname.split("/")[2];
+  if (tenant && slug && tenant !== slug) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("next", `/dashboard/${tenant}`);
+    return NextResponse.redirect(loginUrl);
+  }
+
   const token = request.cookies.get("irewards_merchant_session")?.value;
-  const session = token ? decodeSessionPayload(token) : null;
+  const session = token ? await verifySignedSessionToken(token, "merchant") : null;
 
   if (!session || session.merchantSlug !== slug) {
     const loginUrl = new URL("/login", request.url);
@@ -39,9 +56,20 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (tenant) response.headers.set("x-irewards-tenant", tenant);
+  return response;
 }
 
 export const config = {
-  matcher: "/dashboard/:path*",
+  matcher: [
+    "/",
+    "/dashboard/:path*",
+    "/admin",
+    "/admin/:path*",
+    "/login",
+    "/signup",
+    "/platform",
+    "/platform/:path*",
+  ],
 };

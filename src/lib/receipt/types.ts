@@ -3,6 +3,8 @@ export type ReceiptLineItem = {
   quantity: number;
   unitPriceCents: number;
   modifiers?: { groupName: string; optionName: string; priceDeltaCents: number }[] | null;
+  /** Diner's kitchen note for this line, so the receipt confirms what was asked. */
+  note?: string | null;
 };
 
 export type ReceiptMerchant = {

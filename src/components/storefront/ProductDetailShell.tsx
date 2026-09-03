@@ -52,11 +52,15 @@ export function ProductDetailShell({ merchantSlug, tableId, itemSlug }: ProductD
       })
       .catch((err) => {
         if (!cancelled) {
-          setItemError(
-            err instanceof Error && !/not found/i.test(err.message)
+          // Only surface a message the server actually wrote. A network failure
+          // reads as "Failed to fetch", which means nothing to a diner.
+          const serverMessage =
+            err instanceof Error &&
+            !/not found/i.test(err.message) &&
+            !/failed to fetch|networkerror|load failed/i.test(err.message)
               ? err.message
-              : copy.productUnavailable,
-          );
+              : null;
+          setItemError(serverMessage ?? copy.productUnavailable);
         }
       })
       .finally(() => {

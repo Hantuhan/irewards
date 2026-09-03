@@ -458,12 +458,15 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
   const latestEditorFingerprint = useRef(editorFingerprint);
   latestEditorFingerprint.current = editorFingerprint;
 
+  // Keyed on the slug alone on purpose: this resets the unsaved-changes
+  // baseline when a different product is opened, not on every keystroke.
   useEffect(() => {
     if (!editing) {
       setEditorBaseline(null);
       return;
     }
     setEditorBaseline(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.slug]);
 
   useEffect(() => {
@@ -605,6 +608,8 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
   ]);
 
   /** Auto-fill kcal with AI from name/description (local hint first, then AI refine). */
+  // Deps are the specific editable fields this debounce reacts to. Depending on
+  // `editing` as a whole would refire the AI call on every unrelated field edit.
   useEffect(() => {
     if (!editing) return;
     if (kcalManual) return;
@@ -692,6 +697,7 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
       // slug unused except for clarity in stale checks
       void slug;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     editing?.slug,
     editing?.name,
@@ -730,85 +736,6 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
     categories,
   ]);
 
-  async function askMenuDetailsGenerate() {
-    if (!editing?.name.trim()) {
-      setKcalHint("Add a product name first");
-      return;
-    }
-    setKcalAsking(true);
-    setError(null);
-    try {
-      const cat = categories.find((c) => c.slug === editing.categorySlug);
-      const kind: "drink" | "food" = isDrinkMenuCategory(
-        editing.categorySlug,
-        cat?.label,
-      )
-        ? "drink"
-        : "food";
-      const availablePresets =
-        kind === "drink"
-          ? filterIngredientPresetsForDrinkProduct(ingredientPresets)
-          : filterIngredientPresetsForFoodProduct(ingredientPresets);
-
-      const result = await merchantApi<{
-        ingredientIds: string[];
-        customIngredients: string | null;
-        notes: string | null;
-        kcal: number | null;
-        sugarG: number | null;
-        label: string;
-        rationale?: string;
-        message?: string;
-        source: string;
-      }>(`/api/merchant/${merchantSlug}/ai/menu-details`, {
-        method: "POST",
-        body: JSON.stringify({
-          name: editing.name,
-          description: editing.description,
-          categorySlug: editing.categorySlug,
-          categoryLabel: cat?.label,
-          productKind: kind,
-          availablePresets: availablePresets.map((p) => ({
-            id: p.id,
-            label: p.label,
-            group: p.group,
-          })),
-        }),
-      });
-
-      if (result.ingredientIds?.length) {
-        setIngredientIds(result.ingredientIds);
-      }
-      if (result.customIngredients) {
-        updateCustomIngredients(result.customIngredients);
-      }
-      if (result.notes) {
-        updateItemNotes(result.notes);
-      }
-      if (result.kcal != null) {
-        setKcalInput(String(result.kcal));
-        setKcalManual(true);
-      }
-      if (result.sugarG != null) {
-        setSugarGInput(String(result.sugarG));
-      }
-
-      if (result.kcal == null && !result.ingredientIds?.length && !result.customIngredients) {
-        setKcalHint(result.message ?? "AI could not fill details — edit fields yourself");
-        return;
-      }
-
-      setKcalHint(
-        result.rationale
-          ? `AI · ${result.label} — ${result.rationale}`
-          : `AI · ${result.label || "details filled"}`,
-      );
-    } catch (err) {
-      setKcalHint(err instanceof Error ? err.message : "Auto generate failed");
-    } finally {
-      setKcalAsking(false);
-    }
-  }
 
   function setKcalFromUser(value: string) {
     setKcalManual(true);

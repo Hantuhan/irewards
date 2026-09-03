@@ -44,6 +44,7 @@ export async function sendOrderReceipt(input: {
     quantity: item.quantity,
     unitPriceCents: item.unit_price_cents,
     modifiers: item.modifiers ?? null,
+    note: item.note ?? null,
   }));
 
   const receiptOrder = buildReceiptOrderFromDb(

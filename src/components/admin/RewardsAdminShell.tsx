@@ -28,7 +28,6 @@ import {
   type BonusDayTemplate,
   type PointsRule,
   type PointsRuleCondition,
-  type PointsRuleItemCondition,
 } from "@/lib/loyalty/points-rules";
 import { tierCardGradient } from "@/lib/loyalty/reward-level-map";
 import {

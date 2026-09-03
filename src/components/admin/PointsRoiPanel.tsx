@@ -54,7 +54,6 @@ export function PointsRoiPanel({
 }: PointsRoiPanelProps) {
   const isGuide = variant === "guide";
   const symbol = currency === "SGD" ? "S$" : "RM";
-  const unitNamePlural = currency === "SGD" ? "cents" : "sen";
   const activeLevels = useMemo(() => activeMembershipLevels(levels), [levels]);
   const defaultTop = useMemo(() => topActiveMembershipLevel(levels), [levels]);
 

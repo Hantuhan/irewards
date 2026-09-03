@@ -227,6 +227,11 @@ function renderBlock(
                           + {mod.optionName}
                         </p>
                       ))}
+                    {item.note?.trim() ? (
+                      <p className="mt-0.5 text-[12px] italic text-on-surface-variant">
+                        Note: {item.note}
+                      </p>
+                    ) : null}
                     {getBlockSetting(block, "showQuantity", true) && (
                       <p className="mt-0.5 font-mono text-[10px] text-on-surface-variant">
                         {item.quantity} × {formatReceiptMoney(order.currency, item.unitPriceCents)}

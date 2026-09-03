@@ -140,6 +140,11 @@ export function OrderReceipt({ merchant, order, className = "" }: OrderReceiptPr
                       )}
                     </p>
                   ))}
+                  {item.note?.trim() ? (
+                    <p className="mt-0.5 text-[13px] italic text-on-surface-variant">
+                      Note: {item.note}
+                    </p>
+                  ) : null}
                   <p className="mt-0.5 font-mono text-[11px] text-on-surface-variant">
                     {item.quantity} × {formatReceiptMoney(order.currency, item.unitPriceCents)}
                   </p>

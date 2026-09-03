@@ -8,10 +8,6 @@ import { Icon } from "@/components/ui/Icon";
 import { manusHeaderBtnClass, manusHeaderPrimaryBtnClass } from "@/lib/ui/manus";
 import {
   KitchenTableCard,
-  elapsedMs,
-  severityRank,
-  waitSeverity,
-  orderIsTakeaway,
   type KitchenOrder,
   type KitchenTableGroup,
 } from "@/components/admin/KitchenBoard";
@@ -25,7 +21,6 @@ type BoardFilter = "active" | "completed";
 import {
   DEFAULT_KITCHEN_FLOW,
   flowSummary,
-  getStepMeta,
   isKnownStatus,
   isTerminalStatus,
   KITCHEN_FLOW_PRESETS,

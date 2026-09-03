@@ -62,11 +62,13 @@ export function formatReceiptPlainText(
 function formatLineItem(item: ReceiptLineItem, currency: string): string {
   const base = `${item.quantity}x ${item.name}  ${formatReceiptMoney(currency, item.unitPriceCents * item.quantity)}`;
   const mods = item.modifiers?.filter((m) => m.optionName) ?? [];
-  if (mods.length === 0) return base;
+  const note = item.note?.trim();
+  if (mods.length === 0 && !note) return base;
   const modLines = mods.map(
     (m) =>
       `   + ${m.optionName}${m.priceDeltaCents ? ` (${formatReceiptMoney(currency, m.priceDeltaCents)})` : ""}`,
   );
+  if (note) modLines.push(`   Note: ${note}`);
   return [base, ...modLines].join("\n");
 }
 

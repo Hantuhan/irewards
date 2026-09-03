@@ -109,6 +109,7 @@ export async function GET(_request: Request, context: RouteContext) {
       quantity: item.quantity,
       unitPriceCents: item.unit_price_cents,
       modifiers: item.modifiers ?? null,
+      note: item.note ?? null,
     }));
 
     const receiptOrder = merchant

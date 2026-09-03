@@ -86,11 +86,6 @@ export function formatModifierLabel(selections: CartModifierSelection[]): string
     .join(", ");
 }
 
-export function displayLineName(itemName: string, selections: CartModifierSelection[]): string {
-  const mods = formatModifierLabel(selections);
-  return mods ? `${itemName} (${mods})` : itemName;
-}
-
 export function cartLineKey(
   itemId: string,
   selections: CartModifierSelection[],

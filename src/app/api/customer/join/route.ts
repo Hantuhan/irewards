@@ -33,7 +33,8 @@ export async function POST(request: Request) {
     if (!customer?.is_member || customer.marketing_opt_out) {
       return NextResponse.json({
         found: false,
-        message: "No member found for that number. Join on WhatsApp after you pay.",
+        message:
+          "No member found for that number. Order & pay first, then join on WhatsApp — you can redeem next visit.",
       });
     }
 

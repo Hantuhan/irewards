@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/Icon";
 import {
   groupIngredientPresets,
   ingredientConflictHint,
+  ingredientGroupOptionsForDrinkProduct,
   ingredientGroupOptionsForNonCoffeeProduct,
   isIngredientOptionDisabled,
   toggleIngredientId,
@@ -18,6 +19,14 @@ type MenuItemIngredientPickerProps = {
   kcal: string;
   sugarG: string;
   notes: string;
+  /** Drink = Coffee/Kopi/Teh/cold drinks; food = brunch/pastries/mains. */
+  productKind?: "drink" | "food";
+  /** Suggested kcal / fill status from auto-generate. */
+  kcalHint?: string | null;
+  generating?: boolean;
+  onAutoGenerate?: () => void;
+  /** Hide outer title when wrapped in ProductEditorShell card. */
+  compact?: boolean;
   onSelectedIdsChange: (ids: string[]) => void;
   onCustomIngredientsChange: (value: string) => void;
   onKcalChange: (value: string) => void;
@@ -33,6 +42,11 @@ export function MenuItemIngredientPicker({
   kcal,
   sugarG,
   notes,
+  productKind = "food",
+  kcalHint = null,
+  generating = false,
+  onAutoGenerate,
+  compact = false,
   onSelectedIdsChange,
   onCustomIngredientsChange,
   onKcalChange,
@@ -41,12 +55,14 @@ export function MenuItemIngredientPicker({
   onAddPreset,
 }: MenuItemIngredientPickerProps) {
   const grouped = groupIngredientPresets(presets);
+  const isDrink = productKind === "drink";
+  const groupOptions = isDrink
+    ? ingredientGroupOptionsForDrinkProduct()
+    : ingredientGroupOptionsForNonCoffeeProduct();
   const [newLabel, setNewLabel] = useState("");
-  const [newGroup, setNewGroup] = useState("Warnings");
+  const [newGroup, setNewGroup] = useState(isDrink ? "Allergens" : "Allergens");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-
-  const groupOptions = ingredientGroupOptionsForNonCoffeeProduct();
 
   async function submitNewPreset() {
     const label = newLabel.trim();
@@ -73,9 +89,55 @@ export function MenuItemIngredientPicker({
 
   return (
     <div className="flex flex-col gap-5">
+      {!compact ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
+              {isDrink ? "Allergens & dietary" : "Allergens & notes"}
+            </p>
+            <p className="mt-0.5 text-[12px] text-on-surface-variant">
+              {isDrink
+                ? "Shown on the diner menu. Milk / syrup choices belong under Extra add-ons above, not here."
+                : "Allergens, dietary tags, and kitchen notes. Headline protein is under Main ingredient above."}
+            </p>
+          </div>
+          {onAutoGenerate && (
+            <button
+              type="button"
+              onClick={onAutoGenerate}
+              disabled={generating}
+              className="inline-flex shrink-0 items-center justify-center gap-2 border border-primary bg-primary px-4 py-2.5 text-on-primary transition-colors hover:bg-surface-tint disabled:opacity-50"
+            >
+              <Icon name="auto_awesome" className="text-[18px]" />
+              <span className="font-display text-[13px] font-semibold">
+                {generating ? "Generating…" : "Auto generate with AI"}
+              </span>
+            </button>
+          )}
+        </div>
+      ) : onAutoGenerate ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onAutoGenerate}
+            disabled={generating}
+            className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-primary underline disabled:opacity-50"
+          >
+            <Icon name="auto_awesome" className="text-[14px]" />
+            {generating ? "Generating…" : "Auto generate"}
+          </button>
+        </div>
+      ) : null}
+
+      {kcalHint ? (
+        <p className="text-[12px] text-on-surface-variant">{kcalHint}</p>
+      ) : null}
+
       {presets.length === 0 ? (
         <p className="text-body-md text-on-surface-variant">
-          Add ingredients in Settings → Ingredients first.
+          {isDrink
+            ? "No allergen or dietary chips yet — add Contains dairy, Halal, Vegan, etc. below."
+            : "Add ingredients in Settings → Ingredients first."}
         </p>
       ) : (
         <div className="flex flex-col gap-4">
@@ -119,7 +181,9 @@ export function MenuItemIngredientPicker({
             Save to library
           </p>
           <p className="mt-1 text-body-md text-on-surface-variant">
-            Add a chip once — reuse it on other products (e.g. Spicy, Got fish bone).
+            {isDrink
+              ? "Add a disclosure once — e.g. Contains dairy, Halal."
+              : "Add a chip once — reuse it on other food items."}
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="min-w-[160px] flex-1">
@@ -129,7 +193,7 @@ export function MenuItemIngredientPicker({
               <input
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
-                placeholder="e.g. Spicy, Got fish bone"
+                placeholder={isDrink ? "e.g. Contains soy" : "e.g. Sesame"}
                 className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 focus:border-primary focus:outline-none"
               />
             </label>
@@ -170,7 +234,11 @@ export function MenuItemIngredientPicker({
         <textarea
           value={customIngredients}
           onChange={(e) => onCustomIngredientsChange(e.target.value)}
-          placeholder="Extra details not in your library, e.g. house-made syrup, seasonal fruit"
+          placeholder={
+            isDrink
+              ? "e.g. house-made syrup, condensed milk"
+              : "e.g. house sauce, seasonal garnish"
+          }
           rows={2}
           className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2 text-body-md focus:border-primary focus:outline-none"
         />
@@ -186,7 +254,7 @@ export function MenuItemIngredientPicker({
             min={0}
             value={kcal}
             onChange={(e) => onKcalChange(e.target.value)}
-            placeholder="Optional"
+            placeholder="Auto-filled by AI"
             className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 font-mono focus:border-primary focus:outline-none"
           />
         </label>
@@ -213,7 +281,7 @@ export function MenuItemIngredientPicker({
         <input
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
-          placeholder="e.g. Best served iced"
+          placeholder={isDrink ? "e.g. Best served iced" : "e.g. Contains sesame"}
           className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 focus:border-primary focus:outline-none"
         />
       </label>

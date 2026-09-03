@@ -14,8 +14,6 @@ type PointsCopilotPanelProps = {
   lang: ProgramLanguage;
   currencyLabel?: string;
   onApply: () => void;
-  onHigherEarn: () => void;
-  onLowerEarn: () => void;
   applying?: boolean;
 };
 
@@ -24,16 +22,11 @@ export function PointsCopilotPanel({
   lang,
   currencyLabel = "RM",
   onApply,
-  onHigherEarn,
-  onLowerEarn,
   applying = false,
 }: PointsCopilotPanelProps) {
   const copy = rewardsAdminCopy(lang);
   const topTier = suggestion.tierEarning[suggestion.tierEarning.length - 1];
-  const topMultiplier =
-    topTier && suggestion.pointsPerRinggit > 0
-      ? topTier.pointsPerRm / suggestion.pointsPerRinggit
-      : 1;
+  const topMultiplier = topTier?.multiplier ?? 1;
   const bullets = copilotBullets(
     lang,
     suggestion.pointsPerRinggit,
@@ -103,21 +96,17 @@ export function PointsCopilotPanel({
               </tr>
             </thead>
             <tbody>
-              {suggestion.tierEarning.map((tier) => {
-                const multiplier =
-                  suggestion.pointsPerRinggit > 0
-                    ? tier.pointsPerRm / suggestion.pointsPerRinggit
-                    : 1;
-                return (
-                  <tr key={tier.name} className="border-b border-surface-container-highest/60">
-                    <td className="py-2 pr-2 font-display text-headline-sm text-primary">{tier.name}</td>
-                    <td className="py-2 pr-2 font-mono text-label-mono">
-                      {formatDecimal(tier.pointsPerRm)} {copy.ptsPerRm}
-                    </td>
-                    <td className="py-2 text-on-surface-variant">{formatMultiplier(multiplier)}×</td>
-                  </tr>
-                );
-              })}
+              {suggestion.tierEarning.map((tier) => (
+                <tr key={tier.name} className="border-b border-surface-container-highest/60">
+                  <td className="py-2 pr-2 font-display text-headline-sm text-primary">{tier.name}</td>
+                  <td className="py-2 pr-2 font-mono text-label-mono">
+                    {formatDecimal(tier.pointsPerRm)} {copy.ptsPerRm}
+                  </td>
+                  <td className="py-2 text-on-surface-variant">
+                    {formatMultiplier(tier.multiplier)}×
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -147,22 +136,6 @@ export function PointsCopilotPanel({
           <Icon name="done" />
           {applying ? "Applying…" : copy.applySetup}
         </button>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={onHigherEarn}
-            className="border border-primary py-2.5 font-display text-[11px] uppercase text-primary"
-          >
-            {copy.higherEarn}
-          </button>
-          <button
-            type="button"
-            onClick={onLowerEarn}
-            className="border border-surface-container-highest py-2.5 font-display text-[11px] uppercase text-on-surface-variant"
-          >
-            {copy.lowerEarn}
-          </button>
-        </div>
       </div>
     </aside>
   );

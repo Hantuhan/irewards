@@ -79,6 +79,38 @@ export const INGREDIENT_GROUP_OPTIONS = [
 /** Ingredient groups reserved for coffee products — hidden on pastries, mains, etc. */
 export const COFFEE_ONLY_INGREDIENT_GROUPS = new Set<string>(["Coffee", "Syrups"]);
 
+/**
+ * Groups that belong on drink product details (disclosure only).
+ * Milk / syrup choices are Customisation add-ons — not ingredient chips.
+ */
+export const DRINK_INGREDIENT_GROUPS = new Set<string>(["Allergens", "Dietary"]);
+
+/**
+ * Chips that look like order options (milk type, syrup) — never product-detail
+ * ingredients on drinks. Keep Contains dairy / Halal / Vegan instead.
+ */
+export const DRINK_ORDER_OPTION_INGREDIENT_IDS = new Set<string>([
+  "milk",
+  "oat_milk",
+  "butter",
+]);
+
+/** Food / plated-item ingredients that must never show on drinks. */
+export const FOOD_ONLY_INGREDIENT_IDS = new Set<string>([
+  "butter",
+  "eggs",
+  "wheat_flour",
+  "contains_egg",
+  "contains_shellfish",
+  "contains_pork",
+  "contains_fish_bone",
+  "spicy",
+  "spicy_mild",
+  "spicy_medium",
+  "spicy_hot",
+  ...DRINK_ORDER_OPTION_INGREDIENT_IDS,
+]);
+
 /** Ingredient chips that cannot be selected together on one product. */
 export const INGREDIENT_CONFLICTS: Record<string, string[]> = {
   contains_pork: ["halal"],
@@ -135,6 +167,47 @@ export function filterIngredientPresetsForNonCoffeeProduct(
   return catalog.filter((p) => !isCoffeeOnlyIngredientPreset(p));
 }
 
+/** Coffee product detail: hide bean/espresso disclosure chips (covered by coffee profile). */
+export function filterOutCoffeeDisclosurePresets(
+  catalog: MenuIngredientPreset[],
+): MenuIngredientPreset[] {
+  return catalog.filter((p) => p.group !== "Coffee");
+}
+
+/**
+ * Drink products: allergens + dietary disclosures only.
+ * No milk/syrup order chips, spice, pork, fish bone, eggs, flour, etc.
+ */
+export function filterIngredientPresetsForDrinkProduct(
+  catalog: MenuIngredientPreset[],
+): MenuIngredientPreset[] {
+  return catalog.filter(
+    (p) =>
+      DRINK_INGREDIENT_GROUPS.has(p.group) &&
+      p.group !== "Coffee" &&
+      p.group !== "Syrups" &&
+      !FOOD_ONLY_INGREDIENT_IDS.has(p.id) &&
+      !DRINK_ORDER_OPTION_INGREDIENT_IDS.has(p.id),
+  );
+}
+
+/** Food product detail chips — allergens / diet / spice only. Proteins live under Main ingredient. */
+export const FOOD_INGREDIENT_GROUPS = new Set<string>([
+  "Allergens",
+  "Warnings",
+  "Dietary",
+  "Spice level",
+]);
+
+/** Food products: hide coffee / syrups / dairy-protein composition chips (main ingredient covers those). */
+export function filterIngredientPresetsForFoodProduct(
+  catalog: MenuIngredientPreset[],
+): MenuIngredientPreset[] {
+  return catalog.filter(
+    (p) => FOOD_INGREDIENT_GROUPS.has(p.group) && !isCoffeeOnlyIngredientPreset(p),
+  );
+}
+
 export function stripCoffeeIngredientIds(
   ids: string[],
   catalog: MenuIngredientPreset[],
@@ -145,9 +218,29 @@ export function stripCoffeeIngredientIds(
   return ids.filter((id) => !coffeeIds.has(id));
 }
 
-/** Groups merchants can pick when adding presets on non-coffee products. */
+export function stripCoffeeDisclosureIngredientIds(
+  ids: string[],
+  catalog: MenuIngredientPreset[],
+): string[] {
+  const disclosureIds = new Set(
+    catalog.filter((p) => p.group === "Coffee").map((p) => p.id),
+  );
+  return ids.filter((id) => !disclosureIds.has(id));
+}
+
+/** Drop food-only chips (spice, pork, eggs…) from drink products. */
+export function stripFoodOnlyIngredientIds(ids: string[]): string[] {
+  return ids.filter((id) => !FOOD_ONLY_INGREDIENT_IDS.has(id));
+}
+
+/** Groups merchants can pick when adding presets on non-coffee / food products. */
 export function ingredientGroupOptionsForNonCoffeeProduct(): string[] {
-  return INGREDIENT_GROUP_OPTIONS.filter((g) => !COFFEE_ONLY_INGREDIENT_GROUPS.has(g));
+  return INGREDIENT_GROUP_OPTIONS.filter((g) => FOOD_INGREDIENT_GROUPS.has(g));
+}
+
+/** Groups merchants can pick when adding presets on drink products. */
+export function ingredientGroupOptionsForDrinkProduct(): string[] {
+  return INGREDIENT_GROUP_OPTIONS.filter((g) => DRINK_INGREDIENT_GROUPS.has(g));
 }
 
 export function findIngredientPresetByLabel(
@@ -316,4 +409,43 @@ export function formatIngredientList(
   }
   const parts = [...labels, custom].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : null;
+}
+
+/** Groups shown as diner-facing disclosure chips (not recipe copy). */
+export const DISCLOSURE_INGREDIENT_GROUPS = new Set<string>([
+  "Allergens",
+  "Dietary",
+  "Warnings",
+  "Spice level",
+]);
+
+/** Custom ingredients free-text only — never merge allergen chip labels into this. */
+export function formatCustomIngredients(
+  customText?: string | null,
+  lang?: ProgramLanguage,
+  customTextI18n?: Record<string, string> | null,
+): string | null {
+  let custom = customText?.trim() ?? "";
+  if (lang && lang !== "en" && customTextI18n?.[lang]?.trim()) {
+    custom = customTextI18n[lang]!.trim();
+  }
+  return custom || null;
+}
+
+/** Allergen / dietary / warning / spice chips for the product detail sheet. */
+export function disclosurePresetsFromIds(
+  ids: string[],
+  catalog: MenuIngredientPreset[],
+): MenuIngredientPreset[] {
+  const byId = new Map(catalog.map((p) => [p.id, p]));
+  const out: MenuIngredientPreset[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    const preset = byId.get(id);
+    if (!preset || !DISCLOSURE_INGREDIENT_GROUPS.has(preset.group)) continue;
+    seen.add(id);
+    out.push(preset);
+  }
+  return out;
 }

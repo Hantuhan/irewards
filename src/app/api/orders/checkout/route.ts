@@ -6,6 +6,7 @@ import {
   getMerchantBySlug,
   getRewardLevels,
   getVenueTable,
+  sumPendingPointsRedeemed,
 } from "@/lib/db/repository";
 import {
   createOrderItems,
@@ -13,7 +14,12 @@ import {
   recordPromoRedemption,
   resolveMenuItemsForCheckout,
 } from "@/lib/db/merchant-repository";
-import { createHitPayPaymentRequest, isDevPaymentMode } from "@/lib/payments/hitpay";
+import {
+  createHitPayPaymentRequest,
+  hitPayMethodsForStorefront,
+  isDevPaymentMode,
+  type StorefrontPaymentMethod,
+} from "@/lib/payments/hitpay";
 import { applyLevelDiscount, resolveCustomerLevel } from "@/lib/loyalty/tiers";
 import { calculatePromoDiscountCents } from "@/lib/services/promo";
 import {
@@ -22,6 +28,8 @@ import {
 } from "@/lib/services/order-totals";
 import { pointsDiscountCents } from "@/lib/loyalty/points";
 import { getMemberSessionFromRequest } from "@/lib/customer/session";
+import { getRedeemAuthFromRequest } from "@/lib/customer/redeem-session";
+import { consumePendingStampRewardDiscount } from "@/lib/services/loyalty-stamps";
 
 const checkoutSchema = z.object({
   merchantSlug: z.string().min(1),
@@ -29,6 +37,7 @@ const checkoutSchema = z.object({
   // customerId from the client is ignored — only a signed member session counts.
   promoCode: z.string().optional(),
   pointsToRedeem: z.number().int().min(0).optional(),
+  paymentMethod: z.enum(["duitnow", "card", "wallet"]).optional(),
   serviceType: z.enum(["dine_in", "takeaway"]).default("dine_in"),
   items: z.array(
     z.object({
@@ -84,6 +93,7 @@ export async function POST(request: Request) {
     let pointsRedeemed = 0;
     let promoId: string | null = null;
     let promoDiscountCents = 0;
+    let stampRewardDiscountCents = 0;
 
     if (customerId) {
       const customer = await getCustomerById(customerId);
@@ -94,14 +104,49 @@ export async function POST(request: Request) {
         tierDiscountCents = tierDiscount.discountCents;
 
         const requestedPoints = body.pointsToRedeem ?? 0;
-        if (requestedPoints > 0) {
+        if (requestedPoints > 0 && merchant.points_program_enabled !== false) {
+          const redeemAuth = getRedeemAuthFromRequest(request);
+          if (
+            !redeemAuth ||
+            redeemAuth.customerId !== customer.id ||
+            redeemAuth.merchantSlug !== body.merchantSlug
+          ) {
+            return NextResponse.json(
+              {
+                error:
+                  "Verify with WhatsApp before spending points. Tap Redeem and enter the code we send you.",
+              },
+              { status: 403 },
+            );
+          }
+
+          const reserved = await sumPendingPointsRedeemed(customer.id);
+          const available = Math.max(0, customer.points_balance - reserved);
           const centsPerPoint = Number(merchant.points_redeem_cents_per_point ?? 10);
           const maxPoints = Math.min(
-            customer.points_balance,
+            available,
             Math.floor(subtotalCents / centsPerPoint),
           );
-          pointsRedeemed = Math.min(requestedPoints, maxPoints);
+          if (requestedPoints > maxPoints) {
+            return NextResponse.json(
+              {
+                error:
+                  available < requestedPoints
+                    ? `Only ${available} points available (some may be reserved on another unpaid order).`
+                    : "Not enough points for this cart total.",
+              },
+              { status: 400 },
+            );
+          }
+          pointsRedeemed = requestedPoints;
         }
+
+        const stampReward = await consumePendingStampRewardDiscount({
+          customer,
+          merchantId: merchant.id,
+          subtotalCents,
+        });
+        stampRewardDiscountCents = stampReward.discountCents;
       } else {
         customerId = null;
       }
@@ -117,7 +162,8 @@ export async function POST(request: Request) {
 
     const centsPerPoint = Number(merchant.points_redeem_cents_per_point ?? 10);
     const pointsDiscount = pointsDiscountCents(pointsRedeemed, centsPerPoint);
-    const rawDiscountCents = tierDiscountCents + promoDiscountCents + pointsDiscount;
+    const rawDiscountCents =
+      tierDiscountCents + promoDiscountCents + pointsDiscount + stampRewardDiscountCents;
 
     const chargeSettings = merchantChargeSettingsFromRow(merchant);
     const totals = calculateOrderTotals(subtotalCents, rawDiscountCents, chargeSettings);
@@ -163,12 +209,14 @@ export async function POST(request: Request) {
       });
     }
 
+    const preferredMethod = (body.paymentMethod ?? "duitnow") as StorefrontPaymentMethod;
     const payment = await createHitPayPaymentRequest({
       orderId: order.id,
       amountCents: totals.totalCents,
       currency: merchant.currency,
       redirectUrl: thanksUrl,
       webhookUrl: `${getAppUrl()}/api/webhooks/payments`,
+      paymentMethods: hitPayMethodsForStorefront(preferredMethod, merchant.currency),
     });
 
     return NextResponse.json({

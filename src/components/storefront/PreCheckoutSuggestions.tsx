@@ -3,15 +3,19 @@
 import type { StorefrontMenuItem } from "@/lib/menu/storefront";
 import type { StoreSuggestion, StoreSuggestionBundle } from "@/hooks/useStoreSuggestion";
 import { formatPromoLabel } from "@/lib/menu/upsell-rules";
+import { formatMerchantPrice, type MerchantCurrency } from "@/lib/merchant/currency";
+import type { OrderTotals } from "@/lib/services/order-totals";
+import { dinerFacingSuggestBlurb } from "@/lib/ai/store-intelligence";
 import { Icon } from "@/components/ui/Icon";
 
 type PreCheckoutSuggestionsProps = {
   lines: (StorefrontMenuItem & { quantity: number })[];
   allItems: StorefrontMenuItem[];
   cartTotal: number;
+  orderTotals: OrderTotals | null;
   suggestions: StoreSuggestionBundle;
   loading: boolean;
-  currency?: string;
+  currency?: MerchantCurrency;
   onAdd: (suggestion: StoreSuggestion) => void;
   onSkip: () => void;
   onBack: () => void;
@@ -25,29 +29,27 @@ function ProductSuggestionCard({
 }: {
   suggestion: StoreSuggestion;
   allItems: StorefrontMenuItem[];
-  currency: string;
+  currency: MerchantCurrency;
   onAdd: (suggestion: StoreSuggestion) => void;
 }) {
   if (!suggestion.itemId || !suggestion.name) return null;
   const suggestItem = allItems.find((i) => i.id === suggestion.itemId) ?? null;
-  const isUpsell = suggestion.suggestType === "upsell";
   const regularPrice = suggestion.regularPriceCents ?? suggestItem?.priceCents ?? 0;
   const hasPromo =
     suggestion.promoPriceCents != null && suggestion.promoPriceCents !== regularPrice;
   const displayPrice = hasPromo
     ? formatPromoLabel(regularPrice, suggestion.promoPriceCents ?? null, currency)
     : formatPromoLabel(regularPrice, null, currency);
+  const blurb = dinerFacingSuggestBlurb({
+    description: suggestItem?.description,
+    reason: suggestion.reason,
+    suggestType: suggestion.suggestType,
+  });
 
   return (
-    <article
-      className={`overflow-hidden border ${
-        isUpsell
-          ? "border-primary bg-primary text-on-primary"
-          : "border-surface-container-highest bg-surface-container-lowest"
-      }`}
-    >
-      <div className="flex items-start gap-4 p-4">
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center border border-surface-container-highest bg-surface-container-low">
+    <article className="overflow-hidden border border-surface-container-highest bg-surface-container-lowest">
+      <div className="flex items-center gap-4 p-4">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden border border-surface-container-highest bg-surface-container-low">
           {suggestItem?.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={suggestItem.imageUrl} alt="" className="h-full w-full object-cover" />
@@ -56,25 +58,21 @@ function ProductSuggestionCard({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-display text-headline-sm text-primary">{suggestion.name}</h3>
-          {suggestion.reason && (
-            <p className="mt-1 text-body-md text-on-surface-variant">{suggestion.reason}</p>
-          )}
-          {suggestItem && (
-            <div className="mt-2 font-mono text-label-mono">
-              {hasPromo && (
-                <span className="mr-2 text-on-surface-variant line-through">
-                  {formatPromoLabel(regularPrice, null, currency)}
-                </span>
-              )}
-              <span className={hasPromo ? "font-semibold text-primary" : "text-primary"}>
-                {displayPrice}
+          <h3 className="font-display text-headline-sm text-on-surface">{suggestion.name}</h3>
+          <p className="mt-1 line-clamp-2 text-body-md text-on-surface-variant">{blurb}</p>
+          <div className="mt-2 font-mono text-label-mono">
+            {hasPromo && (
+              <span className="mr-2 text-on-surface-variant line-through">
+                {formatPromoLabel(regularPrice, null, currency)}
               </span>
-            </div>
-          )}
+            )}
+            <span className={hasPromo ? "font-semibold text-primary" : "text-on-surface"}>
+              {displayPrice}
+            </span>
+          </div>
         </div>
       </div>
-      <div className="border-t border-surface-container-highest p-4">
+      <div className="border-t border-surface-container-highest p-3">
         <button
           type="button"
           onClick={() => onAdd(suggestion)}
@@ -96,7 +94,7 @@ function GlobalSuggestionCard({
 }: {
   suggestion: StoreSuggestion;
   allItems: StorefrontMenuItem[];
-  currency: string;
+  currency: MerchantCurrency;
   onAdd: (suggestion: StoreSuggestion) => void;
 }) {
   if (!suggestion.itemId || !suggestion.name) return null;
@@ -149,9 +147,10 @@ export function PreCheckoutSuggestions({
   lines,
   allItems,
   cartTotal,
+  orderTotals,
   suggestions,
   loading,
-  currency = "RM",
+  currency = "MYR",
   onAdd,
   onSkip,
   onBack,
@@ -159,6 +158,7 @@ export function PreCheckoutSuggestions({
   const hasProductSuggestions = suggestions.productSuggestions.length > 0;
   const hasGlobalSuggestions = suggestions.globalSuggestions.length > 0;
   const hasAnySuggestions = hasProductSuggestions || hasGlobalSuggestions;
+  const displayTotal = orderTotals?.totalCents ?? cartTotal;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -171,9 +171,9 @@ export function PreCheckoutSuggestions({
           <Icon name="arrow_back" className="text-lg" />
           Back to cart
         </button>
-        <h1 className="font-display text-headline-mobile text-primary">Almost there</h1>
+        <h1 className="font-display text-headline-mobile text-primary">One more bite?</h1>
         <p className="mt-1 text-body-md text-on-surface-variant">
-          Review your order and add anything else before you pay.
+          Complete your order with a popular add-on — then pay and we&apos;ll start preparing.
         </p>
       </header>
 
@@ -189,16 +189,48 @@ export function PreCheckoutSuggestions({
                   {line.quantity}× {line.name}
                 </span>
                 <span className="shrink-0 font-mono text-label-mono text-on-surface-variant">
-                  {currency} {((line.priceCents * line.quantity) / 100).toFixed(2)}
+                  {formatMerchantPrice(line.priceCents * line.quantity, currency)}
                 </span>
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex justify-between border-t border-surface-container-highest pt-3 font-display text-headline-sm">
-            <span>Subtotal</span>
-            <span className="font-mono text-label-mono">
-              {currency} {(cartTotal / 100).toFixed(2)}
-            </span>
+          <div className="mt-4 flex flex-col gap-2 border-t border-surface-container-highest pt-3">
+            <div className="flex justify-between text-body-md text-on-surface-variant">
+              <span>Subtotal</span>
+              <span className="font-mono text-label-mono">
+                {formatMerchantPrice(cartTotal, currency)}
+              </span>
+            </div>
+            {orderTotals && orderTotals.serviceChargeCents > 0 && (
+              <div className="flex justify-between text-body-md text-on-surface-variant">
+                <span>{orderTotals.serviceChargeLabel ?? "Service charge"}</span>
+                <span className="font-mono text-label-mono">
+                  {formatMerchantPrice(orderTotals.serviceChargeCents, currency)}
+                </span>
+              </div>
+            )}
+            {orderTotals && orderTotals.taxCents > 0 && (
+              <div className="flex justify-between text-body-md text-on-surface-variant">
+                <span>{orderTotals.taxLabel ?? "Tax"}</span>
+                <span className="font-mono text-label-mono">
+                  {formatMerchantPrice(orderTotals.taxCents, currency)}
+                </span>
+              </div>
+            )}
+            {orderTotals && orderTotals.discountCents > 0 && (
+              <div className="flex justify-between text-body-md text-on-surface-variant">
+                <span>Discounts</span>
+                <span className="font-mono text-label-mono">
+                  −{formatMerchantPrice(orderTotals.discountCents, currency)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between font-display text-headline-sm">
+              <span>Total</span>
+              <span className="font-mono text-label-mono">
+                {formatMerchantPrice(displayTotal, currency)}
+              </span>
+            </div>
           </div>
         </section>
 
@@ -215,7 +247,7 @@ export function PreCheckoutSuggestions({
             <div className="flex items-center gap-2">
               <Icon name="restaurant" className="text-primary" />
               <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Goes well with your order
+                Recommended for you
               </p>
             </div>
             <div className="flex flex-col gap-4">
@@ -267,7 +299,7 @@ export function PreCheckoutSuggestions({
           onClick={onSkip}
           className="flex w-full items-center justify-center gap-2 bg-primary py-4 font-display text-headline-sm text-on-primary shadow-xl"
         >
-          Continue to payment
+          Continue to pay
           <Icon name="arrow_forward" />
         </button>
       </div>

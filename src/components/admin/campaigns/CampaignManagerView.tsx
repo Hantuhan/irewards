@@ -209,12 +209,36 @@ export function CampaignManagerView({
 
   async function toggleCampaign(campaign: Campaign) {
     const next = campaign.status === "active" ? "paused" : "active";
+    const hasVoucher =
+      next === "paused" &&
+      Boolean(
+        campaign.workflow?.actions?.some((a) => a.type === "issue_voucher") ||
+          campaign.workflow?.elseActions?.some((a) => a.type === "issue_voucher"),
+      );
+
+    let deactivateVoucher = false;
+    if (hasVoucher) {
+      // Pause both by default so live journeys can't keep handing out a dead offer later.
+      // Cancel aborts the pause entirely.
+      const confirmed = window.confirm(
+        `Pause “${campaign.name}” and deactivate its voucher code?\n\n` +
+          `Members who already received the code won’t be able to redeem it after this.\n\n` +
+          `OK = pause both · Cancel = keep campaign live`,
+      );
+      if (!confirmed) return;
+      deactivateVoucher = true;
+    }
+
     setSaving(true);
     setActionError(null);
     try {
       await merchantApi(`/api/merchant/${merchantSlug}/campaigns`, {
         method: "PATCH",
-        body: JSON.stringify({ campaignId: campaign.id, status: next }),
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          status: next,
+          ...(hasVoucher ? { deactivateVoucher } : {}),
+        }),
       });
       await onCampaignsChange();
     } catch (err) {

@@ -28,9 +28,39 @@ function group(
   };
 }
 
-/** Strict match: only the menu category whose slug is exactly `coffee`. */
-export function isCoffeeMenuCategory(slug: string, _label?: string): boolean {
-  return slug.toLowerCase().trim() === "coffee";
+/** Coffee, Kopi, and Teh categories share Simple drink options. */
+export function isCoffeeMenuCategory(slug: string, label?: string): boolean {
+  const s = slug.toLowerCase().trim();
+  if (s === "coffee" || s === "kopi" || s === "teh" || s === "kopi-teh") return true;
+  const l = (label ?? "").toLowerCase();
+  return /\b(coffee|kopi|teh)\b/.test(l);
+}
+
+/**
+ * Any drink category — coffee/kopi/teh plus non-coffee, cold drinks, juices, signatures.
+ * Used to hide food-only ingredient chips (spice, pork, fish bone, flour…).
+ */
+export function isDrinkMenuCategory(slug: string, label?: string): boolean {
+  if (isCoffeeMenuCategory(slug, label)) return true;
+  const s = slug.toLowerCase().trim();
+  if (
+    s === "non-coffee" ||
+    s === "cold-drinks" ||
+    s === "cold-drink" ||
+    s === "fresh-juices" ||
+    s === "fresh-juice" ||
+    s === "juices" ||
+    s === "juice" ||
+    s === "signature-drinks" ||
+    s === "signature-drink" ||
+    s === "drinks" ||
+    s === "beverages" ||
+    s === "beverage"
+  ) {
+    return true;
+  }
+  const l = (label ?? "").toLowerCase();
+  return /\b(drinks?|beverages?|juices?|matcha|latte|cocoa|chocolate)\b/.test(l);
 }
 
 /** Menu categories that should get coffee-specific product tooling. */
@@ -41,8 +71,6 @@ export function isCoffeeCategory(slug: string, label?: string): boolean {
     "espresso",
     "hot drink",
     "cold drink",
-    "retail bean",
-    "bean bag",
     "pour over",
     "latte",
     "cappuccino",
@@ -136,32 +164,6 @@ export function coffeeDrinkModifierTemplate(currency: MerchantCurrency): Modifie
       ],
       false,
       3,
-    ),
-  ];
-}
-
-/** Bag weight options for retail coffee beans. */
-export function coffeeRetailBeansModifierTemplate(currency: MerchantCurrency): ModifierGroupInput[] {
-  const p = currencyPricing(currency);
-  return [
-    group(
-      "Bag size",
-      [
-        option("250g", 0, true),
-        option("500g", p.sizeMd),
-        option("1kg", p.sizeLg),
-      ],
-      true,
-    ),
-    group(
-      "Grind (optional)",
-      [
-        option("Whole bean", 0, true),
-        option("Ground · 8oz bag"),
-        option("Ground · 12oz bag", p.sizeMd),
-        option("Ground · 16oz bag", p.sizeLg),
-      ],
-      false,
     ),
   ];
 }

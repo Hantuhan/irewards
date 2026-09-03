@@ -10,6 +10,7 @@
     "test": "sh scripts/smoke-test.sh",
     "test:smoke": "sh scripts/smoke-test.sh",
     "test:smoke:campaigns": "sh scripts/smoke-campaigns.sh",
+    "test:smoke:stamps": "sh scripts/smoke-stamps.sh",
     "verify": "npm run typecheck && npm run lint && npm run build && npm run test",
     "typecheck": "tsc --noEmit",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",

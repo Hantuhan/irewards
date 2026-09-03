@@ -30,11 +30,12 @@ export async function calculateOrderPointsAward(
   const level = resolveCustomerLevel(customer.lifetime_points_earned, levels);
   const rate = Number(merchant?.points_per_ringgit ?? 0.1);
   const basePoints = pointsForPaidOrder(totalCents, rate);
+  const timeZone = merchant?.timezone?.trim() || "Asia/Kuala_Lumpur";
   const multiplier = bestPointsMultiplier(
     rules,
     {
       tierName: level.name,
-      dayOfWeek: dayOfWeekId(at),
+      dayOfWeek: dayOfWeekId(at, timeZone),
       orderMenuItemIds,
     },
     Number(level.points_multiplier),
@@ -49,6 +50,9 @@ export async function awardOrderPointsIfEligible(input: {
   totalCents: number;
 }): Promise<number> {
   if (!input.customer.is_member) return 0;
+
+  const merchant = await getMerchantById(input.merchantId);
+  if (merchant && merchant.points_program_enabled === false) return 0;
 
   const alreadyAwarded = await hasPointsLedgerEntry(
     input.orderId,

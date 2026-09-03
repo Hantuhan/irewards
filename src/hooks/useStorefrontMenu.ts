@@ -15,6 +15,10 @@ export function useStorefrontMenu(merchantSlug: string, lang: ProgramLanguage = 
   const [languages, setLanguages] = useState<ProgramLanguage[]>(["en"]);
   const [merchantName, setMerchantName] = useState(merchantSlug);
   const [merchantCurrency, setMerchantCurrency] = useState<"MYR" | "SGD">("MYR");
+  const [pointsProgramEnabled, setPointsProgramEnabled] = useState(true);
+  const [stampsProgramEnabled, setStampsProgramEnabled] = useState(false);
+  const [pointsPerRinggit, setPointsPerRinggit] = useState(0.1);
+  const [pointsRedeemCentsPerPoint, setPointsRedeemCentsPerPoint] = useState(10);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +33,12 @@ export function useStorefrontMenu(merchantSlug: string, lang: ProgramLanguage = 
         setLanguages(langs.length > 0 ? langs : ["en"]);
         setMerchantName(data.merchant.name);
         setMerchantCurrency(data.merchant.currency);
+        setPointsProgramEnabled(data.merchant.pointsProgramEnabled !== false);
+        setStampsProgramEnabled(Boolean(data.merchant.stampsProgramEnabled));
+        setPointsPerRinggit(Number(data.merchant.pointsPerRinggit ?? 0.1));
+        setPointsRedeemCentsPerPoint(
+          Number(data.merchant.pointsRedeemCentsPerPoint ?? 10),
+        );
       })
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Failed to load menu"),
@@ -48,6 +58,10 @@ export function useStorefrontMenu(merchantSlug: string, lang: ProgramLanguage = 
     languages,
     merchantName,
     merchantCurrency,
+    pointsProgramEnabled,
+    stampsProgramEnabled,
+    pointsPerRinggit,
+    pointsRedeemCentsPerPoint,
     loading,
     error,
   };

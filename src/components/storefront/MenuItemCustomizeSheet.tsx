@@ -122,13 +122,17 @@ export function MenuItemCustomizeSheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
       <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
       <div className="relative flex max-h-[92vh] w-full max-w-[382px] flex-col overflow-hidden bg-surface shadow-2xl sm:rounded-lg">
-        <div className="relative aspect-[4/3] shrink-0 bg-surface-container-low">
+        <div className="relative h-[min(140px,20vh)] w-full shrink-0 overflow-hidden bg-surface-container-low">
           {item.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <Icon name="restaurant" className="text-5xl text-on-surface-variant opacity-30" />
+              <Icon name="restaurant" className="text-4xl text-on-surface-variant opacity-30" />
             </div>
           )}
           <button
@@ -141,10 +145,10 @@ export function MenuItemCustomizeSheet({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
           <h2 className="font-display text-headline-md text-primary">{item.name}</h2>
           {item.description && (
-            <p className="mt-2 text-body-md text-on-surface-variant">{item.description}</p>
+            <p className="mt-1.5 text-body-md text-on-surface-variant">{item.description}</p>
           )}
           <p className="mt-2 font-mono text-label-mono text-primary">
             {currency} {(unitPrice / 100).toFixed(2)}

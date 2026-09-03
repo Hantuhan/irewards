@@ -19,6 +19,8 @@ export function simulatePointsEarn(input: {
   tierName: string;
   orderMenuItemIds?: string[];
   at?: Date;
+  /** Merchant IANA timezone for Bonus Days (default Asia/Kuala_Lumpur). */
+  timeZone?: string;
 }): {
   basePoints: number;
   combinedMultiplier: number;
@@ -29,7 +31,7 @@ export function simulatePointsEarn(input: {
     input.rules.filter((r) => r.status === "active"),
     {
       tierName: input.tierName,
-      dayOfWeek: dayOfWeekId(input.at ?? new Date()),
+      dayOfWeek: dayOfWeekId(input.at ?? new Date(), input.timeZone ?? "Asia/Kuala_Lumpur"),
       orderMenuItemIds: input.orderMenuItemIds ?? [],
     },
     input.tierMultiplier,

@@ -84,6 +84,9 @@ const patchSchema = z.object({
     )
     .max(8)
     .optional(),
+  membershipSetupCompleted: z.boolean().optional(),
+  pointsProgramEnabled: z.boolean().optional(),
+  stampsProgramEnabled: z.boolean().optional(),
 });
 
 function toNullable(value: string | null | undefined) {
@@ -147,6 +150,9 @@ function merchantSettingsResponse(
     halalCertificateUrl: merchant.halal_certificate_url ?? null,
     globalUpsellLinks,
     globalUpsellItemSlugs: globalUpsellLinks.map((link) => link.slug),
+    membershipSetupCompleted: Boolean(merchant.membership_setup_completed_at),
+    pointsProgramEnabled: merchant.points_program_enabled !== false,
+    stampsProgramEnabled: Boolean(merchant.stamps_program_enabled),
   };
 }
 
@@ -293,6 +299,17 @@ export async function PATCH(request: Request, context: RouteContext) {
         halal_certificate_url: toNullable(body.halalCertificateUrl),
       }),
       ...(body.halalCertified === false && { halal_certificate_url: null }),
+      ...(body.membershipSetupCompleted !== undefined && {
+        membership_setup_completed_at: body.membershipSetupCompleted
+          ? new Date().toISOString()
+          : null,
+      }),
+      ...(body.pointsProgramEnabled !== undefined && {
+        points_program_enabled: body.pointsProgramEnabled,
+      }),
+      ...(body.stampsProgramEnabled !== undefined && {
+        stamps_program_enabled: body.stampsProgramEnabled,
+      }),
     });
 
     if (body.globalUpsellLinks !== undefined) {

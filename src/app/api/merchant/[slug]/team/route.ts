@@ -9,6 +9,7 @@ import {
 import { verifyMerchantAccess } from "@/lib/merchant/access";
 import { hashPassword, assertPasswordStrength } from "@/lib/merchant/password";
 import { getSessionFromRequest } from "@/lib/merchant/session";
+import { MAX_MERCHANT_USERS, merchantUserSeats } from "@/lib/merchant/team-limits";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -28,8 +29,12 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const users = await listMerchantUsers(merchant.id);
+    const seats = merchantUserSeats(users);
     return NextResponse.json({
       subdomain: merchant.subdomain ?? merchant.slug,
+      limit: seats.limit,
+      used: seats.used,
+      remaining: seats.remaining,
       members: users.map((u) => ({
         id: u.id,
         email: u.email,
@@ -68,6 +73,17 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Merchant not found" }, { status: 404 });
     }
 
+    const existing = await listMerchantUsers(merchant.id);
+    const seats = merchantUserSeats(existing);
+    if (seats.remaining <= 0) {
+      return NextResponse.json(
+        {
+          error: `This cafe already has ${MAX_MERCHANT_USERS} users. Deactivate someone to add another.`,
+        },
+        { status: 400 },
+      );
+    }
+
     const body = inviteSchema.parse(await request.json());
     assertPasswordStrength(body.password);
     const user = await createMerchantUser({
@@ -89,9 +105,12 @@ export async function POST(request: Request, context: RouteContext) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to invite staff";
-    const status = message.toLowerCase().includes("duplicate") || message.toLowerCase().includes("unique")
-      ? 409
-      : 500;
+    const status =
+      message.toLowerCase().includes("duplicate") || message.toLowerCase().includes("unique")
+        ? 409
+        : message.toLowerCase().includes("already has")
+          ? 400
+          : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import { LegalPolicyShell } from "@/components/storefront/LegalPolicyShell";
+import { StorefrontDocShell } from "@/components/storefront/LegalPolicyShell";
 import { getMerchantBySlug } from "@/lib/db/repository";
 import {
   isLegalPolicySlug,
+  LEGAL_POLICIES,
   legalPolicyContent,
   type LegalPolicySlug,
 } from "@/lib/merchant/legal-policies";
@@ -39,9 +40,10 @@ export default async function LegalPolicyPage({ params }: PageProps) {
   if (!content) notFound();
 
   return (
-    <LegalPolicyShell
+    <StorefrontDocShell
+      merchantSlug={merchantSlug}
       merchantName={merchant.name}
-      policy={policy}
+      title={LEGAL_POLICIES[policy].title}
       content={content}
     />
   );

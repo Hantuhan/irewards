@@ -3,10 +3,13 @@ import { ZodError } from "zod";
 const FIELD_LABELS: Record<string, string> = {
   levels: "Membership tiers",
   levelNumber: "Tier number",
-  name: "Tier name",
+  name: "Name",
   minLifetimePoints: "Minimum lifetime points",
-  pointsMultiplier: "Points multiplier",
+  pointsMultiplier: "Collecting multiplier",
   discountPercent: "Discount",
+  mainConditions: "Conditions",
+  itemConditions: "Menu items",
+  ruleId: "Rule",
 };
 
 function labelForPath(path: (string | number)[]): string {

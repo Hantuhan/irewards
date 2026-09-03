@@ -37,17 +37,17 @@ export function MenuProductBadgePicker({
           >
             <Icon
               name={badge.icon}
-              className={selected ? "text-primary" : "text-on-surface-variant"}
+              className={selected ? "text-on-primary" : "text-on-surface-variant"}
             />
             <span
               className={`font-display text-headline-sm ${
-                selected ? "text-primary" : "text-on-surface"
+                selected ? "text-on-primary" : "text-on-surface"
               }`}
             >
               {badge.label}
             </span>
             {selected && (
-              <Icon name="check_circle" className="ml-auto text-primary" filled />
+              <Icon name="check_circle" className="ml-auto text-on-primary" filled />
             )}
           </button>
         );

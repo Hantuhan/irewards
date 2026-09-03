@@ -9,8 +9,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: "#000000",
-        "on-primary": "#ffffff",
+        primary: "var(--color-primary)",
+        "on-primary": "var(--color-on-primary)",
         secondary: "#5e5e5e",
         "on-surface": "#1a1c1c",
         "on-surface-variant": "#444748",
@@ -24,6 +24,7 @@ const config: Config = {
         "surface-container-highest": "#e2e2e2",
         "surface-container-lowest": "#ffffff",
         "surface-tint": "#5f5e5e",
+        manus: "#1a3d2e",
       },
       fontFamily: {
         display: ["var(--font-hanken)", "system-ui", "sans-serif"],

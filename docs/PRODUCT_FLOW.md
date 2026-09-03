@@ -7,16 +7,18 @@
 3. **Dev:** thank-you page → simulate payment  
    **Prod:** HitPay redirect → webhook marks order paid
 4. Server creates **join token** (single-use, ~30 min) — points only after verified payment
-5. Thank-you page shows **Join iRewards on WhatsApp** (`JOIN-{token}`)
-6. Meta WhatsApp webhook → member created (token claimed atomically) → first-join + order points
+5. Thank-you page shows **Join CTA** driven by the merchant's active welcome campaign (`member_joined` / `first_visit`) — headline, pitch, offer badge (voucher % / award points / level welcome points / +1 fallback)
+6. Meta WhatsApp webhook → member created (token claimed atomically) → first-join bonus (level `welcome_points` when set) + order points → welcome campaign runs
 
 ## Return visit
 
 1. Scan QR → storefront
 2. Soft recognition: diner can look up by phone (lookup-only; no silent account create)
-3. Member session binds only after a **paid** order with matching `customer_id`
-4. Checkout ignores client-supplied customer ids; uses signed member session only
-5. Level discount + multiplied points when the session member is known
+3. Not a member → stay in menu; join CTA after pay (no signup redirect)
+4. Member session binds only after a **paid** order with matching `customer_id`
+5. Checkout ignores client-supplied customer ids; uses signed member session only
+6. Level discount + multiplied points when the session member is known
+7. **Spend points:** WhatsApp 4-digit OTP → short redeem-auth cookie → `pointsToRedeem` allowed; unpaid orders reserve points; deduct on payment confirm
 
 ## Campaigns & retention (WhatsApp + banner)
 
@@ -33,7 +35,7 @@
 | v1 ✅ | Points + join token + WhatsApp join |
 | v1.5 ✅ | **5 iRewards levels** — merchant-configurable thresholds, multipliers, perks, checkout discounts |
 | Campaigns ✅ | WhatsApp / banner workflows, Meta template approval, analytics |
-| v2 | Promos at checkout, redeem points |
+| v2 ✅ | Promos at checkout, redeem points (WhatsApp OTP redeem-auth + reserve) |
 | v3 | Digital stamp cards |
 
 ### iRewards levels

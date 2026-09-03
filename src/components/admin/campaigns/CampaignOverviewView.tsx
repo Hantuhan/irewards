@@ -429,15 +429,15 @@ export function CampaignOverviewView({
             )}
           </div>
           <div
-            className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${
+            className={`flex min-h-10 items-center gap-3 rounded-xl border px-3 py-2 ${
               automationsEnabled
                 ? "border-surface-container-highest bg-surface-container-lowest"
                 : "border-amber-300 bg-amber-50"
             }`}
           >
-            <span className="flex items-center gap-2 text-[12px] text-on-surface">
+            <span className="flex items-center gap-2 text-[12px] leading-none text-on-surface">
               <span
-                className={`h-2 w-2 rounded-full ${automationsEnabled ? "bg-emerald-600" : "bg-amber-500"}`}
+                className={`h-2 w-2 shrink-0 rounded-full ${automationsEnabled ? "bg-emerald-600" : "bg-amber-500"}`}
               />
               {automationsEnabled
                 ? `Auto campaigns on · ${stats.automatedLive} live`
@@ -447,8 +447,7 @@ export function CampaignOverviewView({
             </span>
             <button
               type="button"
-              role="switch"
-              aria-checked={automationsEnabled}
+              aria-pressed={automationsEnabled}
               disabled={savingSwitch}
               onClick={() => onToggleAutomations(!automationsEnabled)}
               title={
@@ -456,9 +455,12 @@ export function CampaignOverviewView({
                   ? "Pause campaigns that run on their own. Messages you send yourself still go out."
                   : "Turn auto campaigns back on"
               }
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-surface-container-highest bg-white px-2.5 text-[12px] font-medium text-on-surface hover:bg-surface-container-low disabled:opacity-50"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 self-center rounded-lg border border-surface-container-highest bg-white px-2.5 text-[12px] font-medium leading-none text-on-surface hover:bg-surface-container-low disabled:opacity-50"
             >
-              <Icon name={automationsEnabled ? "pause_circle" : "play_circle"} className="text-base" />
+              <Icon
+                name={automationsEnabled ? "pause_circle" : "play_circle"}
+                className="text-base leading-none"
+              />
               {savingSwitch ? "Saving…" : automationsEnabled ? "Pause all" : "Resume"}
             </button>
           </div>

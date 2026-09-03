@@ -5,6 +5,8 @@ type ProductSettingsSectionProps = {
   title: string;
   icon: string;
   description?: string;
+  /** Optional header action (e.g. Complete with AI). */
+  action?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -13,6 +15,7 @@ export function ProductSettingsSection({
   title,
   icon,
   description,
+  action,
   children,
 }: ProductSettingsSectionProps) {
   return (
@@ -25,12 +28,13 @@ export function ProductSettingsSection({
           <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-primary/20 bg-surface-container-low">
             <Icon name={icon} className="text-xl text-primary" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-display text-headline-sm text-primary">{title}</p>
             {description && (
               <p className="mt-0.5 text-body-md text-on-surface-variant">{description}</p>
             )}
           </div>
+          {action ? <div className="shrink-0">{action}</div> : null}
         </div>
       </div>
       <div className="p-4 sm:p-5">{children}</div>

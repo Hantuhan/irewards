@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { EnrollNewMemberView } from "@/components/admin/EnrollNewMemberView";
+import { MemberDetailView } from "@/components/admin/MemberDetailView";
+import { Icon } from "@/components/ui/Icon";
 import { merchantApi } from "@/lib/merchant/fetch";
+import { manusHeaderPrimaryBtnClass } from "@/lib/ui/manus";
 
 type CustomersAdminShellProps = { merchantSlug: string };
 
@@ -30,6 +34,8 @@ export function CustomersAdminShell({ merchantSlug }: CustomersAdminShellProps) 
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showEnroll, setShowEnroll] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,20 +56,72 @@ export function CustomersAdminShell({ merchantSlug }: CustomersAdminShellProps) 
 
   const followUps = feedback.filter((f) => f.needsFollowUp);
 
+  if (showEnroll) {
+    return (
+      <AdminShell
+        merchantSlug={merchantSlug}
+        active="customers"
+        title="Enroll New Member"
+        eyebrow="Retention · Members"
+        hideHeader
+      >
+        <EnrollNewMemberView
+          merchantSlug={merchantSlug}
+          onCancel={() => setShowEnroll(false)}
+          onEnrolled={(memberId) => {
+            setShowEnroll(false);
+            setSelectedMemberId(memberId);
+            void load();
+          }}
+        />
+      </AdminShell>
+    );
+  }
+
+  if (selectedMemberId) {
+    return (
+      <AdminShell
+        merchantSlug={merchantSlug}
+        active="customers"
+        title="Member detail"
+        eyebrow="Retention"
+      >
+        <MemberDetailView
+          merchantSlug={merchantSlug}
+          memberId={selectedMemberId}
+          onBack={() => {
+            setSelectedMemberId(null);
+            void load();
+          }}
+        />
+      </AdminShell>
+    );
+  }
+
   return (
     <AdminShell
       merchantSlug={merchantSlug}
       active="customers"
-      title="Member database"
+      title="Member overview"
       eyebrow="Retention"
       headerAction={
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search members…"
-          className="border border-surface-container-highest px-3 py-2"
-        />
+        <div className="flex flex-nowrap items-center gap-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search members…"
+            className="h-10 border border-surface-container-highest px-3 text-body-md"
+          />
+          <button
+            type="button"
+            onClick={() => setShowEnroll(true)}
+            className={manusHeaderPrimaryBtnClass}
+          >
+            <Icon name="add" className="text-base" />
+            Add member
+          </button>
+        </div>
       }
     >
       {loading && <p>Loading members…</p>}
@@ -104,7 +162,19 @@ export function CustomersAdminShell({ merchantSlug }: CustomersAdminShellProps) 
           </thead>
           <tbody>
             {members.map((member) => (
-              <tr key={member.id} className="border-b border-surface-container">
+              <tr
+                key={member.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedMemberId(member.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedMemberId(member.id);
+                  }
+                }}
+                className="cursor-pointer border-b border-surface-container transition-colors hover:bg-surface-container-low"
+              >
                 <td className="px-4 py-3 font-display text-headline-sm text-primary">{member.name}</td>
                 <td className="px-4 py-3 font-mono text-label-mono text-on-surface-variant">
                   {member.phone ?? "—"}
@@ -122,6 +192,13 @@ export function CustomersAdminShell({ merchantSlug }: CustomersAdminShellProps) 
                 </td>
               </tr>
             ))}
+            {!loading && members.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-body-md text-on-surface-variant">
+                  No members found{query ? ` for “${query}”` : ""}.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -7,6 +7,7 @@ import {
   getCustomerByPhone,
   getJoinToken,
   getOrderById,
+  getRewardLevels,
   hasPointsLedgerEntry,
   linkOrderToCustomer,
   markJoinTokenUsed,
@@ -18,6 +19,7 @@ import {
   awardOrderPointsIfEligible,
   getCustomerTierForMerchant,
 } from "@/lib/services/loyalty-points";
+import { awardOrderStampsIfEligible } from "@/lib/services/loyalty-stamps";
 import {
   updateCustomerVisitAndUsual,
 } from "@/lib/services/automation";
@@ -25,9 +27,17 @@ import {
 export type JoinResult = {
   customer: CustomerRow;
   pointsAwarded: number;
+  stampsAwarded: number;
   firstJoin: boolean;
   tierName: string;
 };
+
+async function firstJoinBonusPoints(merchantId: string): Promise<number> {
+  const levels = await getRewardLevels(merchantId);
+  const base = levels.find((l) => l.level_number === 1) ?? levels[0];
+  const welcome = Number(base?.welcome_points ?? 0);
+  return welcome > 0 ? Math.floor(welcome) : FIRST_JOIN_BONUS_POINTS;
+}
 
 export async function processWhatsAppJoin(input: {
   token: string;
@@ -52,6 +62,7 @@ export async function processWhatsAppJoin(input: {
 
   let customer = await getCustomerByPhone(order.merchant_id, input.phone);
   let pointsAwarded = 0;
+  let stampsAwarded = 0;
   let firstJoin = false;
 
   if (!customer) {
@@ -74,11 +85,12 @@ export async function processWhatsAppJoin(input: {
   }
 
   if (!customer.first_join_bonus_awarded) {
-    pointsAwarded += FIRST_JOIN_BONUS_POINTS;
+    const bonus = await firstJoinBonusPoints(order.merchant_id);
+    pointsAwarded += bonus;
     customer = await awardPointsToCustomer({
       customer,
       orderId: order.id,
-      points: FIRST_JOIN_BONUS_POINTS,
+      points: bonus,
       reason: "first_join_bonus",
     });
     customer = await updateCustomer(customer.id, { first_join_bonus_awarded: true });
@@ -103,6 +115,13 @@ export async function processWhatsAppJoin(input: {
     pointsAwarded += orderPoints;
     customer = (await getCustomerByPhone(order.merchant_id, input.phone)) ?? customer;
   }
+
+  stampsAwarded = await awardOrderStampsIfEligible({
+    customer,
+    merchantId: order.merchant_id,
+    orderId: order.id,
+  });
+  customer = (await getCustomerByPhone(order.merchant_id, input.phone)) ?? customer;
 
   await updateCustomerVisitAndUsual(order.id, customer.id);
 
@@ -130,6 +149,7 @@ export async function processWhatsAppJoin(input: {
   return {
     customer,
     pointsAwarded,
+    stampsAwarded,
     firstJoin,
     tierName: tier.current.name,
   };

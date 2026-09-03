@@ -15,6 +15,7 @@ export type StorefrontCopy = {
   inCart: string;
   language: string;
   ingredients: string;
+  allergens: string;
   notes: string;
   energy: string;
   sugar: string;
@@ -28,7 +29,7 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     pts: "pts",
     loadingMenu: "Loading menu…",
     shop: "Shop",
-    rewards: "iRewards",
+    rewards: "Rewards",
     cart: "Cart",
     profile: "Profile",
     addToOrder: "Add to order",
@@ -36,7 +37,8 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     addAnother: "Add another",
     inCart: "in cart",
     language: "Language",
-    ingredients: "Ingredients",
+    ingredients: "What's in it",
+    allergens: "Allergens & diet",
     notes: "Notes",
     energy: "Energy",
     sugar: "Sugar",
@@ -48,7 +50,7 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     pts: "积分",
     loadingMenu: "加载菜单中…",
     shop: "点餐",
-    rewards: "iRewards",
+    rewards: "奖励",
     cart: "购物车",
     profile: "我的",
     addToOrder: "加入订单",
@@ -56,7 +58,8 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     addAnother: "再加一份",
     inCart: "已在购物车",
     language: "语言",
-    ingredients: "成分",
+    ingredients: "食材",
+    allergens: "过敏原与饮食",
     notes: "备注",
     energy: "热量",
     sugar: "糖分",
@@ -68,7 +71,7 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     pts: "mata",
     loadingMenu: "Memuatkan menu…",
     shop: "Menu",
-    rewards: "iRewards",
+    rewards: "Ganjaran",
     cart: "Troli",
     profile: "Profil",
     addToOrder: "Tambah pesanan",
@@ -77,6 +80,7 @@ const COPY: Record<ProgramLanguage, StorefrontCopy> = {
     inCart: "dalam troli",
     language: "Bahasa",
     ingredients: "Bahan",
+    allergens: "Alergen & diet",
     notes: "Nota",
     energy: "Tenaga",
     sugar: "Gula",

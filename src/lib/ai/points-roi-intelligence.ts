@@ -74,7 +74,7 @@ function fallbackRoiReply(
   }
 
   if (lower.includes("monday") || lower.includes("double")) {
-    return `**${actuals.merchantName}**: Monday double-points rules multiply earn on matching days. Set a rule under **Points rule**, then re-check ROI with a higher tier multiplier.`;
+    return `**${actuals.merchantName}**: Monday double-points rules multiply earn on matching days. Set a rule under **Bonus days**, then re-check ROI with a higher tier multiplier.`;
   }
 
   const merchantInsights = roi.insights.map((line) => line.replace(/^/, `${actuals.merchantName}: `));

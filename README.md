@@ -16,7 +16,7 @@ Smart table storefront + WhatsApp retention for cafes and F&B merchants in Malay
 |----------|--------|---------|
 | **Merchant SaaS** | `/` → **Open merchant dashboard** | http://localhost:3002/dashboard/demo-cafe |
 | **Diner storefront** | Table QR or cafe subdomain | http://localhost:3002/m/demo-cafe/table/1 · `http://demo-cafe.localhost:3002/` |
-| **Multi-staff login** | `/login` | Owner / manager / staff accounts per cafe |
+| **Multi-staff login** | `/login` | Up to 5 users per cafe (owner / manager / staff) |
 
 Merchants configure menus, loyalty, and QR codes in the dashboard. Customers only see the mobile storefront after scanning a table QR (or opening the cafe subdomain).
 

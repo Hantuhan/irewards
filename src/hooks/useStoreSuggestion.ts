@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  dinerFacingSuggestReason,
+  defaultSuggestReason,
+} from "@/lib/ai/store-intelligence";
 
 export type StoreSuggestion = {
   itemId: string | null;
@@ -35,11 +39,12 @@ function normalizeSuggestion(raw: unknown): StoreSuggestion | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as StoreSuggestion;
   if (!item.itemId) return null;
+  const suggestType = item.suggestType === "downsell" ? "downsell" : "upsell";
   return {
     itemId: item.itemId,
     name: item.name ?? null,
-    reason: item.reason ?? "",
-    suggestType: item.suggestType === "downsell" ? "downsell" : "upsell",
+    reason: dinerFacingSuggestReason(item.reason, defaultSuggestReason(suggestType)),
+    suggestType,
     source: item.source ?? "rules",
     regularPriceCents: item.regularPriceCents,
     promoPriceCents: item.promoPriceCents,

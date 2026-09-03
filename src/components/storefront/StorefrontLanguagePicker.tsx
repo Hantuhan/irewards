@@ -7,6 +7,8 @@ type StorefrontLanguagePickerProps = {
   value: ProgramLanguage;
   onChange: (lang: ProgramLanguage) => void;
   label?: string;
+  /** `text` = mockup-style plain links; `pill` = segmented control */
+  variant?: "text" | "pill";
 };
 
 export function StorefrontLanguagePicker({
@@ -14,10 +16,35 @@ export function StorefrontLanguagePicker({
   value,
   onChange,
   label,
+  variant = "pill",
 }: StorefrontLanguagePickerProps) {
   if (languages.length <= 1) return null;
 
   const options = PROGRAM_LANGUAGES.filter((l) => languages.includes(l.code));
+
+  if (variant === "text") {
+    return (
+      <div className="flex shrink-0 items-center gap-2.5 pt-0.5" role="group" aria-label={label ?? "Language"}>
+        {options.map((lang) => {
+          const active = value === lang.code;
+          return (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => onChange(lang.code)}
+              className={`font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                active
+                  ? "font-bold text-on-surface"
+                  : "font-medium text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              {lang.short}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -26,21 +53,28 @@ export function StorefrontLanguagePicker({
           {label}
         </span>
       )}
-      <div className="flex gap-1">
-        {options.map((lang) => (
-          <button
-            key={lang.code}
-            type="button"
-            onClick={() => onChange(lang.code)}
-            className={`px-2 py-1 font-mono text-[10px] uppercase transition-colors ${
-              value === lang.code
-                ? "bg-primary text-on-primary"
-                : "border border-surface-container-highest text-on-surface-variant hover:border-primary/40"
-            }`}
-          >
-            {lang.short}
-          </button>
-        ))}
+      <div
+        className="inline-flex shrink-0 overflow-hidden rounded-full border border-on-surface/15 bg-surface-container-low p-0.5"
+        role="group"
+        aria-label={label ?? "Language"}
+      >
+        {options.map((lang) => {
+          const active = value === lang.code;
+          return (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => onChange(lang.code)}
+              className={`min-w-[2.25rem] px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide transition-colors ${
+                active
+                  ? "rounded-full bg-primary text-on-primary"
+                  : "text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              {lang.short}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

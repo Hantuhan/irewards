@@ -11,9 +11,10 @@ export type TakeawayChargeConfig = {
 export type ServiceType = "dine_in" | "takeaway";
 
 export const DEFAULT_TAKEAWAY_CHARGE: TakeawayChargeConfig = {
-  enabled: false,
-  surchargeType: "percentage",
-  surchargeValue: 0,
+  enabled: true,
+  surchargeType: "fixed",
+  /** Default packaging fee: RM/SGD 1.00 */
+  surchargeValue: 100,
   priority: 10,
 };
 

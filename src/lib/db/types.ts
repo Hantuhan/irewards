@@ -58,6 +58,50 @@ export type MerchantRow = {
   /** Public SaaS subdomain (defaults to slug), e.g. cafe1 → cafe1.irewards.store */
   subdomain?: string;
   suspended_at?: string | null;
+  membership_setup_completed_at?: string | null;
+  /** Master switch for points wallet module under iRewards. */
+  points_program_enabled?: boolean;
+  /** Master switch for stamp card module under iRewards. */
+  stamps_program_enabled?: boolean;
+};
+
+export type StampProgramRow = {
+  id: string;
+  merchant_id: string;
+  card_size: number;
+  reward_type: "free_item" | "percent_off" | "fixed_off";
+  reward_label: string;
+  reward_menu_item_id: string | null;
+  reward_percent: number | null;
+  reward_cents: number | null;
+  qualifying_menu_item_ids: unknown;
+  qualifying_category_ids: unknown;
+  max_stamps_per_order: number | null;
+  max_stamps_per_day: number | null;
+  /** When true, storefront Pay bar can suggest qualifying items for +1 stamp. */
+  cart_nudge_enabled?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type CustomerStampCardRow = {
+  id: string;
+  merchant_id: string;
+  customer_id: string;
+  stamps_collected: number;
+  cards_completed: number;
+  pending_reward: boolean;
+  updated_at?: string;
+};
+
+export type StampsLedgerRow = {
+  id: string;
+  merchant_id: string;
+  customer_id: string;
+  order_id: string | null;
+  delta: number;
+  reason: string;
+  created_at: string;
 };
 
 export type VenueTableRow = {
@@ -119,6 +163,10 @@ export type CustomerRow = {
   usual_order: { name: string; quantity: number }[] | null;
   email: string | null;
   receipt_delivery_preference: "email" | "whatsapp" | null;
+  birthday_month?: number | null;
+  birthday_day?: number | null;
+  staff_notes?: string | null;
+  created_at?: string;
 };
 
 export type RewardLevelRow = {
@@ -184,11 +232,14 @@ export type MenuItemRow = {
   item_notes?: string | null;
   item_notes_i18n?: Record<string, string> | null;
   ingredient_ids?: string[];
+  main_ingredient_ids?: string[];
   coffee_profile_json?: Record<string, unknown> | null;
   takeaway_charge_enabled?: boolean;
   takeaway_surcharge_type?: "percentage" | "fixed" | null;
   takeaway_surcharge_value?: number | null;
   takeaway_surcharge_priority?: number;
+  available_dine_in?: boolean;
+  available_takeaway?: boolean;
 };
 
 export type PromoRow = {

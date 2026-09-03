@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DEFAULT_CENTS_PER_POINT } from "@/lib/loyalty/points";
 import type { MerchantChargeSettings } from "@/lib/services/order-totals";
 
 export function useCheckoutSettings(merchantSlug: string) {
   const [settings, setSettings] = useState<MerchantChargeSettings | null>(null);
   const [currency, setCurrency] = useState<"MYR" | "SGD">("MYR");
+  const [pointsRedeemCentsPerPoint, setPointsRedeemCentsPerPoint] =
+    useState(DEFAULT_CENTS_PER_POINT);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,9 +27,15 @@ export function useCheckoutSettings(merchantSlug: string) {
           sstRatePercent?: number;
           gstEnabled?: boolean;
           gstRatePercent?: number;
+          pointsRedeemCentsPerPoint?: number;
         }) => {
           if (cancelled || json.error) return;
           setCurrency(json.currency ?? "MYR");
+          setPointsRedeemCentsPerPoint(
+            Number(json.pointsRedeemCentsPerPoint) > 0
+              ? Number(json.pointsRedeemCentsPerPoint)
+              : DEFAULT_CENTS_PER_POINT,
+          );
           setSettings({
             currency: json.currency ?? "MYR",
             serviceChargeEnabled: json.serviceChargeEnabled ?? false,
@@ -48,5 +57,5 @@ export function useCheckoutSettings(merchantSlug: string) {
     };
   }, [merchantSlug]);
 
-  return { settings, currency, loading };
+  return { settings, currency, pointsRedeemCentsPerPoint, loading };
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CustomerMobileNav } from "@/components/customer/CustomerMobileNav";
 import { PreCheckoutSuggestions } from "@/components/storefront/PreCheckoutSuggestions";
 import { ServiceTypePicker } from "@/components/storefront/ServiceTypePicker";
@@ -17,16 +18,19 @@ import { useMemberSession } from "@/hooks/useMemberSession";
 import { MobileShell } from "@/components/ui/MobileShell";
 import { formatMerchantPrice } from "@/lib/merchant/currency";
 import { calculateOrderTotals } from "@/lib/services/order-totals";
+import { pointsDiscountCents } from "@/lib/loyalty/points";
+import { applyLevelDiscount } from "@/lib/loyalty/tiers";
+import type { StorefrontPaymentMethod } from "@/lib/payments/hitpay";
 
 type CartShellProps = {
   merchantSlug: string;
   tableId: string;
 };
 
-type PaymentMethod = "duitnow" | "card" | "wallet";
 type CartStep = "review" | "suggestions" | "payment";
 
 export function CartShell({ merchantSlug, tableId }: CartShellProps) {
+  const searchParams = useSearchParams();
   const { lang, setLang, copy } = useStorefrontLocale(merchantSlug, ["en", "zh", "ms"]);
   const { allItems, languages, loading } = useStorefrontMenu(merchantSlug, lang);
   const {
@@ -43,17 +47,132 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
   const [step, setStep] = useState<CartStep>("review");
   const [checkoutState, setCheckoutState] = useState<"idle" | "loading">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("duitnow");
+  const [paymentMethod, setPaymentMethod] = useState<StorefrontPaymentMethod>("duitnow");
   const [promoCode, setPromoCode] = useState("");
+  const [promoDiscountCents, setPromoDiscountCents] = useState(0);
+  const [promoMsg, setPromoMsg] = useState<string | null>(null);
   const [pointsToRedeem, setPointsToRedeem] = useState(0);
-  const { member } = useMemberSession();
-  const { settings: chargeSettings, currency } = useCheckoutSettings(merchantSlug);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpMsg, setOtpMsg] = useState<string | null>(null);
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+  const [memberTier, setMemberTier] = useState<string | null>(null);
+  const [tierDiscountPercent, setTierDiscountPercent] = useState(0);
+  const { member, redeemAuthorized, refresh: refreshMember } = useMemberSession();
+  const {
+    settings: chargeSettings,
+    currency,
+    pointsRedeemCentsPerPoint,
+  } = useCheckoutSettings(merchantSlug);
   const routes = customerRoutes(merchantSlug, tableId);
+
+  const maxRedeemable = member?.availablePoints ?? member?.points ?? 0;
+
+  useEffect(() => {
+    const fromUrl = searchParams.get("promo")?.trim();
+    if (fromUrl) {
+      setPromoCode(fromUrl.toUpperCase());
+      setStep("payment");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!member?.id) {
+      setMemberTier(null);
+      setTierDiscountPercent(0);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/customers/${member.id}/tier`, { credentials: "include" })
+      .then((res) => res.json())
+      .then(
+        (json: {
+          currentLevel?: { name?: string; discountPercent?: number };
+        }) => {
+          if (cancelled) return;
+          setMemberTier(json.currentLevel?.name ?? null);
+          setTierDiscountPercent(Number(json.currentLevel?.discountPercent) || 0);
+        },
+      )
+      .catch(() => {
+        if (!cancelled) {
+          setMemberTier(null);
+          setTierDiscountPercent(0);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [member?.id]);
+
+  useEffect(() => {
+    const code = promoCode.trim();
+    if (!code) {
+      setPromoDiscountCents(0);
+      setPromoMsg(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      fetch(
+        `/api/merchant/${merchantSlug}/promos/validate?code=${encodeURIComponent(code)}&subtotalCents=${cartTotal}`,
+        { cache: "no-store" },
+      )
+        .then((res) => res.json())
+        .then(
+          (json: {
+            valid?: boolean;
+            discountCents?: number;
+            name?: string;
+            error?: string;
+          }) => {
+            if (cancelled) return;
+            if (json.valid && (json.discountCents ?? 0) > 0) {
+              setPromoDiscountCents(json.discountCents ?? 0);
+              setPromoMsg(json.name ? `Applied: ${json.name}` : "Promo applied");
+            } else {
+              setPromoDiscountCents(0);
+              setPromoMsg(json.error ?? "Invalid promo code");
+            }
+          },
+        )
+        .catch(() => {
+          if (!cancelled) {
+            setPromoDiscountCents(0);
+            setPromoMsg("Could not validate promo");
+          }
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [promoCode, merchantSlug, cartTotal]);
+
+  const previewDiscountCents = useMemo(() => {
+    const tierDisc =
+      member && tierDiscountPercent > 0
+        ? applyLevelDiscount(cartTotal, tierDiscountPercent).discountCents
+        : 0;
+    const pointsDisc =
+      member && redeemAuthorized && pointsToRedeem > 0
+        ? pointsDiscountCents(pointsToRedeem, pointsRedeemCentsPerPoint)
+        : 0;
+    return tierDisc + promoDiscountCents + pointsDisc;
+  }, [
+    member,
+    tierDiscountPercent,
+    cartTotal,
+    redeemAuthorized,
+    pointsToRedeem,
+    pointsRedeemCentsPerPoint,
+    promoDiscountCents,
+  ]);
 
   const orderTotals = useMemo(() => {
     if (!chargeSettings) return null;
-    return calculateOrderTotals(cartTotal, 0, chargeSettings);
-  }, [cartTotal, chargeSettings]);
+    return calculateOrderTotals(cartTotal, previewDiscountCents, chargeSettings);
+  }, [cartTotal, chargeSettings, previewDiscountCents]);
 
   const formattedTotal = orderTotals
     ? formatMerchantPrice(orderTotals.totalCents, currency)
@@ -70,7 +189,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
     merchantSlug,
     cartItemIds,
     cartTotalCents: cartTotal,
-    memberTier: null,
+    memberTier,
     usualOrder: member?.usualOrder ?? undefined,
     enabled: step === "suggestions",
   });
@@ -104,6 +223,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
           items: checkoutLines,
           promoCode: promoCode.trim() || undefined,
           pointsToRedeem: pointsToRedeem > 0 ? pointsToRedeem : undefined,
+          paymentMethod,
         }),
       });
       const data = (await response.json()) as {
@@ -134,7 +254,64 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
     promoCode,
     pointsToRedeem,
     serviceType,
+    paymentMethod,
   ]);
+
+  const requestRedeemOtp = useCallback(async () => {
+    setOtpBusy(true);
+    setOtpMsg(null);
+    setDevOtpHint(null);
+    try {
+      const res = await fetch("/api/customer/redeem/otp/request", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantSlug }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        phoneMasked?: string;
+        devCode?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Could not send code");
+      setOtpMsg(
+        data.phoneMasked
+          ? `Code sent to WhatsApp ${data.phoneMasked}. Enter it below.`
+          : "Code sent to your WhatsApp. Enter it below.",
+      );
+      if (data.devCode) setDevOtpHint(data.devCode);
+    } catch (err) {
+      setOtpMsg(err instanceof Error ? err.message : "Could not send code");
+    } finally {
+      setOtpBusy(false);
+    }
+  }, [merchantSlug]);
+
+  const verifyRedeemOtp = useCallback(async () => {
+    if (!/^\d{4}$/.test(otpCode.trim())) {
+      setOtpMsg("Enter the 4-digit code from WhatsApp.");
+      return;
+    }
+    setOtpBusy(true);
+    setOtpMsg(null);
+    try {
+      const res = await fetch("/api/customer/redeem/otp/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantSlug, code: otpCode.trim() }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Verification failed");
+      setOtpMsg("Verified — you can spend points on this order.");
+      setDevOtpHint(null);
+      await refreshMember();
+    } catch (err) {
+      setOtpMsg(err instanceof Error ? err.message : "Verification failed");
+    } finally {
+      setOtpBusy(false);
+    }
+  }, [merchantSlug, otpCode, refreshMember]);
 
   function handleAddSuggestion(suggestion: StoreSuggestion) {
     if (!suggestion.itemId) return;
@@ -157,8 +334,10 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
           lines={suggestionLines}
           allItems={allItems}
           cartTotal={cartTotal}
+          orderTotals={orderTotals}
           suggestions={suggestions}
           loading={suggestLoading}
+          currency={currency}
           onAdd={handleAddSuggestion}
           onSkip={() => setStep("payment")}
           onBack={() => setStep("review")}
@@ -248,7 +427,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                           </p>
                         )}
                         <p className="mt-1 font-mono text-label-mono text-on-surface-variant">
-                          RM {(line.unitPriceCents / 100).toFixed(2)} each
+                          {formatMerchantPrice(line.unitPriceCents, currency)} each
                           {line.takeawaySurchargeCents > 0 && (
                             <span className="ml-1 text-primary">incl. takeaway</span>
                           )}
@@ -293,7 +472,9 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
 
             <div className="zenith-surface flex justify-between p-4 font-display text-headline-sm">
               <span>Subtotal</span>
-              <span className="font-mono text-label-mono">RM {(cartTotal / 100).toFixed(2)}</span>
+              <span className="font-mono text-label-mono">
+                {formatMerchantPrice(cartTotal, currency)}
+              </span>
             </div>
 
             <p className="text-center text-body-md text-on-surface-variant">
@@ -318,7 +499,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                     {line.quantity}× {line.itemName}
                   </span>
                   <span className="font-mono text-label-mono">
-                    RM {((line.unitPriceCents * line.quantity) / 100).toFixed(2)}
+                    {formatMerchantPrice(line.unitPriceCents * line.quantity, currency)}
                   </span>
                 </li>
               ))}
@@ -335,15 +516,86 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                   placeholder="Promo code"
                   className="border border-surface-container-highest px-3 py-2"
                 />
-                {member && member.points > 0 && (
+                {promoMsg && (
+                  <p
+                    className={`text-[12px] ${
+                      promoDiscountCents > 0 ? "text-primary" : "text-on-surface-variant"
+                    }`}
+                  >
+                    {promoMsg}
+                  </p>
+                )}
+                {!member && (
+                  <p className="border border-dashed border-surface-container-highest px-3 py-2 text-[12px] text-on-surface-variant">
+                    Not a member yet? Order &amp; pay, then join on WhatsApp. Redeem next visit.
+                  </p>
+                )}
+                {member && maxRedeemable <= 0 && (
+                  <p className="border border-surface-container-highest px-3 py-2 text-[12px] text-on-surface-variant">
+                    You have {member.points} pts
+                    {(member.reservedPoints ?? 0) > 0
+                      ? ` (${member.reservedPoints} reserved on an unpaid order)`
+                      : ""}
+                    . Earn more on this visit after you pay.
+                  </p>
+                )}
+                {member && maxRedeemable > 0 && !redeemAuthorized && (
+                  <div className="flex flex-col gap-2 border border-surface-container-highest px-3 py-3">
+                    <p className="text-body-md">
+                      You have {maxRedeemable} pts available. Verify on WhatsApp to spend them.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={otpBusy}
+                      onClick={() => void requestRedeemOtp()}
+                      className="bg-primary px-3 py-2 text-[12px] font-medium text-on-primary disabled:opacity-50"
+                    >
+                      {otpBusy ? "Sending…" : "Send WhatsApp code"}
+                    </button>
+                    <div className="flex gap-2">
+                      <input
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={4}
+                        placeholder="4-digit code"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                        className="h-9 min-w-0 flex-1 border border-surface-container-highest px-3 text-[13px]"
+                      />
+                      <button
+                        type="button"
+                        disabled={otpBusy || otpCode.length !== 4}
+                        onClick={() => void verifyRedeemOtp()}
+                        className="h-9 shrink-0 border border-primary px-3 text-[12px] font-medium text-primary disabled:opacity-50"
+                      >
+                        Verify
+                      </button>
+                    </div>
+                    {devOtpHint && (
+                      <p className="text-[11px] text-on-surface-variant">
+                        Dev mode code: <span className="font-mono">{devOtpHint}</span>
+                      </p>
+                    )}
+                    {otpMsg && (
+                      <p className="text-[11px] text-on-surface-variant">{otpMsg}</p>
+                    )}
+                  </div>
+                )}
+                {member && maxRedeemable > 0 && redeemAuthorized && (
                   <label className="flex items-center justify-between border border-surface-container-highest px-3 py-2">
-                    <span className="text-body-md">Redeem points (max {member.points})</span>
+                    <span className="text-body-md">
+                      Redeem points (max {maxRedeemable})
+                    </span>
                     <input
                       type="number"
                       min={0}
-                      max={member.points}
+                      max={maxRedeemable}
                       value={pointsToRedeem}
-                      onChange={(e) => setPointsToRedeem(Number(e.target.value))}
+                      onChange={(e) =>
+                        setPointsToRedeem(
+                          Math.min(maxRedeemable, Math.max(0, Number(e.target.value) || 0)),
+                        )
+                      }
                       className="w-20 border border-surface-container-highest px-2 py-1 text-right"
                     />
                   </label>
@@ -355,29 +607,99 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
               <h2 className="mb-3 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
                 Payment method
               </h2>
-              <div className="flex flex-col gap-2">
+              <div className="overflow-hidden border border-surface-container-highest">
                 {(
                   [
-                    { id: "duitnow", label: "DuitNow QR", icon: "qr_code_2" },
-                    { id: "card", label: "Card", icon: "credit_card" },
-                    { id: "wallet", label: "E-wallet", icon: "account_balance_wallet" },
+                    {
+                      id: "duitnow" as const,
+                      label: "DuitNow QR",
+                      hint: "Scan with any banking app",
+                      icon: "qr_code_2",
+                      iconBg: "bg-[#ED1C24]/10 text-[#ED1C24]",
+                      brands: ["FPX", "DuitNow"],
+                      recommended: true,
+                    },
+                    {
+                      id: "card" as const,
+                      label: "Card",
+                      hint: "Visa, Mastercard, Amex",
+                      icon: "credit_card",
+                      iconBg: "bg-surface-container text-on-surface",
+                      brands: ["Visa", "Mastercard"],
+                      recommended: false,
+                    },
+                    {
+                      id: "wallet" as const,
+                      label: "E-wallet",
+                      hint: "Touch ’n Go, GrabPay, ShopeePay",
+                      icon: "account_balance_wallet",
+                      iconBg: "bg-[#00B14F]/10 text-[#00B14F]",
+                      brands: ["TNG", "Grab", "Shopee"],
+                      recommended: false,
+                    },
                   ] as const
-                ).map((method) => (
-                  <button
-                    key={method.id}
-                    type="button"
-                    onClick={() => setPaymentMethod(method.id)}
-                    className={`flex items-center gap-3 border p-4 text-left ${
-                      paymentMethod === method.id
-                        ? "border-primary bg-primary text-on-primary"
-                        : "border-surface-container-highest"
-                    }`}
-                  >
-                    <Icon name={method.icon} />
-                    <span className="font-display text-headline-sm">{method.label}</span>
-                  </button>
-                ))}
+                ).map((method, index, list) => {
+                  const selected = paymentMethod === method.id;
+                  return (
+                    <button
+                      key={method.id}
+                      type="button"
+                      onClick={() => setPaymentMethod(method.id)}
+                      className={`flex w-full items-center gap-3 px-3.5 py-3.5 text-left transition-colors ${
+                        index < list.length - 1 ? "border-b border-surface-container-highest" : ""
+                      } ${selected ? "bg-surface-container-low" : "bg-white hover:bg-surface-container-lowest"}`}
+                    >
+                      <span
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center ${method.iconBg}`}
+                      >
+                        <Icon name={method.icon} className="text-[22px]" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-display text-[15px] font-semibold text-on-surface">
+                            {method.label}
+                          </span>
+                          {method.recommended && (
+                            <span className="bg-primary px-1.5 py-0.5 font-mono text-[8px] font-medium uppercase tracking-[0.08em] text-on-primary">
+                              Popular
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-[12px] text-on-surface-variant">
+                          {method.hint}
+                        </span>
+                        <span className="mt-1.5 flex flex-wrap gap-1">
+                          {method.brands.map((brand) => (
+                            <span
+                              key={brand}
+                              className="border border-surface-container-highest bg-white px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-on-surface-variant"
+                            >
+                              {brand}
+                            </span>
+                          ))}
+                        </span>
+                      </span>
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                          selected
+                            ? "border-primary bg-primary"
+                            : "border-outline-variant bg-white"
+                        }`}
+                        aria-hidden
+                      >
+                        {selected && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-on-primary" />
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+              <p className="mt-2 text-[11px] text-on-surface-variant">
+                {paymentMethod === "duitnow" && "You’ll see a QR after confirming — pay in your bank app."}
+                {paymentMethod === "card" && "Card details are entered on a secure payment page."}
+                {paymentMethod === "wallet" && "Choose your wallet on the next screen."}
+              </p>
             </section>
 
             <section className="zenith-surface flex flex-col gap-2 p-4">
@@ -403,6 +725,14 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                   </span>
                 </div>
               )}
+              {orderTotals && orderTotals.discountCents > 0 && (
+                <div className="flex justify-between text-body-md text-on-surface-variant">
+                  <span>Discounts</span>
+                  <span className="font-mono text-label-mono">
+                    −{formatMerchantPrice(orderTotals.discountCents, currency)}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between border-t border-surface-container-highest pt-2 font-display text-headline-sm">
                 <span>Total</span>
                 <span className="font-mono text-label-mono">{formattedTotal}</span>
@@ -417,7 +747,13 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
               onClick={startCheckout}
               className="flex w-full items-center justify-center gap-2 bg-primary py-4 font-display text-headline-sm text-on-primary disabled:opacity-60"
             >
-              {checkoutState === "loading" ? "Starting…" : "Pay now"}
+              {checkoutState === "loading"
+                ? "Starting…"
+                : paymentMethod === "duitnow"
+                  ? "Pay with DuitNow"
+                  : paymentMethod === "card"
+                    ? "Pay with card"
+                    : "Pay with e-wallet"}
               <Icon name="arrow_forward" />
             </button>
           </>

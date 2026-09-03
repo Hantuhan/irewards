@@ -9,6 +9,9 @@
 - [x] Checkout ignores client `customerId` — member session cookie only
 - [x] Browser session bind requires paid order with attached customer (no UUID spoof)
 - [x] Soft phone lookup does not create members or award points
+- [x] Soft phone lookup alone cannot spend points — WhatsApp OTP redeem-auth required
+- [x] Pending checkout reserves redeem points (balance − unpaid `points_redeemed`)
+- [x] Points deducted on payment confirm only (ledger idempotent per order)
 - [x] `CRON_SECRET` required; default value refused in production
 - [x] Session secrets required in production (`MERCHANT_SESSION_SECRET` / `MEMBER_SESSION_SECRET`)
 
@@ -16,7 +19,7 @@
 
 - [x] Payment provider HMAC verification implemented (HitPay)
 - [x] No points/join logic callable from client for awards
-- [x] Redeem points requires verified member session
+- [x] Redeem points requires verified member session **and** short-lived redeem-auth (WhatsApp OTP)
 - [x] STOP opt-out on outbound WhatsApp
 - [x] PDPA notice on storefront footer
 - [x] Review nudge replies: 5 → Google link, 1–4 → private thank-you + `member_feedback` (Members follow-up)
@@ -25,6 +28,7 @@
 
 - Primary: `phone` from the Meta webhook `messages[].from` (signed webhook)
 - Secondary: `external_user_id` (BSUID) for WhatsApp username rollout
-- Soft recognition: existing member phone lookup sets session only — never trust phone alone to create members
+- Soft recognition: existing member phone lookup sets session only — never trust phone alone to create members or spend points
+- Redeem: WhatsApp 4-digit OTP → `irewards_redeem_auth` cookie (~30 min)
 
 Never trust phone numbers from URL params or form input alone for awards.

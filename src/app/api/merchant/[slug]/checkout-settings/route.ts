@@ -23,6 +23,8 @@ export async function GET(_request: Request, context: RouteContext) {
       sstRatePercent: charges.sstRatePercent,
       gstEnabled: charges.gstEnabled,
       gstRatePercent: charges.gstRatePercent,
+      pointsRedeemCentsPerPoint: Number(merchant.points_redeem_cents_per_point ?? 10),
+      pointsProgramEnabled: merchant.points_program_enabled !== false,
       receiptFooterText: merchant.receipt_footer_text ?? null,
       receiptShowRegistration: merchant.receipt_show_registration ?? true,
       receiptLayout: merchant.receipt_layout_json ?? null,

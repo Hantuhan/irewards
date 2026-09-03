@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DinerFlowPreview } from "@/components/admin/DinerFlowPreview";
 import { UpsellRuleEditor } from "@/components/admin/UpsellRuleEditor";
 import type { UpsellLinkConfig } from "@/lib/menu/upsell-rules";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { useUnsavedChangesGuard } from "@/components/admin/unsaved-changes";
 import { TeamSettingsPanel } from "@/components/admin/TeamSettingsPanel";
 import { ReceiptEditor, createDefaultReceiptLayout } from "@/components/receipt/ReceiptEditor";
 import { AiAssistTextarea } from "@/components/ui/AiAssistTextarea";
@@ -18,6 +19,7 @@ import { legalPolicyPath } from "@/lib/merchant/legal-policies";
 import { syncTaxFlagsForCurrency } from "@/lib/merchant/charge-settings";
 import { resolveLegalPolicyDefaults } from "@/lib/merchant/default-legal-policies";
 import { parseReceiptLayout, type ReceiptLayout } from "@/lib/receipt/layout";
+import { manusHeaderBtnClass, manusHeaderPrimaryBtnClass } from "@/lib/ui/manus";
 
 type SettingsAdminShellProps = { merchantSlug: string };
 
@@ -244,7 +246,15 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
     halalCertificateUrl: "",
   });
   const [checkoutProducts, setCheckoutProducts] = useState<
-    { slug: string; name: string; categoryLabel?: string }[]
+    {
+      slug: string;
+      name: string;
+      categoryLabel?: string;
+      categorySlug?: string;
+      priceCents?: number;
+      tags?: string[];
+      specialTags?: string[];
+    }[]
   >([]);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -253,6 +263,15 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [receiptLayout, setReceiptLayout] = useState<ReceiptLayout>(createDefaultReceiptLayout());
+  const [settingsBaseline, setSettingsBaseline] = useState<string | null>(null);
+
+  const settingsFingerprint = useMemo(
+    () => JSON.stringify({ settings, receiptLayout }),
+    [settings, receiptLayout],
+  );
+
+  const settingsDirty =
+    settingsBaseline !== null && settingsFingerprint !== settingsBaseline;
 
   const load = useCallback(async () => {
     const data = await merchantApi<{
@@ -296,7 +315,14 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
 
     const menuData = await merchantApi<{
       categories: { slug: string; label: string }[];
-      items: { slug: string; name: string; categorySlug: string }[];
+      items: {
+        slug: string;
+        name: string;
+        categorySlug: string;
+        priceCents?: number;
+        tags?: string[];
+        specialTags?: string[];
+      }[];
     }>(`/api/merchant/${merchantSlug}/menu`);
     const categoryLabels = new Map(menuData.categories.map((c) => [c.slug, c.label]));
     setCheckoutProducts(
@@ -304,6 +330,10 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
         slug: item.slug,
         name: item.name,
         categoryLabel: categoryLabels.get(item.categorySlug),
+        categorySlug: item.categorySlug,
+        priceCents: item.priceCents,
+        tags: item.tags,
+        specialTags: item.specialTags,
       })),
     );
     const policyDefaults = resolveLegalPolicyDefaults({
@@ -311,7 +341,7 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
       currency: data.currency,
       storeEmail: data.storeEmail,
     });
-    setSettings({
+    const nextSettings = {
       name: data.name,
       logoUrl: data.logoUrl ?? "",
       address: data.address ?? "",
@@ -363,8 +393,11 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
           : "",
       halalCertified: data.halalCertified ?? null,
       halalCertificateUrl: data.halalCertificateUrl ?? "",
-    });
-    setReceiptLayout(parseReceiptLayout(data.receiptLayout) ?? createDefaultReceiptLayout());
+    };
+    const nextLayout = parseReceiptLayout(data.receiptLayout) ?? createDefaultReceiptLayout();
+    setSettings(nextSettings);
+    setReceiptLayout(nextLayout);
+    setSettingsBaseline(JSON.stringify({ settings: nextSettings, receiptLayout: nextLayout }));
   }, [merchantSlug]);
 
   useEffect(() => {
@@ -463,9 +496,10 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
     setError(null);
     setSaved(false);
     if (settings.halalCertified === true && !settings.halalCertificateUrl.trim()) {
-      setError("Upload your halal certificate when declaring Halal certified.");
+      const message = "Upload your halal certificate when declaring Halal certified.";
+      setError(message);
       setSaving(false);
-      return;
+      throw new Error(message);
     }
     try {
       await merchantApi(`/api/merchant/${merchantSlug}/settings`, {
@@ -516,12 +550,24 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
         }),
       });
       setSaved(true);
+      setSettingsBaseline(JSON.stringify({ settings, receiptLayout }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
+      throw err;
     } finally {
       setSaving(false);
     }
   }
+
+  useUnsavedChangesGuard({
+    isDirty: settingsDirty,
+    onSave: async () => {
+      await saveSettings();
+    },
+    onDiscard: () => {
+      void load();
+    },
+  });
 
   const policyDefaults = useCallback(
     () =>
@@ -543,9 +589,9 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
         tab !== "flow" ? (
         <button
           type="button"
-          onClick={saveSettings}
+          onClick={() => void saveSettings().catch(() => {})}
           disabled={saving}
-          className="bg-primary px-5 py-2.5 font-display text-headline-sm text-on-primary disabled:opacity-50"
+          className={manusHeaderPrimaryBtnClass}
         >
           {saving ? "Saving…" : "Save settings"}
         </button>
@@ -617,12 +663,12 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
                     <p className="text-body-md text-on-surface">
                       Square or wide logo works best. PNG, JPG, WebP, or SVG.
                     </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-nowrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => logoInputRef.current?.click()}
                         disabled={uploadingLogo}
-                        className="inline-flex items-center gap-2 bg-primary px-4 py-2 font-display text-eyebrow uppercase text-on-primary disabled:opacity-50"
+                        className={manusHeaderPrimaryBtnClass}
                       >
                         <Icon name="upload" className="text-base" />
                         {uploadingLogo ? "Uploading…" : settings.logoUrl ? "Replace logo" : "Upload logo"}
@@ -631,7 +677,7 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
                         <button
                           type="button"
                           onClick={() => updateField("logoUrl", "")}
-                          className="border border-surface-container-highest px-4 py-2 font-display text-eyebrow uppercase text-on-surface-variant"
+                          className={manusHeaderBtnClass}
                         >
                           Remove
                         </button>

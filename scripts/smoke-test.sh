@@ -88,10 +88,14 @@ fi
 auth() { curl -s -b "$COOKIE_JAR" "$@"; }
 
 # --- Merchant APIs ---
-for path in settings menu orders customers analytics campaigns tables reward-levels reports "reports/compare?periodDays=7" reports/intelligence team; do
+for path in settings menu orders customers analytics campaigns tables reward-levels reports "reports/compare?periodDays=7" reports/intelligence team stamps; do
   code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$BASE_URL/api/merchant/$MERCHANT_SLUG/$path")
   [ "$code" = "200" ] && pass "GET /api/merchant/$MERCHANT_SLUG/$path ($code)" || fail "GET $path expected 200 got $code"
 done
+
+# --- Public stamps progress ---
+stamps_prog=$(http_code "$BASE_URL/api/merchant/$MERCHANT_SLUG/stamps/progress")
+[ "$stamps_prog" = "200" ] && pass "Stamps progress API ($stamps_prog)" || fail "Stamps progress expected 200 got $stamps_prog"
 
 # --- Subdomain rewrite (Host: demo-cafe.localhost) ---
 sub_code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: demo-cafe.localhost" "$BASE_URL/")

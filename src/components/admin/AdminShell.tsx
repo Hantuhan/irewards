@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
+import {
+  UnsavedChangesProvider,
+  useUnsavedChanges,
+} from "@/components/admin/unsaved-changes";
 import {
   dashboardRoutes,
   type AdminSection,
@@ -37,7 +42,15 @@ const navItems: { id: AdminSection; label: string; icon: string }[] = [
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 
-export function AdminShell({
+export function AdminShell(props: AdminShellProps) {
+  return (
+    <UnsavedChangesProvider>
+      <AdminShellInner {...props} />
+    </UnsavedChangesProvider>
+  );
+}
+
+function AdminShellInner({
   merchantSlug,
   active,
   title,
@@ -48,6 +61,8 @@ export function AdminShell({
   hideHeader = false,
 }: AdminShellProps) {
   const routes = dashboardRoutes(merchantSlug);
+  const router = useRouter();
+  const { isDirty, requestLeave } = useUnsavedChanges();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
@@ -77,11 +92,26 @@ export function AdminShell({
   ) => {
     const collapsed = options?.collapsed ?? false;
     const isActive = active === item.id;
+    const href = hrefFor(item.id);
     return (
       <Link
         key={item.id}
-        href={hrefFor(item.id)}
-        onClick={options?.onNavigate}
+        href={href}
+        onClick={(event) => {
+          if (isActive) {
+            options?.onNavigate?.();
+            return;
+          }
+          if (!isDirty()) {
+            options?.onNavigate?.();
+            return;
+          }
+          event.preventDefault();
+          requestLeave(() => {
+            options?.onNavigate?.();
+            router.push(href);
+          });
+        }}
         title={item.label}
         aria-label={item.label}
         className={`group/nav relative flex w-full min-h-11 items-center rounded-sm transition-colors ${
@@ -120,25 +150,53 @@ export function AdminShell({
         }`}
       >
         <div
-          className={`flex shrink-0 items-center border-b border-surface-container-highest ${SHELL_HEADER_HEIGHT} ${
-            sidebarExpanded ? "px-4" : "justify-center px-2"
+          className={`flex shrink-0 flex-col border-b border-surface-container-highest ${
+            sidebarExpanded ? "px-3" : "px-2"
           }`}
         >
-          <div className={`flex items-center ${sidebarExpanded ? "gap-3" : "justify-center"}`}>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-surface-container-highest bg-surface-container">
-              <Icon name="storefront" className="text-primary" />
+          <div
+            className={`flex items-center ${SHELL_HEADER_HEIGHT} ${
+              sidebarExpanded ? "justify-between gap-2" : "justify-center"
+            }`}
+          >
+            <div className={`flex min-w-0 items-center ${sidebarExpanded ? "gap-3" : "justify-center"}`}>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-surface-container-highest bg-surface-container">
+                <Icon name="storefront" className="text-primary" />
+              </div>
+              {sidebarExpanded && (
+                <div className="min-w-0">
+                  <h1 className="truncate font-display text-headline-sm font-bold text-primary">
+                    {merchantSlug}
+                  </h1>
+                  <p className="mt-1 font-mono text-label-mono uppercase tracking-widest text-on-surface-variant">
+                    Merchant SaaS
+                  </p>
+                </div>
+              )}
             </div>
             {sidebarExpanded && (
-              <div className="min-w-0">
-                <h1 className="truncate font-display text-headline-sm font-bold text-primary">
-                  {merchantSlug}
-                </h1>
-                <p className="mt-1 font-mono text-label-mono uppercase tracking-widest text-on-surface-variant">
-                  Merchant SaaS
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="flex h-10 w-10 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary"
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+              >
+                <Icon name="chevron_left" className="text-xl" />
+              </button>
             )}
           </div>
+          {!sidebarExpanded && (
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="mb-2 flex w-full min-h-11 items-center justify-center text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary"
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+            >
+              <Icon name="chevron_right" className="text-xl" />
+            </button>
+          )}
         </div>
 
         <nav className={`flex flex-1 flex-col gap-0.5 overflow-y-auto py-3 ${sidebarExpanded ? "px-3" : "px-2"}`}>
@@ -150,25 +208,14 @@ export function AdminShell({
         >
           <button
             type="button"
-            onClick={toggleSidebar}
-            className={`flex w-full min-h-11 items-center text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary ${
-              sidebarExpanded ? "gap-3 px-4 py-2" : "justify-center px-0 py-2.5"
-            }`}
-            aria-label={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-            title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-          >
-            <Icon
-              name={sidebarExpanded ? "chevron_left" : "chevron_right"}
-              className="pointer-events-none shrink-0 text-xl"
-            />
-            {sidebarExpanded && <span className="text-body-md">Collapse</span>}
-          </button>
-
-          <button
-            type="button"
-            onClick={async () => {
-              await fetch("/api/merchant/auth/login", { method: "DELETE", credentials: "include" });
-              window.location.href = "/login";
+            onClick={() => {
+              requestLeave(async () => {
+                await fetch("/api/merchant/auth/login", {
+                  method: "DELETE",
+                  credentials: "include",
+                });
+                window.location.href = "/login";
+              });
             }}
             title="Sign out"
             aria-label="Sign out"
@@ -182,7 +229,7 @@ export function AdminShell({
         </div>
       </aside>
 
-      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden admin-manus">
         <div className="flex items-center justify-between border-b border-surface-container-highest bg-surface-container-lowest px-4 py-3 md:hidden">
           <button
             type="button"
@@ -206,7 +253,10 @@ export function AdminShell({
               aria-label="Close navigation"
               onClick={() => setMobileNavOpen(false)}
             />
-            <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-surface-container-lowest py-6 shadow-xl">
+            <aside
+              className="relative flex h-full w-72 max-w-[85vw] flex-col bg-surface-container-lowest py-6 shadow-xl"
+              style={{ ["--color-primary" as string]: "#000000" }}
+            >
               <div className="mb-4 flex items-center justify-between px-4">
                 <p className="font-display text-headline-sm font-bold text-primary">Dashboard</p>
                 <button type="button" onClick={() => setMobileNavOpen(false)} aria-label="Close">
@@ -222,15 +272,17 @@ export function AdminShell({
 
         {!hideHeader && (
         <header
-          className={`flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-surface-container-highest bg-surface-container-lowest px-6 md:px-8 ${SHELL_HEADER_HEIGHT}`}
+          className={`flex shrink-0 items-center justify-between gap-4 border-b border-surface-container-highest bg-surface-container-lowest px-6 md:px-8 ${SHELL_HEADER_HEIGHT}`}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
               {eyebrow}
             </p>
-            <h1 className="font-display text-headline-md text-primary">{title}</h1>
+            <h1 className="truncate font-display text-headline-md text-primary">{title}</h1>
           </div>
-          {headerAction}
+          {headerAction ? (
+            <div className="flex shrink-0 flex-nowrap items-center gap-2">{headerAction}</div>
+          ) : null}
         </header>
         )}
         <main

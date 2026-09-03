@@ -6,6 +6,7 @@ import {
   listPromos,
   updatePromo,
 } from "@/lib/db/merchant-repository";
+import { promoDeactivateBlocker } from "@/lib/campaigns/campaign-voucher";
 import { verifyMerchantAccess } from "@/lib/merchant/access";
 
 type RouteContext = { params: Promise<{ slug: string }> };
@@ -33,6 +34,7 @@ export async function GET(request: Request, context: RouteContext) {
         minSpendCents: p.min_spend_cents,
         expiresAt: p.expires_at,
         active: p.active,
+        campaignId: p.campaign_id ?? null,
       })),
     });
   } catch (error) {
@@ -99,6 +101,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const body = patchSchema.parse(await request.json());
+
+    if (body.active === false) {
+      const blocker = await promoDeactivateBlocker(merchant.id, body.promoId);
+      if (blocker) {
+        return NextResponse.json({ error: blocker }, { status: 409 });
+      }
+    }
+
     const promo = await updatePromo(merchant.id, body.promoId, {
       ...(body.active !== undefined && { active: body.active }),
       ...(body.name !== undefined && { name: body.name }),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { z, ZodError } from "zod";
+import { formatZodError } from "@/lib/api/zod-error";
 import { getMerchantBySlug } from "@/lib/db/repository";
 import {
   createPointsRule,
@@ -30,6 +31,12 @@ const ruleBodySchema = z.object({
   itemConditions: z.array(itemSchema),
 });
 
+function ruleErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ZodError) return formatZodError(error);
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     const { slug } = await context.params;
@@ -45,7 +52,7 @@ export async function GET(request: Request, context: RouteContext) {
     const rules = await listPointsRules(merchant.id);
     return NextResponse.json({ rules });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load points rules";
+    const message = ruleErrorMessage(error, "Failed to load points rules");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -66,7 +73,7 @@ export async function POST(request: Request, context: RouteContext) {
     const rule = await createPointsRule(merchant.id, body);
     return NextResponse.json({ rule });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create rule";
+    const message = ruleErrorMessage(error, "Failed to create rule");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -92,7 +99,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const rule = await updatePointsRule(merchant.id, ruleId, patch);
     return NextResponse.json({ rule });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update rule";
+    const message = ruleErrorMessage(error, "Failed to update rule");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -115,7 +122,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     await deletePointsRule(merchant.id, body.ruleId);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to delete rule";
+    const message = ruleErrorMessage(error, "Failed to delete rule");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

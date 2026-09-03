@@ -3,11 +3,17 @@ import {
   getActiveJoinTokenForOrder,
   getCustomerById,
   getOrderById,
+  getRewardLevels,
 } from "@/lib/db/repository";
-import { getOrderItems } from "@/lib/db/merchant-repository";
+import {
+  getOrderItems,
+  listActiveMessagingCampaigns,
+} from "@/lib/db/merchant-repository";
+import { buildJoinOffer, pickWelcomeCampaign } from "@/lib/loyalty/join-offer";
 import { buildWhatsAppJoinUrl } from "@/lib/loyalty/join-token";
 import { adminDb } from "@/lib/db/admin";
 import { getCustomerTierForMerchant } from "@/lib/services/loyalty-points";
+import { getStampProgressForCustomer } from "@/lib/services/loyalty-stamps";
 import { buildReceiptOrderFromDb } from "@/lib/receipt/build-order-from-db";
 
 type RouteContext = { params: Promise<{ orderId: string }> };
@@ -48,7 +54,19 @@ export async function GET(_request: Request, context: RouteContext) {
         ? buildWhatsAppJoinUrl(merchant.whatsapp_number, joinToken)
         : null;
 
+    const [welcomeCampaigns, rewardLevels] = await Promise.all([
+      listActiveMessagingCampaigns(order.merchant_id),
+      getRewardLevels(order.merchant_id),
+    ]);
+    const baseLevel = rewardLevels.find((l) => l.level_number === 1) ?? rewardLevels[0];
+    const joinOffer = buildJoinOffer({
+      campaign: pickWelcomeCampaign(welcomeCampaigns),
+      fallbackWelcomePoints: Number(baseLevel?.welcome_points ?? 0),
+      merchantName: merchant?.name ?? null,
+    });
+
     let tier = null;
+    let stamps = null;
     if (order.customer_id) {
       const customer = await getCustomerById(order.customer_id);
       if (customer?.is_member) {
@@ -63,6 +81,26 @@ export async function GET(_request: Request, context: RouteContext) {
           pointsToNextLevel: snapshot.pointsToNextLevel,
           nextLevelName: snapshot.next?.name ?? null,
         };
+        const progress = await getStampProgressForCustomer(
+          order.merchant_id,
+          customer.id,
+        );
+        if (progress.enabled) {
+          stamps = {
+            enabled: true,
+            filled: progress.filled,
+            size: progress.size,
+            remaining: progress.remaining,
+            rewardLabel: progress.rewardLabel,
+            voucher: progress.voucher
+              ? {
+                  name: progress.voucher.name,
+                  code: progress.voucher.code,
+                  description: progress.voucher.description,
+                }
+              : null,
+          };
+        }
       }
     }
 
@@ -135,7 +173,9 @@ export async function GET(_request: Request, context: RouteContext) {
       tableNumber,
       joinToken,
       whatsappJoinUrl,
+      joinOffer,
       tier,
+      stamps,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load order";

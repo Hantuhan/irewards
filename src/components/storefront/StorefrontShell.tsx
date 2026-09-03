@@ -9,7 +9,11 @@ import {
   StorefrontCategoryPills,
   StorefrontMenuHeader,
   StorefrontMenuItemRow,
+  StorefrontStampProgress,
+  StorefrontUsualCard,
+  StorefrontBannerVisual,
 } from "@/components/storefront/StorefrontMenuLayout";
+import { HorizontalScrollCue } from "@/components/ui/HorizontalScrollCue";
 import { useStorefrontMenu } from "@/hooks/useStorefrontMenu";
 import { useStorefrontLocale } from "@/hooks/useStorefrontLocale";
 import { useTableCart } from "@/hooks/useTableCart";
@@ -20,9 +24,11 @@ import { fetchStorefrontMenuItem } from "@/lib/menu/storefront";
 import { Icon } from "@/components/ui/Icon";
 import { useMemberSession, type MemberProfile } from "@/hooks/useMemberSession";
 import { MobileShell } from "@/components/ui/MobileShell";
+import { formatMultiplier } from "@/lib/format/number";
 
-const PREVIEW_MEMBER_POINTS = 120;
-const PREVIEW_MEMBER_TIER = "Gold";
+const PREVIEW_MEMBER_POINTS = 1450;
+const PREVIEW_MEMBER_TIER = "Silken";
+const PREVIEW_MEMBER_MULT = 1.5;
 
 type StorefrontShellProps = {
   merchantSlug: string;
@@ -33,6 +39,28 @@ type StorefrontShellProps = {
   previewMember?: boolean;
 };
 
+type StampSnap = {
+  filled: number;
+  size: number;
+  rewardLabel: string | null;
+  cartNudgeEnabled: boolean;
+  qualifyingItemSlugs: string[];
+};
+type TierSnap = { name: string; pointsMultiplier: number };
+
+const PREVIEW_STAMPS: StampSnap = {
+  filled: 3,
+  size: 8,
+  rewardLabel: null,
+  cartNudgeEnabled: true,
+  qualifyingItemSlugs: [],
+};
+
+function firstName(displayName: string | null | undefined): string | null {
+  if (!displayName?.trim()) return null;
+  return displayName.trim().split(/\s+/)[0] ?? null;
+}
+
 export function StorefrontShell({
   merchantSlug,
   tableId,
@@ -40,13 +68,27 @@ export function StorefrontShell({
   previewMember = false,
 }: StorefrontShellProps) {
   const { lang, setLang, copy } = useStorefrontLocale(merchantSlug, ["en", "zh", "ms"]);
-  const { categories, allItems, badges, languages, merchantName, merchantCurrency, loading: menuLoading, error: menuError } =
-    useStorefrontMenu(merchantSlug, lang);
-  const { cartCount, cartTotal, addItem, addConfiguredItem, quantityInCart } = useTableCart(
-    merchantSlug,
-    tableId,
+  const {
+    categories,
     allItems,
-  );
+    badges,
+    languages,
+    merchantName,
+    merchantCurrency,
+    pointsProgramEnabled,
+    stampsProgramEnabled,
+    loading: menuLoading,
+    error: menuError,
+  } = useStorefrontMenu(merchantSlug, lang);
+  const {
+    cartCount,
+    cartTotal,
+    cartLines,
+    addItem,
+    addConfiguredItem,
+    quantityInCart,
+    serviceType,
+  } = useTableCart(merchantSlug, tableId, allItems);
 
   const [activeItem, setActiveItem] = useState<StorefrontMenuItem | null>(null);
   const [sheetMode, setSheetMode] = useState<"detail" | "customize" | null>(null);
@@ -64,11 +106,78 @@ export function StorefrontShell({
   const [phonePrompt, setPhonePrompt] = useState("");
   const [phoneBusy, setPhoneBusy] = useState(false);
   const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
+  const [showLoadPoints, setShowLoadPoints] = useState(false);
+  const [stamps, setStamps] = useState<StampSnap | null>(null);
+  const [tier, setTier] = useState<TierSnap | null>(null);
+  const [upsellDismissed, setUpsellDismissed] = useState(false);
+  const [usualExpanded, setUsualExpanded] = useState(true);
 
   const routes = customerRoutes(merchantSlug, tableId);
 
   useEffect(() => {
-    fetch(`/api/merchant/${merchantSlug}/campaigns/banner`)
+    if (previewMember) {
+      setStamps(PREVIEW_STAMPS);
+      setTier({ name: PREVIEW_MEMBER_TIER, pointsMultiplier: PREVIEW_MEMBER_MULT });
+      return;
+    }
+
+    const customerId =
+      typeof window !== "undefined"
+        ? member?.id ?? localStorage.getItem(`irewards-member:${merchantSlug}`)
+        : null;
+    const qs = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
+    fetch(`/api/merchant/${merchantSlug}/stamps/progress${qs}`)
+      .then((res) => res.json())
+      .then((json: {
+        stampsProgramEnabled?: boolean;
+        progress?: {
+          enabled?: boolean;
+          filled?: number;
+          size?: number;
+          rewardLabel?: string | null;
+          cartNudge?: {
+            enabled?: boolean;
+            qualifyingItemSlugs?: string[];
+          };
+        };
+      }) => {
+        if (!json.stampsProgramEnabled || !json.progress?.enabled || !customerId) {
+          setStamps(null);
+          return;
+        }
+        setStamps({
+          filled: json.progress.filled ?? 0,
+          size: json.progress.size ?? 6,
+          rewardLabel: json.progress.rewardLabel ?? null,
+          cartNudgeEnabled: Boolean(json.progress.cartNudge?.enabled),
+          qualifyingItemSlugs: json.progress.cartNudge?.qualifyingItemSlugs ?? [],
+        });
+      })
+      .catch(() => setStamps(null));
+
+    if (!customerId) {
+      setTier(null);
+      return;
+    }
+    fetch(`/api/customers/${customerId}/tier`)
+      .then((res) => res.json())
+      .then((json: {
+        currentLevel?: { name: string; pointsMultiplier: number };
+      }) => {
+        if (!json.currentLevel) {
+          setTier(null);
+          return;
+        }
+        setTier({
+          name: json.currentLevel.name,
+          pointsMultiplier: Number(json.currentLevel.pointsMultiplier ?? 1),
+        });
+      })
+      .catch(() => setTier(null));
+  }, [merchantSlug, member?.id, previewMember]);
+
+  useEffect(() => {
+    fetch(`/api/merchant/${merchantSlug}/campaigns/banner`, { credentials: "include" })
       .then((res) => res.json())
       .then((json: {
         banner?: {
@@ -79,13 +188,18 @@ export function StorefrontShell({
         } | null;
       }) => {
         if (json.banner) setBanner(json.banner);
+        else setBanner(null);
       })
-      .catch(() => undefined);
-  }, [merchantSlug]);
+      .catch(() => setBanner(null));
+  }, [merchantSlug, member?.id]);
 
   useEffect(() => {
     if (categories[0] && !activeCategory) setActiveCategory(categories[0].id);
   }, [categories, activeCategory]);
+
+  useEffect(() => {
+    setUpsellDismissed(false);
+  }, [cartLines.length]);
 
   const previewMemberProfile = useMemo((): MemberProfile | null => {
     if (!previewMember || allItems.length === 0) return null;
@@ -96,17 +210,104 @@ export function StorefrontShell({
       tierPoints: 450,
       usualOrder: picks.map((item) => ({ name: item.name, quantity: 1 })),
       favoriteItem: picks[0]?.name ?? null,
+      displayName: "Alex",
     };
   }, [previewMember, allItems]);
 
   const activeMember = previewMember ? previewMemberProfile : member;
   const usualItems = activeMember?.usualOrder ?? [];
   const showMemberChrome = Boolean(activeMember) && (!embed || previewMember);
+  const memberFirst = firstName(activeMember?.displayName) ?? (previewMember ? "Alex" : null);
 
-  const filteredMenu = useMemo(
-    () => categories.find((c) => c.id === activeCategory)?.items ?? [],
-    [categories, activeCategory],
+  const filteredMenu = useMemo(() => {
+    const items = categories.find((c) => c.id === activeCategory)?.items ?? [];
+    return items.filter((item) =>
+      serviceType === "takeaway"
+        ? item.availableTakeaway !== false
+        : item.availableDineIn !== false,
+    );
+  }, [categories, activeCategory, serviceType]);
+
+  const cartItemIds = useMemo(
+    () => new Set(cartLines.map((line) => line.itemId)),
+    [cartLines],
   );
+
+  /** Soft upsell for the floating checkout bar — stamp nudge from backend qualifying items. */
+  const cartUpsell = useMemo(() => {
+    if (cartCount === 0 || upsellDismissed) return null;
+    if (!stampsProgramEnabled || !stamps?.cartNudgeEnabled) return null;
+    if (stamps.qualifyingItemSlugs.length === 0) return null;
+
+    const qualifying = new Set(stamps.qualifyingItemSlugs);
+    const candidate = allItems.find(
+      (i) =>
+        !cartItemIds.has(i.id) &&
+        (qualifying.has(i.id) || qualifying.has(i.menuItemId)),
+    );
+    if (!candidate) return null;
+
+    return {
+      item: candidate,
+      reason: `Add ${candidate.name} for +1 stamp?`,
+    };
+  }, [
+    allItems,
+    cartCount,
+    cartItemIds,
+    stamps,
+    stampsProgramEnabled,
+    upsellDismissed,
+  ]);
+
+  const serviceGuestLine = useMemo(() => {
+    const service = serviceType === "takeaway" ? "Takeaway" : "Dine-in";
+    const who = memberFirst ?? (activeMember ? "Member" : copy.guest);
+    return `${service} · ${who}`.toUpperCase();
+  }, [serviceType, memberFirst, activeMember, copy.guest]);
+
+  function submitLoadPoints(e: React.FormEvent) {
+    e.preventDefault();
+    if (!phonePrompt.trim() || phoneBusy) return;
+    setPhoneBusy(true);
+    setPhoneMsg(null);
+    const raw = phonePrompt.trim();
+    const phone =
+      raw.startsWith("+") || raw.startsWith("0") ? raw : `+60${raw.replace(/\s/g, "")}`;
+    void fetch("/api/customer/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ merchantSlug, phone }),
+    })
+      .then(async (res) => {
+        const data = (await res.json()) as {
+          found?: boolean;
+          message?: string;
+          error?: string;
+          member?: { id: string; points: number; tierName: string };
+        };
+        if (!res.ok) throw new Error(data.error ?? "Lookup failed");
+        if (!data.found) {
+          setPhoneMsg(data.message ?? "No member found for that number.");
+          return;
+        }
+        if (data.member?.id) {
+          try {
+            localStorage.setItem(`irewards-member:${merchantSlug}`, data.member.id);
+          } catch {
+            /* ignore */
+          }
+        }
+        setShowLoadPoints(false);
+        setPhonePrompt("");
+        await refresh();
+      })
+      .catch((err) => {
+        setPhoneMsg(err instanceof Error ? err.message : "Lookup failed");
+      })
+      .finally(() => setPhoneBusy(false));
+  }
 
   function openItemDetail(item: StorefrontMenuItem) {
     setActiveItem(item);
@@ -141,8 +342,8 @@ export function StorefrontShell({
     setDetailError(null);
   }
 
-  function handleQuickAdd(item: StorefrontMenuItem, e: React.MouseEvent) {
-    e.stopPropagation();
+  function handleQuickAdd(item: StorefrontMenuItem, e?: React.MouseEvent) {
+    e?.stopPropagation();
     if ((item.modifierGroups?.length ?? 0) > 0) {
       openCustomize(item);
       return;
@@ -175,153 +376,194 @@ export function StorefrontShell({
     );
   }
 
-  const guestLabel = activeMember
-    ? previewMember
-      ? `${PREVIEW_MEMBER_TIER} · ${activeMember.points} ${copy.pts}`
-      : `${activeMember.points} ${copy.pts}`
-    : copy.guest;
-
   return (
     <MobileShell>
       <StorefrontMenuHeader
         storeName={merchantName}
         tableId={tableId}
-        guestLabel={guestLabel}
+        serviceGuestLine={serviceGuestLine}
         languages={languages}
         language={lang}
         onLanguageChange={setLang}
         copy={copy}
       />
 
-      {showMemberChrome && (
-        <div className="mx-6 mt-4 border border-primary bg-surface-container-low px-4 py-3">
-          <p className="font-display text-headline-sm text-primary">Welcome back!</p>
-          <p className="mt-0.5 text-body-md text-on-surface-variant">
-            {previewMember
-              ? `${PREVIEW_MEMBER_TIER} member · ${activeMember!.points} points`
-              : `${activeMember!.points} points available`}
-          </p>
-        </div>
-      )}
-
-      {!showMemberChrome && !embed && !previewMember && (
-        <div className="mx-6 mt-4 border border-surface-container-highest bg-surface-container-lowest px-4 py-3">
-          <p className="font-display text-headline-sm text-primary">Returning member?</p>
-          <p className="mt-0.5 text-[12px] text-on-surface-variant">
-            Enter the mobile you used on WhatsApp to load your points and usual order.
-          </p>
-          <form
-            className="mt-3 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!phonePrompt.trim() || phoneBusy) return;
-              setPhoneBusy(true);
-              setPhoneMsg(null);
-              void fetch("/api/customer/join", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ merchantSlug, phone: phonePrompt.trim() }),
-              })
-                .then(async (res) => {
-                  const data = (await res.json()) as {
-                    found?: boolean;
-                    message?: string;
-                    error?: string;
-                    member?: { points: number; tierName: string };
-                  };
-                  if (!res.ok) throw new Error(data.error ?? "Lookup failed");
-                  if (!data.found) {
-                    setPhoneMsg(data.message ?? "No member found for that number.");
-                    return;
-                  }
-                  setPhoneMsg(`Welcome back · ${data.member?.tierName ?? "member"} · ${data.member?.points ?? 0} pts`);
-                  await refresh();
-                })
-                .catch((err) => {
-                  setPhoneMsg(err instanceof Error ? err.message : "Lookup failed");
-                })
-                .finally(() => setPhoneBusy(false));
-            }}
-          >
-            <input
-              type="tel"
-              inputMode="tel"
-              placeholder="+60…"
-              value={phonePrompt}
-              onChange={(e) => setPhonePrompt(e.target.value)}
-              className="h-9 min-w-0 flex-1 border border-surface-container-highest bg-white px-3 text-[13px] text-on-surface"
-            />
-            <button
-              type="submit"
-              disabled={phoneBusy}
-              className="h-9 shrink-0 bg-primary px-3 text-[12px] font-medium text-on-primary disabled:opacity-50"
-            >
-              {phoneBusy ? "…" : "Load"}
-            </button>
-          </form>
-          {phoneMsg && (
-            <p className="mt-2 text-[11px] text-on-surface-variant">{phoneMsg}</p>
+      {/* Guests: campaign banner is the hero chrome (no loyalty strip). */}
+      {!showMemberChrome && !embed && banner && (
+        <div className="mx-5 mt-3 overflow-hidden border border-surface-container-highest">
+          {banner.linkUrl ? (
+            <a href={banner.linkUrl} target="_blank" rel="noopener noreferrer" className="block">
+              <StorefrontBannerVisual banner={banner} />
+            </a>
+          ) : (
+            <StorefrontBannerVisual banner={banner} />
           )}
         </div>
       )}
 
-      {!embed && banner && (
-        <div className="mx-6 mt-4 overflow-hidden border border-surface-container-highest">
-          {banner.imageUrl ? (
-            <div className="relative aspect-[3.2/1] w-full bg-surface-container-low">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={banner.imageUrl} alt={banner.title} className="h-full w-full object-cover" />
-              {(banner.title || banner.text) && (
-                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/70 via-black/20 to-transparent p-4">
-                  <p className="font-display text-eyebrow uppercase text-white">{banner.title}</p>
-                  {banner.text && <p className="mt-1 text-body-md text-white/90">{banner.text}</p>}
-                </div>
+      {showMemberChrome && (
+        <section className="px-5 pt-4">
+          <h2 className="font-display text-[28px] font-bold leading-none tracking-tight text-on-surface">
+            Welcome{memberFirst ? ` ${memberFirst}` : ""}
+          </h2>
+
+          {pointsProgramEnabled && (
+            <div className="mt-4 flex items-center justify-between gap-3 border border-surface-container-highest bg-white px-3.5 py-3.5">
+              <div className="min-w-0">
+                <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-on-surface-variant">
+                  Points balance
+                </p>
+                <p className="mt-0.5 font-display text-[15px] font-semibold text-on-surface">
+                  {activeMember!.points.toLocaleString()} pts
+                </p>
+              </div>
+              {tier && tier.pointsMultiplier > 1 && (
+                <span className="shrink-0 border border-on-surface bg-white px-2 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-on-surface">
+                  {tier.name} {formatMultiplier(tier.pointsMultiplier)}x boost
+                </span>
+              )}
+              {tier && tier.pointsMultiplier <= 1 && (
+                <span className="shrink-0 border border-on-surface/25 bg-white px-2 py-1.5 font-mono text-[9px] font-medium uppercase tracking-[0.08em] text-on-surface">
+                  {tier.name}
+                </span>
               )}
             </div>
-          ) : (
-            <div className="bg-surface-container-low p-4">
-              <p className="font-display text-eyebrow uppercase text-primary">{banner.title}</p>
-              {banner.text && <p className="mt-1 text-body-md">{banner.text}</p>}
+          )}
+
+          {stampsProgramEnabled && stamps && (
+            <div className="mt-4">
+              <StorefrontStampProgress filled={stamps.filled} size={stamps.size} />
             </div>
+          )}
+        </section>
+      )}
+
+      {!showMemberChrome && !embed && !previewMember && (
+        <div className="px-5 pt-3">
+          {!showLoadPoints ? (
+            <button
+              type="button"
+              onClick={() => setShowLoadPoints(true)}
+              className="text-left text-[12px] text-on-surface-variant underline-offset-2 hover:text-on-surface hover:underline"
+            >
+              Returning member? Load your points
+            </button>
+          ) : (
+            <form onSubmit={submitLoadPoints} className="flex flex-col gap-2">
+              <div className="flex gap-1.5">
+                <span className="flex h-9 shrink-0 items-center border border-surface-container-highest bg-white px-2 font-mono text-[11px] text-on-surface-variant">
+                  +60
+                </span>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoFocus
+                  placeholder="12 345 6789"
+                  value={phonePrompt}
+                  onChange={(e) => setPhonePrompt(e.target.value)}
+                  className="h-9 min-w-0 flex-1 border border-surface-container-highest bg-white px-2.5 text-[13px] text-on-surface"
+                />
+                <button
+                  type="submit"
+                  disabled={phoneBusy}
+                  className="h-9 shrink-0 bg-primary px-3 text-[12px] font-medium text-on-primary disabled:opacity-50"
+                >
+                  {phoneBusy ? "…" : "Load"}
+                </button>
+              </div>
+              {phoneMsg && <p className="text-[11px] text-on-surface-variant">{phoneMsg}</p>}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLoadPoints(false);
+                  setPhoneMsg(null);
+                }}
+                className="self-start text-[11px] text-on-surface-variant"
+              >
+                Cancel
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Members: optional promo under loyalty chrome */}
+      {showMemberChrome && !embed && banner && (
+        <div className="mx-5 mt-4 overflow-hidden border border-surface-container-highest">
+          {banner.linkUrl ? (
+            <a href={banner.linkUrl} target="_blank" rel="noopener noreferrer" className="block">
+              <StorefrontBannerVisual banner={banner} />
+            </a>
+          ) : (
+            <StorefrontBannerVisual banner={banner} />
           )}
         </div>
       )}
 
       {showMemberChrome && usualItems.length > 0 && (
-        <div className="mx-6 mt-4 border border-primary bg-surface-container-low p-4">
-          <p className="font-mono text-label-mono uppercase text-primary">Your usual</p>
-          <ul className="mt-2 space-y-2">
-            {usualItems.map((item) => {
-              const menuItem = allItems.find((m) => m.name === item.name);
-              return (
-                <li key={item.name} className="flex items-center justify-between gap-2">
-                  <span className="text-body-md">
-                    {item.quantity}× {item.name}
-                  </span>
-                  {menuItem && (
-                    <button
-                      type="button"
-                      onClick={() => addItem(menuItem.id, item.quantity)}
-                      className="font-mono text-label-mono text-primary underline"
+        <section className="pt-5">
+          <button
+            type="button"
+            onClick={() => setUsualExpanded((open) => !open)}
+            aria-expanded={usualExpanded}
+            className="mb-2.5 flex w-full items-center justify-between gap-2 px-5 text-left"
+          >
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant">
+              Your usual
+              <span className="ml-1.5 normal-case tracking-normal text-on-surface-variant/70">
+                ({usualItems.length})
+              </span>
+            </span>
+            <Icon
+              name={usualExpanded ? "expand_less" : "expand_more"}
+              className="text-xl text-on-surface-variant"
+            />
+          </button>
+          {usualExpanded && (
+            <HorizontalScrollCue
+              className="px-5"
+              contentClassName="gap-3 pb-1"
+              fadeFromClass="from-surface-container-lowest"
+              controlClassName="border-surface-container-highest bg-surface-container-lowest"
+              ariaLabel="Your usual order"
+            >
+              {usualItems.map((usual) => {
+                const menuItem = allItems.find((m) => m.name === usual.name);
+                if (!menuItem) {
+                  return (
+                    <div
+                      key={usual.name}
+                      className="flex w-[148px] shrink-0 items-center border border-surface-container-highest px-3 py-4 text-[13px] text-on-surface-variant"
                     >
-                      Reorder
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+                      {usual.quantity}× {usual.name}
+                    </div>
+                  );
+                }
+                return (
+                  <StorefrontUsualCard
+                    key={usual.name}
+                    item={menuItem}
+                    subtitle={menuItem.description?.split(/[.\n]/)[0]?.trim() || null}
+                    currency={merchantCurrency}
+                    onOpen={() => openItemDetail(menuItem)}
+                    onAdd={() => handleQuickAdd(menuItem)}
+                  />
+                );
+              })}
+            </HorizontalScrollCue>
+          )}
+        </section>
       )}
 
-      <StorefrontCategoryPills
-        categories={categories}
-        activeCategory={activeCategory}
-        onSelect={setActiveCategory}
-      />
+      <div className="mt-2">
+        <StorefrontCategoryPills
+          categories={categories}
+          activeCategory={activeCategory}
+          onSelect={setActiveCategory}
+        />
+      </div>
 
-      <section className="flex flex-col gap-3 px-6 pb-32">
+      <section className={`px-5 ${cartCount > 0 && !embed ? "pb-44" : "pb-28"}`}>
         {filteredMenu.map((item) => (
           <StorefrontMenuItemRow
             key={item.id}
@@ -333,26 +575,56 @@ export function StorefrontShell({
             onAdd={(e) => handleQuickAdd(item, e)}
           />
         ))}
+        {filteredMenu.length === 0 && (
+          <p className="py-10 text-center text-[13px] text-on-surface-variant">
+            No items in this category.
+          </p>
+        )}
       </section>
 
       {!embed && cartCount > 0 && (
-        <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[382px] -translate-x-1/2 px-4">
-          <div className="flex items-center justify-between bg-primary p-4 text-on-primary shadow-xl">
-            <div className="flex flex-col">
-              <span className="font-mono text-label-mono text-secondary">
-                {cartCount} item{cartCount === 1 ? "" : "s"}
-              </span>
-              <span className="font-display text-headline-sm text-on-primary">
-                {formatMerchantPrice(cartTotal, merchantCurrency)}
-              </span>
+        <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[382px] -translate-x-1/2 px-4 pb-1">
+          <div className="overflow-hidden bg-primary text-on-primary shadow-[0_8px_28px_rgba(0,0,0,0.22)]">
+            {cartUpsell && (
+              <div className="flex items-center gap-2 border-b border-white/15 px-3 py-2">
+                <Icon name="auto_awesome" className="shrink-0 text-[15px] text-white/80" />
+                <p className="min-w-0 flex-1 truncate text-[12px] text-white/90">
+                  {cartUpsell.reason}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAdd(cartUpsell.item)}
+                  className="shrink-0 bg-white px-2.5 py-1 text-[11px] font-semibold text-on-surface"
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUpsellDismissed(true)}
+                  aria-label="Dismiss suggestion"
+                  className="shrink-0 text-white/50 hover:text-white"
+                >
+                  <Icon name="close" className="text-[14px]" />
+                </button>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/70">
+                  {cartCount} item{cartCount === 1 ? "" : "s"}
+                </p>
+                <p className="font-display text-[17px] font-semibold leading-tight text-on-primary">
+                  {formatMerchantPrice(cartTotal, merchantCurrency)}
+                </p>
+              </div>
+              <Link
+                href={routes.cart}
+                className="flex shrink-0 items-center gap-1 bg-white px-4 py-2.5 font-display text-[14px] font-semibold text-on-surface"
+              >
+                Pay
+                <Icon name="arrow_forward" className="text-[16px]" />
+              </Link>
             </div>
-            <Link
-              href={routes.cart}
-              className="flex items-center gap-2 bg-on-primary px-4 py-2 font-display text-headline-sm text-primary"
-            >
-              View cart
-              <Icon name="arrow_forward" className="text-xl" />
-            </Link>
           </div>
         </div>
       )}
@@ -374,9 +646,11 @@ export function StorefrontShell({
         <MenuItemDetailSheet
           item={activeItem}
           quantity={quantityInCart(activeItem.id)}
+          currency={merchantCurrency}
           loading={detailLoading}
           error={detailError}
           badgeCatalog={badges}
+          lang={lang}
           copy={copy}
           onClose={closeSheet}
           onAdd={() => handleDetailAdd(activeItem)}

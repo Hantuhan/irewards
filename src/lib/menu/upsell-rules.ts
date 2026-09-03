@@ -117,6 +117,21 @@ export function buildSuggestReason(
   return priceBit ?? "Popular add-on before you pay";
 }
 
+/** Merge AI picks into existing selection: keep curated links, fill remaining slots. */
+export function mergeMaxProfitLinks(
+  existing: UpsellLinkConfig[],
+  suggested: UpsellLinkConfig[],
+  max: number,
+): UpsellLinkConfig[] {
+  const bySlug = new Map(existing.map((l) => [l.slug, l]));
+  for (const link of suggested) {
+    if (bySlug.size >= max) break;
+    if (bySlug.has(link.slug)) continue;
+    bySlug.set(link.slug, link);
+  }
+  return [...bySlug.values()].slice(0, max);
+}
+
 export function sortUpsellLinks(links: UpsellLinkConfig[]): UpsellLinkConfig[] {
   return [...links].sort((a, b) => b.priority - a.priority);
 }

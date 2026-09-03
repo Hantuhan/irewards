@@ -1,5 +1,6 @@
 import type { MenuBadge } from "@/lib/menu/menu-badges";
 import type { CoffeeProfile } from "@/lib/menu/coffee-profile";
+import type { SimpleCategoryProfile } from "@/lib/menu/simple-category-profile";
 import type { ProgramLanguage } from "@/lib/i18n/program-locale";
 
 export type StorefrontMenuItem = {
@@ -17,11 +18,16 @@ export type StorefrontMenuItem = {
   ingredients?: string | null;
   notes?: string | null;
   ingredientIds?: string[];
+  mainIngredientIds?: string[];
   coffeeProfile?: CoffeeProfile;
+  simpleCategoryProfile?: SimpleCategoryProfile;
+
   upsellLinks?: import("@/lib/menu/upsell-rules").UpsellLinkConfig[];
   upsellItemIds?: string[];
   modifierGroups?: import("@/lib/menu/modifiers").ModifierGroup[];
   takeawayCharge?: import("@/lib/menu/takeaway-charge").TakeawayChargeConfig;
+  availableDineIn?: boolean;
+  availableTakeaway?: boolean;
 };
 
 export type StorefrontCategory = {
@@ -37,6 +43,10 @@ export type StorefrontMenuResponse = {
   merchant: {
     name: string;
     currency: "MYR" | "SGD";
+    pointsProgramEnabled?: boolean;
+    stampsProgramEnabled?: boolean;
+    pointsPerRinggit?: number;
+    pointsRedeemCentsPerPoint?: number;
   };
 };
 
@@ -54,7 +64,14 @@ export async function fetchStorefrontMenu(
     categories: json.categories ?? [],
     badges: json.badges ?? [],
     languages: json.languages ?? ["en"],
-    merchant: json.merchant ?? { name: merchantSlug, currency: "MYR" },
+    merchant: json.merchant ?? {
+      name: merchantSlug,
+      currency: "MYR",
+      pointsProgramEnabled: true,
+      stampsProgramEnabled: false,
+      pointsPerRinggit: 0.1,
+      pointsRedeemCentsPerPoint: 10,
+    },
   };
 }
 

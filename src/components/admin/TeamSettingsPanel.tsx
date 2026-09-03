@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { merchantApi } from "@/lib/merchant/fetch";
+import { MAX_MERCHANT_USERS } from "@/lib/merchant/team-limits";
 import { merchantPublicOrigin } from "@/lib/tenancy/host";
 
 type TeamMember = {
@@ -19,6 +20,8 @@ type TeamPanelProps = {
 
 export function TeamSettingsPanel({ merchantSlug }: TeamPanelProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [limit, setLimit] = useState(MAX_MERCHANT_USERS);
+  const [used, setUsed] = useState(0);
   const [subdomain, setSubdomain] = useState(merchantSlug);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +35,15 @@ export function TeamSettingsPanel({ merchantSlug }: TeamPanelProps) {
     setLoading(true);
     setError(null);
     try {
-      const data = await merchantApi<{ members: TeamMember[]; subdomain: string }>(
-        `/api/merchant/${merchantSlug}/team`,
-      );
+      const data = await merchantApi<{
+        members: TeamMember[];
+        subdomain: string;
+        limit?: number;
+        used?: number;
+      }>(`/api/merchant/${merchantSlug}/team`);
       setMembers(data.members);
+      setLimit(data.limit ?? MAX_MERCHANT_USERS);
+      setUsed(data.used ?? data.members.filter((m) => m.active).length);
       setSubdomain(data.subdomain || merchantSlug);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load team");
@@ -50,6 +58,10 @@ export function TeamSettingsPanel({ merchantSlug }: TeamPanelProps) {
 
   async function invite(e: React.FormEvent) {
     e.preventDefault();
+    if (atCap) {
+      setError(`This cafe already has ${limit} users. Deactivate someone to add another.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -83,6 +95,8 @@ export function TeamSettingsPanel({ merchantSlug }: TeamPanelProps) {
   }
 
   const storeUrl = merchantPublicOrigin(subdomain);
+  const remaining = Math.max(0, limit - used);
+  const atCap = remaining <= 0;
 
   return (
     <div className="space-y-8">
@@ -97,7 +111,7 @@ export function TeamSettingsPanel({ merchantSlug }: TeamPanelProps) {
       <section>
         <h2 className="font-display text-headline-sm text-primary">Team</h2>
         <p className="mt-1 text-body-md text-on-surface-variant">
-          Multiple logins for the same cafe — owner, manager, or staff.
+          Up to {limit} logins for this cafe — owner, manager, or staff. {used} of {limit} in use.
         </p>
         {loading && <p className="mt-3">Loading team…</p>}
         {error && <p className="mt-3 text-body-md text-on-surface-variant">{error}</p>}
@@ -130,6 +144,15 @@ export function TeamSettingsPanel({ merchantSlug }: TeamPanelProps) {
 
       <section className="border border-surface-container-highest bg-surface-container-low p-4">
         <h2 className="font-display text-headline-sm text-primary">Invite staff</h2>
+        {atCap ? (
+          <p className="mt-2 text-body-md text-on-surface-variant">
+            This cafe already has {limit} users. Deactivate someone to add another.
+          </p>
+        ) : (
+          <p className="mt-2 text-body-md text-on-surface-variant">
+            {remaining} seat{remaining === 1 ? "" : "s"} left.
+          </p>
+        )}
         <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(e) => void invite(e)}>
           <label className="block text-body-md">
             Name
@@ -175,10 +198,10 @@ export function TeamSettingsPanel({ merchantSlug }: TeamPanelProps) {
           <div className="sm:col-span-2">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || atCap}
               className="border border-primary bg-primary px-4 py-2 font-display text-eyebrow uppercase text-on-primary disabled:opacity-50"
             >
-              {saving ? "Inviting…" : "Add team member"}
+              {saving ? "Inviting…" : atCap ? "Team full" : "Add team member"}
             </button>
           </div>
         </form>

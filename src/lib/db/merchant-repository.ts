@@ -26,11 +26,13 @@ import {
   sanitizeIngredientIds,
   type MenuIngredientPreset,
 } from "@/lib/menu/menu-ingredients";
+import { normalizeMainIngredientIds } from "@/lib/menu/main-ingredients";
 import { mapStorefrontMenuItem } from "@/lib/menu/storefront-item";
 import { isCoffeeMenuCategory, mergeCoffeeIngredientPresets } from "@/lib/menu/coffee-templates";
 import type { StorefrontMenuItem } from "@/lib/menu/storefront";
 import {
   calculateTakeawaySurchargeCents,
+  DEFAULT_TAKEAWAY_CHARGE,
   shouldApplyTakeawayCharge,
   takeawayChargeFromRow,
   type TakeawayChargeConfig,
@@ -198,6 +200,9 @@ export async function updateMerchant(
       | "weekly_revenue_target_cents"
       | "monthly_revenue_target_cents"
       | "kitchen_flow_json"
+      | "membership_setup_completed_at"
+      | "points_program_enabled"
+      | "stamps_program_enabled"
     >
   >,
 ): Promise<MerchantRow> {
@@ -288,17 +293,25 @@ function slugifyCategoryLabel(label: string): string {
 
 export async function createMenuCategory(
   merchantId: string,
-  input: { label: string },
+  input: { label: string; slug?: string },
 ): Promise<MenuCategoryRow> {
   const label = input.label.trim();
   if (!label) throw new Error("Category name is required");
 
   const categories = await listMenuCategories(merchantId);
-  const baseSlug = slugifyCategoryLabel(label) || "category";
+  const preferred = input.slug?.trim().toLowerCase();
+  const baseSlug =
+    (preferred && preferred.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")) ||
+    slugifyCategoryLabel(label) ||
+    "category";
   let slug = baseSlug;
   let suffix = 1;
   while (categories.some((c) => c.slug === slug)) {
     slug = `${baseSlug}-${suffix++}`;
+  }
+
+  if (categories.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
+    throw new Error("That category already exists");
   }
 
   const sortOrder =
@@ -509,11 +522,14 @@ export async function upsertMenuItem(
     upsellLinks?: UpsellLinkConfig[];
     upsellItemSlugs?: string[];
     takeawayCharge?: TakeawayChargeConfig;
+    availableDineIn?: boolean;
+    availableTakeaway?: boolean;
     kcal?: number | null;
     sugarG?: number | null;
     ingredients?: string | null;
     itemNotes?: string | null;
     ingredientIds?: string[];
+    mainIngredientIds?: string[];
     nameI18n?: LocalizedMap;
     descriptionI18n?: LocalizedMap;
     ingredientsI18n?: LocalizedMap;
@@ -531,6 +547,10 @@ export async function upsertMenuItem(
       ? sanitizeIngredientIds(
           normalizeIngredientIds(input.ingredientIds, ingredientCatalog),
         )
+      : undefined;
+  const normalizedMainIngredientIds =
+    input.mainIngredientIds !== undefined
+      ? normalizeMainIngredientIds(input.mainIngredientIds)
       : undefined;
 
   const existingItems = await listMenuItems(merchantId);
@@ -552,50 +572,84 @@ export async function upsertMenuItem(
     en: input.itemNotes ?? "",
   });
 
+  // Omit main_ingredient_ids from the primary upsert so menus still save when
+  // migration 049 is not applied / PostgREST schema cache is stale.
+  const rowPayload: Record<string, unknown> = {
+    merchant_id: merchantId,
+    category_id: category.id,
+    slug: input.slug,
+    name: input.name,
+    name_i18n: nameI18n,
+    description: input.description,
+    description_i18n: descriptionI18n,
+    price_cents: input.priceCents,
+    active: input.active,
+    image_url: input.imageUrl ?? null,
+    tags: input.tags ?? [],
+    special_tags: input.specialTags ?? [],
+    availability_mode: input.availabilityMode ?? "always",
+    availability_weekly: input.availabilityWeekly ?? null,
+    available_from: input.availableFrom ?? null,
+    available_until: input.availableUntil ?? null,
+    takeaway_charge_enabled: (input.takeawayCharge ?? DEFAULT_TAKEAWAY_CHARGE).enabled,
+    takeaway_surcharge_type: (input.takeawayCharge ?? DEFAULT_TAKEAWAY_CHARGE).enabled
+      ? (input.takeawayCharge ?? DEFAULT_TAKEAWAY_CHARGE).surchargeType
+      : null,
+    takeaway_surcharge_value: (input.takeawayCharge ?? DEFAULT_TAKEAWAY_CHARGE).enabled
+      ? (input.takeawayCharge ?? DEFAULT_TAKEAWAY_CHARGE).surchargeValue
+      : null,
+    takeaway_surcharge_priority:
+      (input.takeawayCharge ?? DEFAULT_TAKEAWAY_CHARGE).priority,
+    kcal: input.kcal ?? null,
+    sugar_g: input.sugarG ?? null,
+    ingredients: (ingredientsI18n.en?.trim() || input.ingredients) ?? null,
+    ingredients_i18n: ingredientsI18n,
+    item_notes: (itemNotesI18n.en?.trim() || input.itemNotes) ?? null,
+    item_notes_i18n: itemNotesI18n,
+    ingredient_ids: normalizedIngredientIds ?? [],
+    coffee_profile_json: input.coffeeProfile ?? existing?.coffee_profile_json ?? {},
+  };
+
   const { data, error } = await db()
     .from("menu_items")
-    .upsert(
-      {
-        merchant_id: merchantId,
-        category_id: category.id,
-        slug: input.slug,
-        name: input.name,
-        name_i18n: nameI18n,
-        description: input.description,
-        description_i18n: descriptionI18n,
-        price_cents: input.priceCents,
-        active: input.active,
-        image_url: input.imageUrl ?? null,
-        tags: input.tags ?? [],
-        special_tags: input.specialTags ?? [],
-        availability_mode: input.availabilityMode ?? "always",
-        availability_weekly: input.availabilityWeekly ?? null,
-        available_from: input.availableFrom ?? null,
-        available_until: input.availableUntil ?? null,
-        takeaway_charge_enabled: input.takeawayCharge?.enabled ?? false,
-        takeaway_surcharge_type: input.takeawayCharge?.enabled
-          ? input.takeawayCharge.surchargeType
-          : null,
-        takeaway_surcharge_value: input.takeawayCharge?.enabled
-          ? input.takeawayCharge.surchargeValue
-          : null,
-        takeaway_surcharge_priority: input.takeawayCharge?.priority ?? 10,
-        kcal: input.kcal ?? null,
-        sugar_g: input.sugarG ?? null,
-        ingredients: (ingredientsI18n.en?.trim() || input.ingredients) ?? null,
-        ingredients_i18n: ingredientsI18n,
-        item_notes: (itemNotesI18n.en?.trim() || input.itemNotes) ?? null,
-        item_notes_i18n: itemNotesI18n,
-        ingredient_ids: normalizedIngredientIds ?? [],
-        coffee_profile_json: input.coffeeProfile ?? existing?.coffee_profile_json ?? {},
-      },
-      { onConflict: "merchant_id,slug" },
-    )
+    .upsert(rowPayload, { onConflict: "merchant_id,slug" })
     .select("*")
     .single();
 
   if (error) throw new Error(error.message);
   const row = data as MenuItemRow;
+
+  if (normalizedMainIngredientIds !== undefined) {
+    const { error: mainErr } = await db()
+      .from("menu_items")
+      .update({ main_ingredient_ids: normalizedMainIngredientIds })
+      .eq("id", row.id);
+    if (mainErr && !/main_ingredient_ids/i.test(mainErr.message)) {
+      throw new Error(mainErr.message);
+    }
+    if (!mainErr) {
+      row.main_ingredient_ids = normalizedMainIngredientIds;
+    }
+  }
+
+  if (input.availableDineIn !== undefined || input.availableTakeaway !== undefined) {
+    const channelPatch: Record<string, boolean> = {};
+    if (input.availableDineIn !== undefined) channelPatch.available_dine_in = input.availableDineIn;
+    if (input.availableTakeaway !== undefined) {
+      channelPatch.available_takeaway = input.availableTakeaway;
+    }
+    const { error: channelErr } = await db()
+      .from("menu_items")
+      .update(channelPatch)
+      .eq("id", row.id);
+    if (channelErr && !/available_dine_in|available_takeaway/i.test(channelErr.message)) {
+      throw new Error(channelErr.message);
+    }
+    if (!channelErr) {
+      if (input.availableDineIn !== undefined) row.available_dine_in = input.availableDineIn;
+      if (input.availableTakeaway !== undefined) row.available_takeaway = input.availableTakeaway;
+    }
+  }
 
   if (input.modifierGroups !== undefined) {
     await replaceModifierGroups(row.id, input.modifierGroups);
@@ -970,6 +1024,391 @@ export async function listCustomersForMerchant(
   return rows;
 }
 
+export type MemberActivityType =
+  | "order"
+  | "voucher_redeemed"
+  | "voucher_issued"
+  | "points"
+  | "whatsapp"
+  | "feedback";
+
+export type MemberActivityItem = {
+  id: string;
+  type: MemberActivityType;
+  title: string;
+  at: string;
+  description: string;
+};
+
+export type MemberVoucherStatus = "active" | "expiring_soon" | "redeemed" | "expired";
+
+export type MemberVoucherItem = {
+  id: string;
+  name: string;
+  description: string;
+  expiresAt: string | null;
+  status: MemberVoucherStatus;
+  icon: "local_bar" | "percent" | "loyalty" | "card_giftcard";
+  code?: string | null;
+};
+
+/** Active vouchers issued to a member (for storefront + admin). */
+export type CustomerVoucherItem = {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string;
+  expiresAt: string | null;
+  status: Extract<MemberVoucherStatus, "active" | "expiring_soon">;
+  source: "stamp_card" | "campaign" | "merchant" | "unknown";
+};
+
+export type MemberDetailView = {
+  customer: CustomerRow;
+  lifetimeSpendCents: number;
+  totalVisits: number;
+  activity: MemberActivityItem[];
+  vouchers: MemberVoucherItem[];
+};
+
+function formatMoneyLabel(cents: number, currency: "MYR" | "SGD"): string {
+  const symbol = currency === "SGD" ? "S$" : "RM";
+  return `${symbol}${(cents / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function voucherIconFor(type: "percentage" | "fixed", name: string): MemberVoucherItem["icon"] {
+  if (type === "percentage") return "percent";
+  const lower = name.toLowerCase();
+  if (/sake|wine|drink|cocktail|beer|coffee/.test(lower)) return "local_bar";
+  if (/gift|welcome|birthday/.test(lower)) return "card_giftcard";
+  return "loyalty";
+}
+
+function resolveMemberVoucherStatus(
+  promo: PromoRow,
+  redeemedAt: string | null,
+): MemberVoucherStatus {
+  if (redeemedAt) return "redeemed";
+  if (!promo.active) return "expired";
+  if (promo.expires_at && new Date(promo.expires_at) < new Date()) return "expired";
+  if (promo.expires_at) {
+    const daysLeft =
+      (new Date(promo.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    if (daysLeft <= 7) return "expiring_soon";
+  }
+  return "active";
+}
+
+export async function getMemberDetailForMerchant(
+  merchantId: string,
+  customerId: string,
+  currency: "MYR" | "SGD" = "MYR",
+): Promise<MemberDetailView | null> {
+  const { data: customerData, error: customerError } = await db()
+    .from("customers")
+    .select("*")
+    .eq("id", customerId)
+    .eq("merchant_id", merchantId)
+    .maybeSingle();
+
+  if (customerError) throw new Error(customerError.message);
+  if (!customerData) return null;
+  const customer = customerData as CustomerRow;
+
+  const [ordersRes, ledgerRes, redemptionsRes, jobsRes] = await Promise.all([
+    db()
+      .from("orders")
+      .select("id, total_cents, paid_at, created_at, status, venue_table_id, points_redeemed")
+      .eq("merchant_id", merchantId)
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false })
+      .limit(40),
+    db()
+      .from("points_ledger")
+      .select("id, delta, reason, created_at, order_id")
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false })
+      .limit(40),
+    db()
+      .from("promo_redemptions")
+      .select("id, promo_id, redeemed_at, promos(id, name, type, value, expires_at, active, code)")
+      .eq("customer_id", customerId)
+      .order("redeemed_at", { ascending: false })
+      .limit(40),
+    db()
+      .from("automation_jobs")
+      .select("id, job_type, status, payload, sent_at, created_at, run_at")
+      .eq("merchant_id", merchantId)
+      .eq("customer_id", customerId)
+      .in("status", ["sent", "pending"])
+      .order("created_at", { ascending: false })
+      .limit(40),
+  ]);
+
+  if (ordersRes.error) throw new Error(ordersRes.error.message);
+  if (ledgerRes.error) throw new Error(ledgerRes.error.message);
+  if (redemptionsRes.error) throw new Error(redemptionsRes.error.message);
+  if (jobsRes.error) throw new Error(jobsRes.error.message);
+
+  type OrderLite = {
+    id: string;
+    total_cents: number;
+    paid_at: string | null;
+    created_at: string;
+    status: string;
+    venue_table_id: string | null;
+    points_redeemed: number;
+  };
+  type LedgerLite = {
+    id: string;
+    delta: number;
+    reason: string;
+    created_at: string;
+    order_id: string | null;
+  };
+  type RedemptionLite = {
+    id: string;
+    promo_id: string;
+    redeemed_at: string;
+    promos:
+      | {
+          id: string;
+          name: string;
+          type: "percentage" | "fixed";
+          value: number;
+          expires_at: string | null;
+          active: boolean;
+          code: string | null;
+        }
+      | {
+          id: string;
+          name: string;
+          type: "percentage" | "fixed";
+          value: number;
+          expires_at: string | null;
+          active: boolean;
+          code: string | null;
+        }[]
+      | null;
+  };
+  type JobLite = {
+    id: string;
+    job_type: string;
+    status: string;
+    payload: Record<string, unknown> | null;
+    sent_at: string | null;
+    created_at: string;
+    run_at: string;
+  };
+
+  const orders = (ordersRes.data ?? []) as OrderLite[];
+  const ledger = (ledgerRes.data ?? []) as LedgerLite[];
+  const redemptions = (redemptionsRes.data ?? []) as RedemptionLite[];
+  const jobs = (jobsRes.data ?? []) as JobLite[];
+
+  const paidOrders = orders.filter((o) => o.status === "paid");
+  const lifetimeSpendCents = paidOrders.reduce((sum, o) => sum + Number(o.total_cents ?? 0), 0);
+  const totalVisits = paidOrders.length;
+
+  const tableIds = [
+    ...new Set(orders.map((o) => o.venue_table_id).filter((id): id is string => Boolean(id))),
+  ];
+  const tableMap = new Map<string, string>();
+  if (tableIds.length > 0) {
+    const { data: tables, error: tablesError } = await db()
+      .from("venue_tables")
+      .select("id, table_number")
+      .in("id", tableIds);
+    if (tablesError) throw new Error(tablesError.message);
+    for (const t of (tables ?? []) as { id: string; table_number: string }[]) {
+      tableMap.set(t.id, t.table_number);
+    }
+  }
+
+  const pointsByOrder = new Map<string, number>();
+  for (const entry of ledger) {
+    if (!entry.order_id || entry.delta <= 0) continue;
+    pointsByOrder.set(entry.order_id, (pointsByOrder.get(entry.order_id) ?? 0) + entry.delta);
+  }
+
+  const activity: MemberActivityItem[] = [];
+
+  for (const order of orders.slice(0, 20)) {
+    const table = order.venue_table_id ? tableMap.get(order.venue_table_id) : null;
+    const earned = pointsByOrder.get(order.id) ?? 0;
+    const parts = [
+      table ? `Table ${table}` : null,
+      `${formatMoneyLabel(order.total_cents, currency)} total`,
+      earned > 0 ? `Earned ${earned} points` : null,
+      order.status === "pending" ? "Payment pending" : null,
+      order.status === "cancelled" ? "Cancelled" : null,
+    ].filter(Boolean);
+    activity.push({
+      id: `order-${order.id}`,
+      type: "order",
+      title: "Order Placed",
+      at: order.paid_at ?? order.created_at,
+      description: parts.join(". ") + (parts.length ? "." : ""),
+    });
+  }
+
+  for (const row of redemptions) {
+    const promo = Array.isArray(row.promos) ? row.promos[0] ?? null : row.promos;
+    activity.push({
+      id: `redeem-${row.id}`,
+      type: "voucher_redeemed",
+      title: "Voucher Redeemed",
+      at: row.redeemed_at,
+      description: promo ? `Redeemed '${promo.name}'.` : "Redeemed a voucher.",
+    });
+  }
+
+  for (const entry of ledger) {
+    if (entry.order_id && entry.delta > 0) continue;
+    const reason = entry.reason.replace(/_/g, " ");
+    activity.push({
+      id: `points-${entry.id}`,
+      type: "points",
+      title: entry.delta >= 0 ? "Points Added" : "Points Redeemed",
+      at: entry.created_at,
+      description:
+        entry.delta >= 0
+          ? `+${entry.delta} points · ${reason}`
+          : `${entry.delta} points · ${reason}`,
+    });
+  }
+
+  for (const job of jobs) {
+    if (job.job_type === "campaign_issue_voucher") {
+      const promoName =
+        typeof job.payload?.promoName === "string"
+          ? job.payload.promoName
+          : typeof job.payload?.code === "string"
+            ? job.payload.code
+            : "Voucher";
+      const code =
+        typeof job.payload?.code === "string" && job.payload.code
+          ? ` Code ${job.payload.code}.`
+          : "";
+      activity.push({
+        id: `issue-${job.id}`,
+        type: "voucher_issued",
+        title: "Voucher Issued",
+        at: job.sent_at ?? job.run_at ?? job.created_at,
+        description: `Issued '${promoName}'.${code}`,
+      });
+      continue;
+    }
+    if (!/whatsapp|sms|review|bounce|churn|winback/i.test(job.job_type)) continue;
+    const message = typeof job.payload?.message === "string" ? job.payload.message : null;
+    const preview = message
+      ? message.length > 80
+        ? `${message.slice(0, 77)}…`
+        : message
+      : job.job_type.replace(/_/g, " ");
+    activity.push({
+      id: `msg-${job.id}`,
+      type: "whatsapp",
+      title: job.status === "pending" ? "WhatsApp Message Queued" : "WhatsApp Message Sent",
+      at: job.sent_at ?? job.run_at ?? job.created_at,
+      description: preview.startsWith("Automated") ? preview : `Automated campaign: "${preview}"`,
+    });
+  }
+
+  activity.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+  const redeemedPromoIds = new Set(redemptions.map((r) => r.promo_id));
+  const issuedCodes = new Set<string>();
+  const issuedCampaignIds = new Set<string>();
+  const issuedPromoIds = new Set<string>();
+  for (const job of jobs) {
+    const code = job.payload?.code;
+    if (typeof code === "string" && code.trim()) issuedCodes.add(code.trim().toUpperCase());
+    const campaignId = job.payload?.campaignId;
+    if (typeof campaignId === "string") issuedCampaignIds.add(campaignId);
+    const promoId = job.payload?.promoId;
+    if (typeof promoId === "string") issuedPromoIds.add(promoId);
+  }
+
+  const vouchers: MemberVoucherItem[] = [];
+  const seenPromoIds = new Set<string>();
+  const hasIssued =
+    issuedCodes.size > 0 || issuedCampaignIds.size > 0 || issuedPromoIds.size > 0;
+
+  if (hasIssued) {
+    const { data: promoRows, error: promoError } = await db()
+      .from("promos")
+      .select("*")
+      .eq("merchant_id", merchantId)
+      .eq("active", true);
+    if (promoError) throw new Error(promoError.message);
+
+    for (const promo of (promoRows ?? []) as PromoRow[]) {
+      const codeMatch = promo.code && issuedCodes.has(promo.code.toUpperCase());
+      const campaignMatch = promo.campaign_id && issuedCampaignIds.has(promo.campaign_id);
+      const idMatch = issuedPromoIds.has(promo.id);
+      if (!codeMatch && !campaignMatch && !idMatch) continue;
+      if (redeemedPromoIds.has(promo.id)) continue;
+      if (seenPromoIds.has(promo.id)) continue;
+      seenPromoIds.add(promo.id);
+      const status = resolveMemberVoucherStatus(promo, null);
+      if (status === "expired" || status === "redeemed") continue;
+      vouchers.push({
+        id: promo.id,
+        name: promo.name,
+        description:
+          promo.type === "percentage"
+            ? `${promo.value}% off total bill`
+            : `${currency === "SGD" ? "S$" : "RM"}${promo.value} off`,
+        expiresAt: promo.expires_at,
+        status,
+        icon: voucherIconFor(promo.type, promo.name),
+      });
+    }
+  }
+
+  // Fall back to merchant-wide active promos when none were issued to this member.
+  if (vouchers.length === 0 && !hasIssued) {
+    const { data: activePromos, error: activePromoError } = await db()
+      .from("promos")
+      .select("*")
+      .eq("merchant_id", merchantId)
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(6);
+    if (activePromoError) throw new Error(activePromoError.message);
+
+    for (const promo of (activePromos ?? []) as PromoRow[]) {
+      if (redeemedPromoIds.has(promo.id)) continue;
+      const status = resolveMemberVoucherStatus(promo, null);
+      if (status === "expired") continue;
+      vouchers.push({
+        id: promo.id,
+        name: promo.name,
+        description:
+          promo.type === "percentage"
+            ? `${promo.value}% off total bill`
+            : `${currency === "SGD" ? "S$" : "RM"}${promo.value} off`,
+        expiresAt: promo.expires_at,
+        status,
+        icon: voucherIconFor(promo.type, promo.name),
+      });
+      if (vouchers.length >= 4) break;
+    }
+  }
+
+  return {
+    customer,
+    lifetimeSpendCents,
+    totalVisits,
+    activity: activity.slice(0, 25),
+    vouchers,
+  };
+}
+
 export async function listPromos(merchantId: string): Promise<PromoRow[]> {
   const { data, error } = await db()
     .from("promos")
@@ -979,6 +1418,122 @@ export async function listPromos(merchantId: string): Promise<PromoRow[]> {
 
   if (error) throw new Error(error.message);
   return (data ?? []) as PromoRow[];
+}
+
+/**
+ * Vouchers issued to this customer that are still usable (not redeemed / expired).
+ * Includes stamp-card, staff, and campaign issues tracked via automation_jobs.
+ */
+export async function listCustomerActiveVouchers(
+  merchantId: string,
+  customerId: string,
+  currency: "MYR" | "SGD" = "MYR",
+): Promise<CustomerVoucherItem[]> {
+  const [jobsRes, redemptionsRes] = await Promise.all([
+    db()
+      .from("automation_jobs")
+      .select("id, payload, created_at")
+      .eq("merchant_id", merchantId)
+      .eq("customer_id", customerId)
+      .eq("job_type", "campaign_issue_voucher")
+      .in("status", ["sent", "pending"])
+      .order("created_at", { ascending: false })
+      .limit(40),
+    db()
+      .from("promo_redemptions")
+      .select("promo_id")
+      .eq("customer_id", customerId),
+  ]);
+
+  if (jobsRes.error) throw new Error(jobsRes.error.message);
+  if (redemptionsRes.error) throw new Error(redemptionsRes.error.message);
+
+  const redeemedPromoIds = new Set(
+    ((redemptionsRes.data ?? []) as { promo_id: string }[]).map((r) => r.promo_id),
+  );
+
+  type IssueJob = {
+    id: string;
+    payload: Record<string, unknown> | null;
+    created_at: string;
+  };
+  const jobs = (jobsRes.data ?? []) as IssueJob[];
+  if (jobs.length === 0) return [];
+
+  const issuedPromoIds = new Set<string>();
+  const issuedCodes = new Set<string>();
+  const sourceByPromoId = new Map<string, CustomerVoucherItem["source"]>();
+  const sourceByCode = new Map<string, CustomerVoucherItem["source"]>();
+
+  for (const job of jobs) {
+    const payload = job.payload ?? {};
+    const issuedBy =
+      payload.issuedBy === "stamp_card"
+        ? "stamp_card"
+        : payload.issuedBy === "merchant"
+          ? "merchant"
+          : payload.campaignId
+            ? "campaign"
+            : "unknown";
+    const promoId = typeof payload.promoId === "string" ? payload.promoId : null;
+    const code =
+      typeof payload.code === "string" && payload.code.trim()
+        ? payload.code.trim().toUpperCase()
+        : null;
+    if (promoId) {
+      issuedPromoIds.add(promoId);
+      if (!sourceByPromoId.has(promoId)) sourceByPromoId.set(promoId, issuedBy);
+    }
+    if (code) {
+      issuedCodes.add(code);
+      if (!sourceByCode.has(code)) sourceByCode.set(code, issuedBy);
+    }
+  }
+
+  if (issuedPromoIds.size === 0 && issuedCodes.size === 0) return [];
+
+  const { data: promoRows, error: promoError } = await db()
+    .from("promos")
+    .select("*")
+    .eq("merchant_id", merchantId)
+    .eq("active", true);
+  if (promoError) throw new Error(promoError.message);
+
+  const money = currency === "SGD" ? "S$" : "RM";
+  const vouchers: CustomerVoucherItem[] = [];
+  const seen = new Set<string>();
+
+  for (const promo of (promoRows ?? []) as PromoRow[]) {
+    const codeMatch = promo.code && issuedCodes.has(promo.code.toUpperCase());
+    const idMatch = issuedPromoIds.has(promo.id);
+    if (!codeMatch && !idMatch) continue;
+    if (redeemedPromoIds.has(promo.id)) continue;
+    if (seen.has(promo.id)) continue;
+    seen.add(promo.id);
+
+    const status = resolveMemberVoucherStatus(promo, null);
+    if (status !== "active" && status !== "expiring_soon") continue;
+
+    const source =
+      sourceByPromoId.get(promo.id) ??
+      (promo.code ? sourceByCode.get(promo.code.toUpperCase()) : undefined) ??
+      "unknown";
+
+    vouchers.push({
+      id: promo.id,
+      name: promo.name,
+      code: promo.code,
+      description:
+        promo.type === "percentage"
+          ? `${promo.value}% off total bill`
+          : `${money}${Number(promo.value).toFixed(2)} off`,
+      expiresAt: promo.expires_at,
+      status,
+      source,
+    });
+  }
+
+  return vouchers;
 }
 
 export async function createPromo(
@@ -1018,7 +1573,9 @@ export async function createPromo(
 export async function updatePromo(
   merchantId: string,
   promoId: string,
-  patch: Partial<Pick<PromoRow, "name" | "active" | "value">>,
+  patch: Partial<
+    Pick<PromoRow, "name" | "active" | "value" | "expires_at" | "campaign_id">
+  >,
 ): Promise<PromoRow> {
   const { data, error } = await db()
     .from("promos")
@@ -1030,6 +1587,37 @@ export async function updatePromo(
 
   if (error) throw new Error(error.message);
   return data as PromoRow;
+}
+
+export async function getPromoById(
+  merchantId: string,
+  promoId: string,
+): Promise<PromoRow | null> {
+  const { data, error } = await db()
+    .from("promos")
+    .select("*")
+    .eq("id", promoId)
+    .eq("merchant_id", merchantId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data as PromoRow | null) ?? null;
+}
+
+/** Promos owned by a campaign (issue_voucher step), newest first. */
+export async function listPromosForCampaign(
+  merchantId: string,
+  campaignId: string,
+): Promise<PromoRow[]> {
+  const { data, error } = await db()
+    .from("promos")
+    .select("*")
+    .eq("merchant_id", merchantId)
+    .eq("campaign_id", campaignId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PromoRow[];
 }
 
 export async function listVoucherInventory(
@@ -1059,6 +1647,32 @@ export async function listVoucherInventory(
   const redemptions = (redemptionRows ?? []) as RedemptionRow[];
   const promoById = new Map(promos.map((p) => [p.id, p]));
   const promosWithRedemptions = new Set(redemptions.map((r) => r.promo_id));
+
+  const campaignIds = [
+    ...new Set(promos.map((p) => p.campaign_id).filter((id): id is string => Boolean(id))),
+  ];
+  const campaignById = new Map<string, { name: string; status: CampaignRow["status"] }>();
+  if (campaignIds.length > 0) {
+    const { data: campaignRows, error: campaignError } = await db()
+      .from("campaigns")
+      .select("id, name, status")
+      .eq("merchant_id", merchantId)
+      .in("id", campaignIds);
+    if (campaignError) throw new Error(campaignError.message);
+    for (const row of (campaignRows ?? []) as { id: string; name: string; status: CampaignRow["status"] }[]) {
+      campaignById.set(row.id, { name: row.name, status: row.status });
+    }
+  }
+
+  const campaignMeta = (promo: PromoRow) => {
+    const campaign = promo.campaign_id ? campaignById.get(promo.campaign_id) : null;
+    return {
+      campaignId: promo.campaign_id ?? null,
+      campaignName: campaign?.name ?? null,
+      campaignActive: campaign?.status === "active",
+    };
+  };
+
   const items: VoucherInventoryItem[] = [];
 
   for (const row of redemptions) {
@@ -1081,6 +1695,7 @@ export async function listVoucherInventory(
       issuedBy: "Admin",
       redeemedAt: row.redeemed_at,
       promoName: promo.name,
+      ...campaignMeta(promo),
     });
   }
 
@@ -1102,6 +1717,7 @@ export async function listVoucherInventory(
       issuedBy: "Admin",
       redeemedAt: null,
       promoName: promo.name,
+      ...campaignMeta(promo),
     });
   }
 
@@ -1206,6 +1822,25 @@ export async function getActiveBannerCampaign(
 
   if (error) throw new Error(error.message);
   return (data as CampaignRow | null) ?? null;
+}
+
+/**
+ * Active WhatsApp/auto campaigns used to drive the post-payment join CTA.
+ * Caller picks the welcome journey via `pickWelcomeCampaign`.
+ */
+export async function listActiveMessagingCampaigns(
+  merchantId: string,
+): Promise<CampaignRow[]> {
+  const { data, error } = await db()
+    .from("campaigns")
+    .select("*")
+    .eq("merchant_id", merchantId)
+    .eq("status", "active")
+    .in("channel", ["whatsapp", "auto"])
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CampaignRow[];
 }
 
 export async function updateCampaignStatus(

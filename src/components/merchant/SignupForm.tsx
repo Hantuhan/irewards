@@ -104,7 +104,8 @@ export function SignupForm() {
         }
         throw new Error(message);
       }
-      router.push(json.merchant?.dashboardPath ?? "/login");
+      if (!json.merchant?.dashboardPath) throw new Error("Signup succeeded but cafe was missing");
+      router.push(`${json.merchant.dashboardPath}/rewards?setup=1`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {

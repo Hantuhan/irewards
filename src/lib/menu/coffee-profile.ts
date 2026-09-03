@@ -1,4 +1,4 @@
-export type CoffeeProductKind = "drink" | "retail_beans";
+export type CoffeeProductKind = "drink";
 
 export type CoffeeRoastLevel = "light" | "medium" | "medium_dark" | "dark";
 
@@ -14,10 +14,23 @@ export type CoffeeFlavorProfile = {
 
 export type CoffeeDetailLevel = "simple" | "advanced";
 
+/** Plain English sweetness codes (legacy kosong / siew_dai / ga_dai still parse). */
+export type DrinkSweetness = "none" | "less" | "regular" | "extra";
+
+export function normalizeDrinkSweetness(raw: unknown): DrinkSweetness {
+  if (raw === "none" || raw === "kosong") return "none";
+  if (raw === "less" || raw === "siew_dai") return "less";
+  if (raw === "extra" || raw === "ga_dai") return "extra";
+  return "regular";
+}
+
 export type CoffeeProfile = {
   detailLevel?: CoffeeDetailLevel;
   kind?: CoffeeProductKind;
-  defaultTemperature?: "hot" | "cold";
+  defaultTemperature?: "hot" | "iced";
+  defaultSize?: "small" | "regular" | "large";
+  defaultSweetness?: DrinkSweetness;
+  defaultIce?: "none" | "less" | "regular" | "extra";
   roastLevel?: CoffeeRoastLevel | null;
   tastingNotes?: string[];
   origin?: string;
@@ -57,6 +70,10 @@ export function emptyCoffeeProfile(): CoffeeProfile {
   return {
     detailLevel: "simple",
     kind: "drink",
+    defaultTemperature: "hot",
+    defaultSize: "regular",
+    defaultSweetness: "regular",
+    defaultIce: "regular",
     tastingNotes: [],
     flavorProfile: {},
   };
@@ -83,11 +100,25 @@ export function parseCoffeeProfile(raw: unknown): CoffeeProfile {
         .filter(Boolean)
     : [];
 
-  const kind = row.kind === "retail_beans" ? "retail_beans" : "drink";
+  const kind: CoffeeProductKind = "drink";
   const defaultTemperature =
-    row.defaultTemperature === "hot" || row.defaultTemperature === "cold"
+    row.defaultTemperature === "hot" || row.defaultTemperature === "iced"
       ? row.defaultTemperature
-      : undefined;
+      : row.defaultTemperature === "cold"
+        ? "iced"
+        : "hot";
+  const defaultSize =
+    row.defaultSize === "small" || row.defaultSize === "regular" || row.defaultSize === "large"
+      ? row.defaultSize
+      : "regular";
+  const defaultSweetness = normalizeDrinkSweetness(row.defaultSweetness);
+  const defaultIce =
+    row.defaultIce === "none" ||
+    row.defaultIce === "less" ||
+    row.defaultIce === "regular" ||
+    row.defaultIce === "extra"
+      ? row.defaultIce
+      : "regular";
 
   const roastLevel = COFFEE_ROAST_OPTIONS.some((o) => o.value === row.roastLevel)
     ? (row.roastLevel as CoffeeRoastLevel)
@@ -97,13 +128,15 @@ export function parseCoffeeProfile(raw: unknown): CoffeeProfile {
     ? (row.processMethod as CoffeeProcessMethod)
     : null;
 
-  const detailLevel: CoffeeDetailLevel =
-    row.detailLevel === "advanced" ? "advanced" : "simple";
+  const detailLevel: CoffeeDetailLevel = "simple";
 
   return {
     detailLevel,
     kind,
     defaultTemperature,
+    defaultSize,
+    defaultSweetness,
+    defaultIce,
     roastLevel,
     tastingNotes,
     origin: typeof row.origin === "string" ? row.origin.trim() : "",
@@ -118,7 +151,6 @@ export function parseCoffeeProfile(raw: unknown): CoffeeProfile {
 }
 
 export function coffeeProfileHasDisplay(profile: CoffeeProfile): boolean {
-  if (profile.detailLevel !== "advanced") return false;
   return Boolean(
     profile.roastLevel ||
       profile.tastingNotes?.length ||

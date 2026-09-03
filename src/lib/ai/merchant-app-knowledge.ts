@@ -17,18 +17,34 @@ If asked something outside scope, refuse briefly and list what you can help with
 |---------|------|---------|
 | **Orders** | Dashboard home | Live kitchen board — paid/pending orders from table storefront |
 | **Menu** | Menu | Categories, items, modifiers, photos, sold-out toggles |
-| **Members** | Members | Customer list, points balance, visit history |
-| **iRewards program** | Rewards | Points tab, Points rule, Membership tiers, expiry, conversion |
+| **Members** | Members | Customer list, points/stamps, visit history — **Add member** opens full enroll (tier, welcome points, stamps, WhatsApp invite) |
+| **iRewards** | Rewards | Hub: choose **Points** or **Stamps**; each module has its own on/off |
 | **Campaigns** | Campaigns | One list of broadcasts and automated journeys (workflow builder, master pause switch), Vouchers tab |
 | **Store settings** | Settings | Store, Social, Receipt, Legal tabs |
 | **Table QR** | Table QR | Generate per-table QR codes for storefront entry |
 | **AI Assistant** | AI Assistant | This chat — setup help only |
+
+### Membership & points (iRewards → Points)
+- **Points tab**: how fast members earn (pts per RM/SGD), what a point is worth when they pay, birthday points, global expiry.
+- **Bonus rules tab**: extra earn on certain days or items (e.g. Monday 2×, member level conditions).
+- **Member levels tab**: 5 levels (Starter → Platinum) — name, points needed, earn speed, benefit text, % off bill, birthday points, level duration.
+- New cafes see a **setup walkthrough** (earn rate, point value, benefits, rough cost) until they save a program. Everything is customisable during setup and later.
+- Members opt in via **WhatsApp after payment** (+1 first-join point), or staff use **Add member** enroll: name, WhatsApp phone, optional email/birthday/notes, tier, welcome points, initial stamps, Manual add or Enroll & send WhatsApp.
+- Guests who skip join can still order but do not earn points.
+
+### Stamp cards (iRewards → Stamps)
+- One stamp card per outlet. Size presets 3/6/9/12 or custom (2–20).
+- Earn: 1 stamp per qualifying line. Merchant picks **categories and/or items** (OR union — must pick at least one). Category = every product in that tab; item picks add products outside those tabs. Optional max per order/day.
+- Complete card → **personal voucher** (promo code) issued to the member — shown under My vouchers on Rewards and applyable in cart. Auto-converts when the last stamp is earned; member can also tap Claim voucher if needed.
+- WhatsApp members only. Staff can adjust stamps on the member detail page.
+- Storefront: Reward tab stamp card + vouchers, thank-you progress, thin line on shop for members.
 
 ### Store settings
 - **Store** tab: logo, name, address, registration no., landline, WhatsApp, currency (MYR/SGD). Currency auto-selects receipt tax: SST for MYR, GST for SGD.
 - **Online** tab: social links and store email for review nudges.
 - **Receipt** tab: service charge %, SST (MYR) or GST (SGD), receipt footer, show registration on receipt.
 - **Legal** tab: refund and privacy policies — published at \`/m/{slug}/legal/refund\` and \`/m/{slug}/legal/privacy\` when filled in.
+- **Team** tab: each cafe can have **up to 5 users** (owner + staff). Deactivate a leaver to free a seat.
 - Points earn/redeem rates are in **iRewards program**, not Store settings.
 
 ### Campaigns
@@ -45,16 +61,13 @@ If asked something outside scope, refuse briefly and list what you can help with
 
 ### Menu
 - Merchants manage menu at **Menu** in the dashboard.
-- Supports categories, item names/prices, modifiers, and photo upload.
+- Left: **categories** (diner tabs). Right: **products in the selected category**.
+- **Categories** panel: add/remove categories only.
+- **Add product**: adds into the category currently selected on the left.
+- Supports item names/prices, modifiers, and photo upload.
 - Sold-out items can be toggled — storefront should reflect availability.
 - Menu-linked **Points rules** can target specific items (Points rule tab).
-
-### Membership & points (iRewards program)
-- **Points tab**: base earn rate (pts/RM), redemption cents-per-point, birthday points, global expiry.
-- **Points rule tab**: conditional multipliers (e.g. Monday 2×, tier conditions, menu items).
-- **Membership tab**: 5 lifetime-point tiers — name, threshold, earn multiplier, perk text, checkout discount %, birthday points, tier expiry.
-- Members opt in via **WhatsApp after payment** (+1 first-join point).
-- Guests who skip join can still order but do not earn points.
+- Stamp qualifying items are configured under **iRewards → Stamps**.
 
 ### Campaigns
 - **Campaigns** section: create campaigns with channels:
@@ -76,6 +89,7 @@ If asked something outside scope, refuse briefly and list what you can help with
   - **Win-back** — No visit for 7 days → WhatsApp come-back voucher
   - **Welcome series** — 1st visit completed → wait 1 hour → welcome message
 - WhatsApp copy must be approved by Meta (Meta approval panel in the builder) before a campaign can go live.
+- **Campaign ↔ voucher:** if a workflow has Issue voucher, the system auto-creates (and reactivates) a linked promo code on save / go-live / fire. Merchants cannot revoke that voucher while the campaign is live — they must pause the campaign first (pause both is offered). Pausing a voucher campaign deactivates its code too.
 - **You do not create or save campaigns in this chat.** You may describe and suggest workflows using the catalog above. When a merchant wants a new journey, point them to:
   1. **Describe it (AI planner)** — Campaigns → New campaign → Describe it. They type a brief; the planner (same catalog) suggests a draft workflow; they open it in the builder, edit, save, and submit to Meta.
   2. **Pick a template** — Campaigns → New campaign → Start from template (Welcome, Win-back, Review nudge, etc.).

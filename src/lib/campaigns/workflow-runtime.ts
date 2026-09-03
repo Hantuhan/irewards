@@ -1,7 +1,7 @@
 import { adminDb } from "@/lib/db/admin";
 import type { CampaignRow, CustomerRow } from "@/lib/db/types";
 import { enqueueAutomationJob } from "@/lib/db/automation-repository";
-import { createPromo, getPromoByCode } from "@/lib/db/merchant-repository";
+import { ensureCampaignVoucher } from "@/lib/campaigns/campaign-voucher";
 import { memberRecentlyMessaged } from "@/lib/db/campaign-analytics-repository";
 import { snapToSendWindow } from "@/lib/campaigns/send-window";
 import {
@@ -262,7 +262,7 @@ async function queueActions(
   let delayMs = 0;
 
   const voucher = actions.find((a) => a.type === "issue_voucher");
-  const code = voucher ? await ensureCampaignVoucher(campaign, voucher) : undefined;
+  const code = voucher ? (await ensureCampaignVoucher(campaign, voucher)).code : undefined;
 
   const { data: merchantRow } = await db()
     .from("merchants")
@@ -362,36 +362,6 @@ const JOB_TYPE_BY_ACTION: Record<string, string | undefined> = {
   show_banner: undefined,
 };
 
-/**
- * Voucher codes are short and readable at the counter: the voucher name's
- * letters plus the discount, e.g. COMEBACK20. Created once per campaign;
- * later runs find it by code.
- */
-export function campaignVoucherCode(campaign: CampaignRow, action: CampaignNode): string {
-  const name = String(action.config.name ?? "").replace(/[^a-z]/gi, "").toUpperCase().slice(0, 8) || "PERK";
-  const discount = Math.round(Number(action.config.discountPercent ?? 20));
-  const short = campaign.id.replace(/-/g, "").slice(0, 4).toUpperCase();
-  return `${name}${discount}${short}`;
-}
-
-async function ensureCampaignVoucher(campaign: CampaignRow, action: CampaignNode): Promise<string> {
-  const code = campaignVoucherCode(campaign, action);
-  const existing = await getPromoByCode(campaign.merchant_id, code);
-  if (existing) return code;
-
-  const expiryDays = Math.max(1, Number(action.config.expiryDays ?? 14));
-  await createPromo(campaign.merchant_id, {
-    name: `${String(action.config.name ?? "Campaign perk").trim() || "Campaign perk"} · ${campaign.name}`,
-    code,
-    type: "percentage",
-    value: Math.min(100, Math.max(1, Number(action.config.discountPercent ?? 20))),
-    minSpendCents: null,
-    expiresAt: new Date(Date.now() + expiryDays * 86_400_000).toISOString(),
-    campaignId: campaign.id,
-  });
-  return code;
-}
-
 function waitDurationMs(action: CampaignNode): number {
   const amount = Number(action.config.amount ?? 1);
   const unit = String(action.config.unit ?? "hours");
@@ -476,12 +446,30 @@ async function customerPaidOrderStats(
  * Whether an active banner campaign's workflow conditions pass right now.
  * Used by the storefront banner API (banners are not queued as jobs).
  */
+/**
+ * Used by the storefront banner API (banners are not queued as jobs).
+ * Guests skip member-gated conditions (phone / opt-in / tier / spend) so
+ * acquisition banners still appear when someone scans as a guest.
+ */
 export function bannerWorkflowAllowsDisplay(
   campaign: CampaignRow,
   context: TriggerContext,
 ): boolean {
   const workflow = asWorkflow(campaign.workflow, "banner");
-  const failed = workflow.conditions.find((condition) => !evaluateCondition(condition, context));
+  const isGuest = !context.customer;
+  const guestSkip = new Set([
+    "has_phone",
+    "marketing_opted_in",
+    "member_tier",
+    "lifetime_points",
+    "spend_amount",
+    "visit_count",
+  ]);
+  const conditions = isGuest
+    ? workflow.conditions.filter((c) => !guestSkip.has(c.type))
+    : workflow.conditions;
+
+  const failed = conditions.find((condition) => !evaluateCondition(condition, context));
   if (!failed) return workflow.actions.some((a) => a.type === "show_banner");
   return workflow.elseActions.some((a) => a.type === "show_banner");
 }

@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/whatsapp-template-repository";
 import type { WhatsAppTemplateRow } from "@/lib/db/types";
 import { goLiveBlocker } from "@/lib/services/campaign-status";
+import { ensureCampaignVoucherForGoLive, pauseCampaignAndVoucher } from "@/lib/campaigns/campaign-voucher";
 import { summarizeTemplate } from "@/lib/whatsapp/templates";
 import { getNumberHealth, summarizeNumberHealth } from "@/lib/whatsapp/number-health";
 
@@ -119,6 +120,19 @@ export async function POST(request: Request, context: RouteContext) {
       workflow,
       triggerType: workflow.trigger.type,
     });
+
+    // Prepare the linked promo as soon as the campaign is saved — go-live and
+    // runtime will reactivate if a merchant revoked it later.
+    await ensureCampaignVoucherForGoLive(campaign).catch(() => undefined);
+
+    if (body.status === "active") {
+      const blocker = await goLiveBlocker(campaign);
+      if (blocker) {
+        await updateCampaignStatus(merchant.id, campaign.id, "draft");
+        return NextResponse.json({ error: blocker }, { status: 409 });
+      }
+    }
+
     return NextResponse.json({ id: campaign.id, name: campaign.name });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -132,6 +146,8 @@ export async function POST(request: Request, context: RouteContext) {
 const patchSchema = z.object({
   campaignId: z.string().uuid(),
   status: z.enum(["draft", "active", "scheduled", "paused"]).optional(),
+  /** When pausing: also revoke the campaign's linked voucher code. */
+  deactivateVoucher: z.boolean().optional(),
   name: z.string().min(1).optional(),
   messageBody: z.string().nullable().optional(),
   bannerTitle: z.string().nullable().optional(),
@@ -154,7 +170,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const body = patchSchema.parse(await request.json());
-    const { campaignId, status, ...content } = body;
+    const { campaignId, status, deactivateVoucher, ...content } = body;
 
     let workflowPatch = {};
     if (content.workflow !== undefined && content.workflow !== null) {
@@ -199,9 +215,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     let campaign =
-      status !== undefined
-        ? await updateCampaignStatus(merchant.id, campaignId, status)
-        : null;
+      status === "paused" && deactivateVoucher
+        ? (await pauseCampaignAndVoucher(merchant.id, campaignId, { deactivateVoucher: true }))
+            .campaign
+        : status !== undefined
+          ? await updateCampaignStatus(merchant.id, campaignId, status)
+          : null;
     if (campaign?.status_reason && status !== undefined) {
       // The merchant chose this status themselves; the system's reason no longer applies.
       campaign = await updateCampaign(merchant.id, campaignId, { status_reason: null });
@@ -209,6 +228,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (Object.keys(contentPatch).length > 0) {
       campaign = await updateCampaign(merchant.id, campaignId, contentPatch);
+      await ensureCampaignVoucherForGoLive(campaign).catch(() => undefined);
     }
 
     if (!campaign) {

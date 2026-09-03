@@ -198,6 +198,30 @@ export async function hasPointsLedgerEntry(
   return Boolean(data);
 }
 
+/** Points already spoken-for on unpaid checkouts (reserve until pay or abandon). */
+export async function sumPendingPointsRedeemed(
+  customerId: string,
+  excludeOrderId?: string,
+): Promise<number> {
+  let query = db()
+    .from("orders")
+    .select("points_redeemed")
+    .eq("customer_id", customerId)
+    .eq("status", "pending")
+    .gt("points_redeemed", 0);
+
+  if (excludeOrderId) {
+    query = query.neq("id", excludeOrderId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce(
+    (sum, row) => sum + Number((row as { points_redeemed: number }).points_redeemed || 0),
+    0,
+  );
+}
+
 export async function getCustomerById(customerId: string): Promise<CustomerRow | null> {
   const { data, error } = await db()
     .from("customers")
@@ -241,21 +265,42 @@ export async function createMemberCustomer(input: {
   merchantId: string;
   phone: string;
   externalUserId?: string | null;
+  displayName?: string | null;
+  email?: string | null;
+  birthdayMonth?: number | null;
+  birthdayDay?: number | null;
+  staffNotes?: string | null;
 }): Promise<CustomerRow> {
-  const { data, error } = await db()
-    .from("customers")
-    .insert([
-      {
-        merchant_id: input.merchantId,
-        phone: input.phone,
-        external_user_id: input.externalUserId ?? null,
-        is_member: true,
-        points_balance: 0,
-        first_join_bonus_awarded: false,
-      },
-    ])
-    .select("*")
-    .single();
+  const row: Record<string, unknown> = {
+    merchant_id: input.merchantId,
+    phone: input.phone,
+    external_user_id: input.externalUserId ?? null,
+    display_name: input.displayName?.trim() || null,
+    email: input.email?.trim() || null,
+    is_member: true,
+    points_balance: 0,
+    first_join_bonus_awarded: false,
+  };
+  if (input.birthdayMonth != null) row.birthday_month = input.birthdayMonth;
+  if (input.birthdayDay != null) row.birthday_day = input.birthdayDay;
+  if (input.staffNotes != null) row.staff_notes = input.staffNotes.trim() || null;
+
+  let { data, error } = await db().from("customers").insert([row]).select("*").single();
+
+  if (
+    error &&
+    /birthday_month|birthday_day|staff_notes/i.test(error.message)
+  ) {
+    const {
+      birthday_month: _bm,
+      birthday_day: _bd,
+      staff_notes: _sn,
+      ...core
+    } = row;
+    const retry = await db().from("customers").insert([core]).select("*").single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) throw new Error(error.message);
   return data as CustomerRow;
@@ -279,15 +324,47 @@ export async function updateCustomer(
       | "email"
       | "phone"
       | "receipt_delivery_preference"
+      | "birthday_month"
+      | "birthday_day"
+      | "staff_notes"
     >
   >,
 ): Promise<CustomerRow> {
-  const { data, error } = await db()
+  let { data, error } = await db()
     .from("customers")
     .update(patch)
     .eq("id", customerId)
     .select("*")
     .single();
+
+  if (
+    error &&
+    /birthday_month|birthday_day|staff_notes/i.test(error.message)
+  ) {
+    const {
+      birthday_month: _bm,
+      birthday_day: _bd,
+      staff_notes: _sn,
+      ...rest
+    } = patch as Record<string, unknown>;
+    if (Object.keys(rest).length === 0) {
+      const existing = await db()
+        .from("customers")
+        .select("*")
+        .eq("id", customerId)
+        .single();
+      if (existing.error) throw new Error(existing.error.message);
+      return existing.data as CustomerRow;
+    }
+    const retry = await db()
+      .from("customers")
+      .update(rest)
+      .eq("id", customerId)
+      .select("*")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) throw new Error(error.message);
   return data as CustomerRow;

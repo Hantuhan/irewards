@@ -80,7 +80,8 @@ export async function provisionMerchant(
         name: input.cafeName.trim(),
         currency: input.currency,
         retention_enabled: true,
-        points_per_ringgit: 1,
+        points_per_ringgit: 0.1,
+        points_redeem_cents_per_point: 10,
       },
     ])
     .select("*")

@@ -52,7 +52,7 @@ const FIRST_VISIT_STEPS: FlowStep[] = [
   {
     id: "thanks",
     title: "Join iRewards",
-    caption: "Thank-you screen invites diners to join on WhatsApp for +1 point and retention.",
+    caption: "Thank-you CTA follows your active welcome campaign — headline, offer, WhatsApp join.",
     screen: "thanks",
   },
 ];
@@ -207,26 +207,72 @@ function ScreenMock({
     case "cart":
       return (
         <>
-          <div className="border-b border-surface-container-highest px-3 py-2">
-            <p className="font-display text-[11px] font-bold text-primary">Your cart</p>
-            <p className="text-[9px] text-on-surface-variant">Table 5</p>
+          <div className="flex items-center justify-between border-b border-surface-container-highest px-2.5 py-1.5">
+            <div className="flex items-center gap-0.5">
+              <Icon name="arrow_back" className="text-[12px] text-primary" />
+              <p className="font-display text-[10px] font-bold text-primary">Demo Cafe</p>
+            </div>
+            <span className="rounded border border-on-surface/15 px-1.5 py-0.5 font-mono text-[7px] text-on-surface-variant">
+              Table 1 · Dine-in
+            </span>
           </div>
-          <div className="flex-1 space-y-2 px-3 py-2">
-            <div className="flex justify-between border-b border-surface-container-highest pb-2 text-[10px]">
-              <span>Latte × 1</span>
-              <span>RM 12.00</span>
+          <div className="flex-1 space-y-2 overflow-hidden px-2.5 py-2">
+            <div>
+              <p className="font-display text-[14px] font-bold leading-none text-primary">Cart</p>
+              <p className="mt-0.5 text-[8px] text-on-surface-variant">2 Items</p>
             </div>
-            <div className="rounded border border-dashed border-primary/40 bg-surface-container-low p-2 text-[9px] text-primary">
-              ⬆️ Add a pastry? Complete your meal
+            <div className="border border-surface-container-highest p-1.5">
+              <div className="flex gap-1.5">
+                <div className="h-8 w-8 shrink-0 bg-surface-container" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[6px] uppercase text-on-surface-variant">Coffee</p>
+                  <p className="text-[9px] font-semibold text-primary">Oat Milk Latte</p>
+                  <p className="text-[7px] text-on-surface-variant">Large · Iced</p>
+                </div>
+              </div>
+              <div className="mt-1 flex items-end justify-between">
+                <span className="bg-surface-container px-1.5 py-0.5 font-mono text-[8px]">− 1 +</span>
+                <div className="text-right">
+                  <p className="text-[9px] font-semibold">RM 6.50</p>
+                  <p className="text-[7px] text-red-600">Remove</p>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between pt-2 text-[11px] font-bold">
-              <span>Total</span>
-              <span>RM 12.00</span>
+            <div>
+              <p className="mb-1 flex items-center gap-0.5 text-[9px] font-semibold text-primary">
+                <Icon name="auto_awesome" className="text-[10px]" />
+                Pair with a Treat?
+              </p>
+              <div className="relative flex items-center gap-1.5 border border-surface-container-highest p-1">
+                <span className="absolute right-7 top-0.5 bg-primary px-0.5 font-mono text-[5px] text-on-primary">
+                  +1 Stamp
+                </span>
+                <div className="h-6 w-6 shrink-0 bg-surface-container" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[8px] font-semibold">Pain au Chocolat</p>
+                  <p className="text-[7px] text-on-surface-variant">+RM 4.50</p>
+                </div>
+                <span className="flex h-5 w-5 items-center justify-center border border-surface-container-highest text-[10px]">
+                  +
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="border-t border-surface-container-highest p-3">
-            <div className="bg-primary py-2 text-center text-[10px] font-medium text-on-primary">
-              Checkout
+            <div className="border border-surface-container-highest p-1.5">
+              <p className="text-[9px] font-semibold">Summary</p>
+              <div className="mt-1 flex justify-between text-[7px] text-on-surface-variant">
+                <span>Subtotal</span>
+                <span>RM 12.30</span>
+              </div>
+              <div className="mt-0.5 flex justify-between border-t border-surface-container-highest pt-1 text-[9px] font-bold">
+                <span>Total</span>
+                <span>RM 13.28</span>
+              </div>
+              <div className="mt-1.5 bg-primary py-1 text-center text-[8px] font-medium text-on-primary">
+                Checkout →
+              </div>
+              <p className="mt-1 text-center font-mono text-[6px] uppercase text-on-surface-variant">
+                Earning 25 reward points
+              </p>
             </div>
           </div>
           <MiniNav active="cart" />

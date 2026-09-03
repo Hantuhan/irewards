@@ -56,6 +56,7 @@ export function PromoVoucherInventoryView({
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     name: "",
     code: "",
@@ -78,6 +79,10 @@ export function PromoVoucherInventoryView({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    setRevokeError(null);
+  }, [selectedId]);
 
   useEffect(() => {
     loadInventory();
@@ -138,10 +143,21 @@ export function PromoVoucherInventoryView({
 
   async function handleRevoke() {
     if (!selected || selected.status !== "active") return;
+    if (selected.campaignActive) {
+      setRevokeError(
+        selected.campaignName
+          ? `Pause the live campaign “${selected.campaignName}” first, or pause both from Campaigns.`
+          : "Pause the linked live campaign first, then revoke this voucher.",
+      );
+      return;
+    }
     setRevoking(true);
+    setRevokeError(null);
     try {
       await onRevokeVoucher(selected.promoId);
       await loadInventory();
+    } catch (err) {
+      setRevokeError(err instanceof Error ? err.message : "Could not revoke voucher");
     } finally {
       setRevoking(false);
     }
@@ -353,6 +369,19 @@ export function PromoVoucherInventoryView({
                   {formatVoucherDate(selected.expiresAt)}
                 </dd>
               </div>
+              {selected.campaignId && (
+                <div className="col-span-2">
+                  <dt className={labelClass}>Linked campaign</dt>
+                  <dd className="mt-1 text-on-surface">
+                    {selected.campaignName ?? "Campaign"}
+                    {selected.campaignActive ? (
+                      <span className="ml-2 font-mono text-[10px] uppercase tracking-wider text-emerald-700">
+                        Live
+                      </span>
+                    ) : null}
+                  </dd>
+                </div>
+              )}
             </dl>
 
             <div className="mt-6">
@@ -386,14 +415,27 @@ export function PromoVoucherInventoryView({
             </div>
 
             {selected.status === "active" && (
-              <button
-                type="button"
-                onClick={handleRevoke}
-                disabled={revoking}
-                className="mt-8 h-10 w-full border border-on-surface bg-surface-container-lowest text-body-md font-medium uppercase tracking-wide hover:bg-surface-container-low disabled:opacity-50"
-              >
-                {revoking ? "Revoking…" : "Revoke voucher"}
-              </button>
+              <div className="mt-8 space-y-2">
+                {selected.campaignActive && (
+                  <p className="text-[12px] leading-relaxed text-amber-800">
+                    This code belongs to a live campaign. Pause the campaign first (or pause both),
+                    then revoke.
+                  </p>
+                )}
+                {revokeError && (
+                  <p role="alert" className="text-[12px] leading-relaxed text-red-700">
+                    {revokeError}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRevoke}
+                  disabled={revoking || selected.campaignActive}
+                  className="h-10 w-full border border-on-surface bg-surface-container-lowest text-body-md font-medium uppercase tracking-wide hover:bg-surface-container-low disabled:opacity-50"
+                >
+                  {revoking ? "Revoking…" : "Revoke voucher"}
+                </button>
+              </div>
             )}
           </aside>
         )}

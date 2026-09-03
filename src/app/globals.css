@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-manus: #1a3d2e;
+}
+
 @layer base {
   body {
     @apply bg-surface font-sans text-on-surface antialiased;
@@ -13,6 +19,41 @@
   input[type="radio"] {
     accent-color: #166534;
   }
+}
+
+/* Merchant dashboard main canvas — Manus forest controls (sidebar excluded). */
+.admin-manus {
+  --color-primary: #1a3d2e;
+  --color-on-primary: #ffffff;
+}
+
+.admin-manus input[type="checkbox"],
+.admin-manus input[type="radio"] {
+  accent-color: #1a3d2e;
+}
+
+.admin-manus input[type="range"] {
+  accent-color: #1a3d2e;
+}
+
+/* Primary action buttons / selected chips — sharp Manus blocks */
+.admin-manus :where(button, a, [role="button"]).bg-primary {
+  border-radius: 0;
+}
+
+.admin-manus :where(button, a, [role="button"]).bg-primary:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+/* Compact track toggles only (thumb switches with .relative) — not labeled action buttons. */
+.admin-manus button[role="switch"].relative[aria-checked="true"] {
+  background-color: #1a3d2e !important;
+  border-radius: 9999px;
+}
+
+.admin-manus button[role="switch"].relative[aria-checked="false"] {
+  background-color: #e2e2e2 !important;
+  border-radius: 9999px;
 }
 
 @layer utilities {

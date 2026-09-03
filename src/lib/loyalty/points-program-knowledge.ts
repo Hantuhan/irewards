@@ -15,7 +15,7 @@ export const POINTS_PROGRAM_KNOWLEDGE = `
 1. **Base points** = floor(order total in RM × points per RM), minimum **1 point** per paid order.
 2. Apply the **best multiplier** from:
    - Member **tier multiplier** (Membership tab, e.g. Gold 1.5×)
-   - Active **points rules** (Points rule tab, e.g. Monday 2×) — system uses the **highest** multiplier, not stacked multiplication of all rules.
+   - Active **Bonus days** rules (e.g. Monday 2×) — system uses the **highest** multiplier, not stacked multiplication of all rules. Day-of-week is evaluated in the **merchant timezone** (default Asia/Kuala_Lumpur / Singapore).
 3. Final earn = round(base × combined multiplier), minimum 1.
 
 ### Example earn
@@ -41,9 +41,9 @@ export const POINTS_PROGRAM_KNOWLEDGE = `
 ### Where merchants configure (dashboard)
 | Topic | Location |
 |-------|----------|
-| Base earn & redeem rate | iRewards program → **Points** |
-| Monday double / conditional boosts | iRewards program → **Points rule** |
-| Tier multipliers, birthday pts, expiry | iRewards program → **Membership** |
+| Base earn & redeem rate | iRewards program → **Collecting & using** |
+| Monday double / conditional boosts | iRewards program → **Bonus days** |
+| Tier multipliers, birthday pts, expiry | iRewards program → **Levels & gifts** |
 | Campaigns / WhatsApp | **Campaigns** & **Automation** |
 
 ### First join bonus

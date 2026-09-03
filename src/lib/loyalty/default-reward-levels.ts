@@ -13,6 +13,9 @@ export type RewardLevelConfig = RewardLevelInput & {
   validityMonths: number | null;
 };
 
+/** Cafe / F&B industry typical: unused points expire after 12 months. */
+export const INDUSTRY_POINT_EXPIRY_DAYS = 365;
+
 export const DEFAULT_REWARD_LEVELS: RewardLevelConfig[] = [
   {
     levelNumber: 1,
@@ -22,7 +25,7 @@ export const DEFAULT_REWARD_LEVELS: RewardLevelConfig[] = [
     perkDescription: "Welcome to iRewards",
     discountPercent: 0,
     tierActive: true,
-    pointExpiryDays: null,
+    pointExpiryDays: INDUSTRY_POINT_EXPIRY_DAYS,
     birthdayPoints: 0,
     welcomePoints: 0,
     welcomeRewards: 0,
@@ -35,10 +38,10 @@ export const DEFAULT_REWARD_LEVELS: RewardLevelConfig[] = [
     name: "Bronze",
     minLifetimePoints: 50,
     pointsMultiplier: 1.1,
-    perkDescription: "Free topping upgrade",
-    discountPercent: 5,
+    perkDescription: "Free coffee\nFree topping upgrade",
+    discountPercent: 0,
     tierActive: true,
-    pointExpiryDays: null,
+    pointExpiryDays: INDUSTRY_POINT_EXPIRY_DAYS,
     birthdayPoints: 0,
     welcomePoints: 0,
     welcomeRewards: 0,
@@ -51,10 +54,10 @@ export const DEFAULT_REWARD_LEVELS: RewardLevelConfig[] = [
     name: "Silver",
     minLifetimePoints: 150,
     pointsMultiplier: 1.25,
-    perkDescription: "Birthday drink",
-    discountPercent: 8,
+    perkDescription: "Birthday drink\nFree pastry once a month",
+    discountPercent: 0,
     tierActive: true,
-    pointExpiryDays: null,
+    pointExpiryDays: INDUSTRY_POINT_EXPIRY_DAYS,
     birthdayPoints: 0,
     welcomePoints: 0,
     welcomeRewards: 0,
@@ -67,10 +70,10 @@ export const DEFAULT_REWARD_LEVELS: RewardLevelConfig[] = [
     name: "Gold",
     minLifetimePoints: 400,
     pointsMultiplier: 1.5,
-    perkDescription: "Priority queue",
-    discountPercent: 12,
+    perkDescription: "Priority queue\nFree size upgrade\nMystery gift monthly",
+    discountPercent: 0,
     tierActive: true,
-    pointExpiryDays: null,
+    pointExpiryDays: INDUSTRY_POINT_EXPIRY_DAYS,
     birthdayPoints: 0,
     welcomePoints: 0,
     welcomeRewards: 0,
@@ -83,10 +86,10 @@ export const DEFAULT_REWARD_LEVELS: RewardLevelConfig[] = [
     name: "Platinum",
     minLifetimePoints: 1000,
     pointsMultiplier: 2,
-    perkDescription: "Exclusive seasonal menu",
-    discountPercent: 15,
+    perkDescription: "Exclusive seasonal menu\nFree drink every month\nBring-a-friend free drink",
+    discountPercent: 0,
     tierActive: true,
-    pointExpiryDays: null,
+    pointExpiryDays: INDUSTRY_POINT_EXPIRY_DAYS,
     birthdayPoints: 0,
     welcomePoints: 0,
     welcomeRewards: 0,
@@ -117,12 +120,20 @@ export function normalizeRewardLevels(
         perkDescriptionI18n: tierDefaults?.perk ?? { en: defaults.perkDescription ?? "" },
       };
     }
+    const rawExpiry = existing.pointExpiryDays;
+    // Blank/null or very short windows → industry 12 months (30 days is too aggressive for cafes).
+    const pointExpiryDays =
+      typeof rawExpiry === "number" && rawExpiry >= 90
+        ? rawExpiry
+        : defaults.pointExpiryDays;
+
     return {
       ...defaults,
       ...existing,
       levelNumber: defaults.levelNumber,
       name: existing.name?.trim() || defaults.name,
       perkDescription: existing.perkDescription?.trim() || defaults.perkDescription,
+      pointExpiryDays,
       nameI18n: {
         en: existing.name?.trim() || defaults.name,
         ...tierDefaults?.name,

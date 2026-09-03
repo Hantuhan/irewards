@@ -20,7 +20,10 @@ export type UpsellProductOption = {
   slug: string;
   name: string;
   categoryLabel?: string;
+  categorySlug?: string;
   priceCents?: number;
+  tags?: string[];
+  specialTags?: string[];
 };
 
 type UpsellRuleEditorProps = {
@@ -126,8 +129,8 @@ export function UpsellRuleEditor({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-body-md text-on-surface-variant">
-        Search and add up to {max} products. Set rules (when to show) and promo pricing (e.g. RM2
-        bread, free ice cream). {value.length}/{max} selected.
+        Use Complete with AI to seed pairings, or search and add manually. Set rules and promo
+        pricing as needed. {value.length}/{max} selected.
       </p>
 
       {value.length > 0 && (
@@ -164,10 +167,9 @@ export function UpsellRuleEditor({
                   <button
                     type="button"
                     onClick={() => remove(link.slug)}
-                    className="shrink-0 text-on-surface-variant hover:text-primary"
-                    aria-label={`Remove ${product?.name ?? link.slug}`}
+                    className="shrink-0 font-mono text-label-mono text-on-surface-variant underline"
                   >
-                    <Icon name="close" />
+                    Remove
                   </button>
                 </div>
 
@@ -176,26 +178,25 @@ export function UpsellRuleEditor({
                     {showDownsell && (
                       <label>
                         <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                          Type
+                          Suggest as
                         </span>
                         <select
-                          value={link.suggestType}
+                          value={link.suggestType ?? "upsell"}
                           onChange={(e) =>
                             updateLink(link.slug, {
                               suggestType: e.target.value as SuggestType,
                             })
                           }
-                          className="w-full border border-surface-container-highest bg-surface-container-low px-3 py-2"
+                          className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
                         >
-                          <option value="upsell">Upsell — suggest add-on</option>
-                          <option value="downsell">Downsell — lighter alternative</option>
+                          <option value="upsell">Upsell</option>
+                          <option value="downsell">Downsell</option>
                         </select>
                       </label>
                     )}
-
                     <label>
                       <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                        Promo price
+                        Promo
                       </span>
                       <select
                         value={link.promoMode}
@@ -204,39 +205,43 @@ export function UpsellRuleEditor({
                           updateLink(link.slug, {
                             promoMode,
                             promoPriceCents:
-                              promoMode === "custom" ? (link.promoPriceCents ?? 200) : undefined,
+                              promoMode === "custom" ? (link.promoPriceCents ?? 0) : null,
                           });
                         }}
-                        className="w-full border border-surface-container-highest bg-surface-container-low px-3 py-2"
+                        className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
                       >
-                        <option value="regular">Regular menu price</option>
-                        <option value="free">Free</option>
+                        <option value="regular">Regular price</option>
                         <option value="custom">Custom promo price</option>
+                        <option value="free">FREE</option>
                       </select>
                     </label>
-
                     {link.promoMode === "custom" && (
                       <label>
                         <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                          Promo amount ({currencyDisplayCode(currency)})
+                          Promo price ({currencyDisplayCode(currency)})
                         </span>
                         <input
+                          type="text"
+                          inputMode="decimal"
                           value={promoInputFor(link)}
-                          onChange={(e) => {
-                            setPromoInputs((prev) => ({ ...prev, [link.slug]: e.target.value }));
-                            updateLink(link.slug, {
-                              promoPriceCents: parsePriceToCents(e.target.value),
-                            });
+                          onChange={(e) =>
+                            setPromoInputs((prev) => ({ ...prev, [link.slug]: e.target.value }))
+                          }
+                          onBlur={() => {
+                            const cents = parsePriceToCents(promoInputFor(link));
+                            updateLink(link.slug, { promoPriceCents: cents });
+                            setPromoInputs((prev) => ({
+                              ...prev,
+                              [link.slug]: centsToPriceInput(cents),
+                            }));
                           }}
-                          placeholder="2.00"
-                          className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 focus:border-primary focus:outline-none"
+                          className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2 font-mono"
                         />
                       </label>
                     )}
-
                     <label>
                       <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                        Show when
+                        When to show
                       </span>
                       <select
                         value={link.ruleType}
@@ -244,56 +249,44 @@ export function UpsellRuleEditor({
                           const ruleType = e.target.value as UpsellRuleType;
                           updateLink(link.slug, {
                             ruleType,
-                            minCartCents: ruleType === "min_cart" ? (link.minCartCents ?? 0) : undefined,
-                            maxCartCents: ruleType === "max_cart" ? (link.maxCartCents ?? 5000) : undefined,
+                            minCartCents: ruleType === "min_cart" ? (link.minCartCents ?? 0) : null,
+                            maxCartCents: ruleType === "max_cart" ? (link.maxCartCents ?? 0) : null,
                           });
                         }}
-                        className="w-full border border-surface-container-highest bg-surface-container-low px-3 py-2"
+                        className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
                       >
                         <option value="always">Always</option>
-                        <option value="min_cart">Cart total at least…</option>
-                        <option value="max_cart">Cart total at most…</option>
+                        <option value="min_cart">Cart at least…</option>
+                        <option value="max_cart">Cart at most…</option>
                       </select>
                     </label>
-
-                    {link.ruleType !== "always" && (
+                    {(link.ruleType === "min_cart" || link.ruleType === "max_cart") && (
                       <label>
                         <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
                           Cart amount ({currencyDisplayCode(currency)})
                         </span>
                         <input
+                          type="text"
+                          inputMode="decimal"
                           value={ruleAmountInputFor(link)}
-                          onChange={(e) => {
-                            setRuleInputs((prev) => ({ ...prev, [link.slug]: e.target.value }));
-                            const cents = parsePriceToCents(e.target.value);
+                          onChange={(e) =>
+                            setRuleInputs((prev) => ({ ...prev, [link.slug]: e.target.value }))
+                          }
+                          onBlur={() => {
+                            const cents = parsePriceToCents(ruleAmountInputFor(link));
                             updateLink(link.slug, {
-                              minCartCents: link.ruleType === "min_cart" ? cents : undefined,
-                              maxCartCents: link.ruleType === "max_cart" ? cents : undefined,
+                              minCartCents: link.ruleType === "min_cart" ? cents : null,
+                              maxCartCents: link.ruleType === "max_cart" ? cents : null,
                             });
+                            setRuleInputs((prev) => ({
+                              ...prev,
+                              [link.slug]: centsToPriceInput(cents),
+                            }));
                           }}
-                          placeholder="25.00"
-                          className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 focus:border-primary focus:outline-none"
+                          className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2 font-mono"
                         />
                       </label>
                     )}
-
-                    <label>
-                      <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                        Priority
-                      </span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={link.priority}
-                        onChange={(e) =>
-                          updateLink(link.slug, {
-                            priority: Number.parseInt(e.target.value, 10) || 10,
-                          })
-                        }
-                        className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 focus:border-primary focus:outline-none"
-                      />
-                    </label>
                   </div>
                 )}
               </div>
@@ -302,61 +295,42 @@ export function UpsellRuleEditor({
         </div>
       )}
 
-      <label>
-        <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-          Search products
-        </span>
-        <div className="relative">
-          <Icon
-            name="search"
-            className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 text-on-surface-variant"
-          />
+      {!atMax && (
+        <div className="flex flex-col gap-3 border border-dashed border-surface-container-highest bg-surface-container-low p-4">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or category"
-            className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 pl-7 focus:border-primary focus:outline-none"
+            placeholder="Search products to add…"
+            className="w-full border-0 border-b border-surface-container-highest bg-transparent py-2 focus:border-primary focus:outline-none"
           />
-        </div>
-      </label>
-
-      <div className="max-h-64 overflow-y-auto border border-surface-container-highest bg-surface-container-lowest">
-        {filteredAvailable.length === 0 ? (
-          <p className="px-4 py-6 text-center text-body-md text-on-surface-variant">
-            {search.trim()
-              ? "No products match your search."
-              : atMax
-                ? "Maximum selected. Remove one above to add another."
-                : "All products are already selected."}
-          </p>
-        ) : (
-          <ul>
-            {filteredAvailable.map((item) => (
-              <li key={item.slug} className="border-b border-surface-container-highest last:border-b-0">
+          <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+            {filteredAvailable.length === 0 ? (
+              <p className="text-body-md text-on-surface-variant">No matching products.</p>
+            ) : (
+              filteredAvailable.slice(0, 20).map((item) => (
                 <button
+                  key={item.slug}
                   type="button"
-                  disabled={atMax}
                   onClick={() => add(item.slug)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex items-center justify-between gap-2 px-2 py-2 text-left transition-colors hover:bg-surface-container-lowest"
                 >
-                  <Icon name="inventory_2" className="shrink-0 text-on-surface-variant" />
-                  <span className="min-w-0 flex-1">
+                  <span>
                     <span className="block font-display text-headline-sm text-on-surface">
                       {item.name}
                     </span>
-                    {item.categoryLabel && (
-                      <span className="mt-0.5 block font-mono text-label-mono text-on-surface-variant">
+                    {item.categoryLabel ? (
+                      <span className="font-mono text-[11px] text-on-surface-variant">
                         {item.categoryLabel}
                       </span>
-                    )}
+                    ) : null}
                   </span>
-                  <Icon name="add" className="shrink-0 text-primary" />
+                  <Icon name="add" className="text-primary" />
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

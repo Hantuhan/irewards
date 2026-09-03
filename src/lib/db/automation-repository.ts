@@ -40,6 +40,37 @@ export async function enqueueAutomationJob(input: {
   if (error) throw new Error(error.message);
 }
 
+/** Record that a voucher was issued to a member (staff, stamp card, etc.). */
+export async function recordManualVoucherIssue(input: {
+  merchantId: string;
+  customerId: string;
+  promoId: string;
+  code: string | null;
+  promoName: string;
+  issuedBy?: "merchant" | "stamp_card";
+}) {
+  const now = new Date().toISOString();
+  const issuedBy = input.issuedBy ?? "merchant";
+  const { error } = await db().from("automation_jobs").insert([
+    {
+      merchant_id: input.merchantId,
+      customer_id: input.customerId,
+      job_type: "campaign_issue_voucher",
+      run_at: now,
+      status: "sent",
+      sent_at: now,
+      payload: {
+        promoId: input.promoId,
+        code: input.code,
+        promoName: input.promoName,
+        issuedBy,
+        message: `Issued voucher: ${input.promoName}${input.code ? ` (${input.code})` : ""}`,
+      },
+    },
+  ]);
+  if (error) throw new Error(error.message);
+}
+
 export async function listDueAutomationJobs(limit = 50): Promise<AutomationJobRow[]> {
   const { data, error } = await db()
     .from("automation_jobs")

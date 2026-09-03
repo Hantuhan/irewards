@@ -661,13 +661,13 @@ export function validateWorkflow(workflow: CampaignWorkflow, channel: string): s
   );
   const issuesVoucher = workflow.actions.some((a) => a.type === "issue_voucher");
   const body = workflowMessageBody(workflow) ?? "";
-  if (issuesVoucher) {
+  if (issuesVoucher && (channel === "whatsapp" || channel === "sms")) {
     if (!sendsMessage) {
       issues.push("Add a Send WhatsApp step so members actually receive the voucher code.");
     } else if (!/\{code\}/i.test(body)) {
       issues.push("Add {code} to the message so the member receives their voucher code.");
     }
-  } else if (/\{code\}/i.test(body)) {
+  } else if (/\{code\}/i.test(body) && !issuesVoucher) {
     issues.push("Your message mentions {code} but there's no Issue voucher step — add one, or take {code} out of the message.");
   }
   if (sendsMessage && (channel === "whatsapp" || channel === "sms")) {

@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { merchantApi } from "@/lib/merchant/fetch";
 import { Icon } from "@/components/ui/Icon";
+import { manusHeaderBtnClass, manusHeaderPrimaryBtnClass } from "@/lib/ui/manus";
 import {
   DEFAULT_KITCHEN_FLOW,
   flowSummary,
@@ -404,19 +406,19 @@ function KitchenFlowEditor({
         </p>
       )}
 
-      <div className="mt-5 flex gap-2">
+      <div className="mt-5 flex flex-nowrap items-center gap-2">
         <button
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="bg-primary px-4 py-2 font-display text-eyebrow uppercase text-on-primary disabled:opacity-50"
+          className={manusHeaderPrimaryBtnClass}
         >
           {saving ? "Saving…" : "Save flow"}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="border border-surface-container-highest px-4 py-2 text-body-md"
+          className={manusHeaderBtnClass}
           disabled={saving}
         >
           Cancel
@@ -439,6 +441,7 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
   const [flowDraft, setFlowDraft] = useState<KitchenFlow>(DEFAULT_KITCHEN_FLOW);
   const [savingFlow, setSavingFlow] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
+  const [needsMembershipSetup, setNeedsMembershipSetup] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -467,6 +470,17 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
 
   useEffect(() => {
     load();
+    void merchantApi<{ membershipSetupCompleted?: boolean }>(
+      `/api/merchant/${merchantSlug}/settings`,
+    )
+      .then((settings) => {
+        setNeedsMembershipSetup(
+          merchantSlug !== "demo-cafe" && !settings.membershipSetupCompleted,
+        );
+      })
+      .catch(() => {
+        /* board still works without setup flag */
+      });
     const stream = new EventSource(`/api/merchant/${merchantSlug}/orders/stream`, {
       withCredentials: true,
     });
@@ -589,7 +603,7 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
           <button
             type="button"
             onClick={openFlowEditor}
-            className="inline-flex items-center gap-2 border border-surface-container-highest bg-surface-container-lowest px-4 py-2 font-display text-eyebrow uppercase text-primary"
+            className={manusHeaderBtnClass}
           >
             <Icon name="tune" className="text-base" />
             Edit flow
@@ -611,6 +625,26 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
           </div>
         ) : (
           <>
+            {needsMembershipSetup && (
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border border-[#1a3d2e]/20 bg-[#1a3d2e]/5 px-4 py-3">
+                <div>
+                  <p className="font-display text-headline-sm text-[#1a3d2e]">
+                    Set up iRewards
+                  </p>
+                  <p className="text-body-md text-on-surface-variant">
+                    Choose how members earn points, what they get, and what it costs you — about 2
+                    minutes, and you can change everything later.
+                  </p>
+                </div>
+                <Link
+                  href={`/dashboard/${merchantSlug}/rewards?setup=1`}
+                  className="inline-flex items-center gap-2 bg-[#1a3d2e] px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-white"
+                >
+                  <Icon name="smart_toy" className="text-[16px]" />
+                  Start setup
+                </Link>
+              </div>
+            )}
             <p className="shrink-0 text-body-md text-on-surface-variant">
               Flow:{" "}
               <span className="font-mono text-label-mono">{flowSummary(kitchenFlow)}</span>

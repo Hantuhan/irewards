@@ -12,6 +12,11 @@ export type VoucherInventoryItem = {
   issuedBy: string | null;
   redeemedAt: string | null;
   promoName: string;
+  /** Set when this promo was auto-created for a campaign's Issue voucher step. */
+  campaignId: string | null;
+  campaignName: string | null;
+  /** True when the linked campaign is live — revoke is blocked until it is paused. */
+  campaignActive: boolean;
 };
 
 export function formatVoucherCode(base: string | null, id: string): string {

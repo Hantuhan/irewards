@@ -16,8 +16,8 @@ type CustomerMobileNavProps = {
 };
 
 const defaultTabs: { id: CustomerTab; label: string; icon: string }[] = [
-  { id: "shop", label: "Shop", icon: "home" },
-  { id: "rewards", label: "Reward", icon: "confirmation_number" },
+  { id: "shop", label: "Shop", icon: "storefront" },
+  { id: "rewards", label: "Rewards", icon: "confirmation_number" },
   { id: "cart", label: "Cart", icon: "shopping_bag" },
   { id: "profile", label: "Profile", icon: "person" },
 ];
@@ -36,7 +36,7 @@ export function CustomerMobileNav({
   }));
 
   return (
-    <nav className="fixed bottom-0 left-1/2 z-50 flex h-16 w-full max-w-mobile -translate-x-1/2 items-center justify-around border-t border-surface-container-highest bg-surface px-4 py-2">
+    <nav className="fixed bottom-0 left-1/2 z-50 flex h-[64px] w-full max-w-mobile -translate-x-1/2 items-center justify-around border-t border-surface-container-highest bg-surface-container-lowest px-1 pb-[env(safe-area-inset-bottom)]">
       {tabs.map((tab) => {
         const href = routes[tab.id];
         const isActive = active === tab.id;
@@ -44,20 +44,20 @@ export function CustomerMobileNav({
           <Link
             key={tab.id}
             href={href}
-            className={`relative flex h-full w-full flex-col items-center justify-center transition-colors ${
-              isActive
-                ? "font-bold text-primary"
-                : "text-on-surface-variant hover:text-primary"
+            className={`relative flex h-full w-full flex-col items-center justify-center gap-0.5 transition-colors ${
+              isActive ? "text-on-surface" : "text-on-surface-variant/70 hover:text-on-surface"
             }`}
           >
-            <Icon
-              name={tab.icon}
-              className="mb-1 text-xl"
-              filled={isActive && tab.id === "rewards"}
-            />
-            <span className="font-mono text-label-mono">{tab.label}</span>
+            <Icon name={tab.icon} className="text-[22px]" filled={isActive} />
+            <span
+              className={`font-mono text-[10px] tracking-[0.04em] ${
+                isActive ? "font-semibold" : "font-medium"
+              }`}
+            >
+              {tab.label}
+            </span>
             {tab.id === "cart" && cartCount > 0 && (
-              <span className="absolute right-5 top-1 h-2 w-2 rounded-full bg-primary" />
+              <span className="absolute right-[calc(50%-14px)] top-2.5 h-1.5 w-1.5 rounded-full bg-primary" />
             )}
           </Link>
         );

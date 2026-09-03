@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ReceiptView } from "@/components/receipt/ReceiptView";
+import { StampCardVisual } from "@/components/storefront/StampCardVisual";
+import { IRewardsStatusCard } from "@/components/storefront/IRewardsStatusCard";
 import { Icon } from "@/components/ui/Icon";
 import { useMemberSession } from "@/hooks/useMemberSession";
 import type { ReceiptLineItem, ReceiptMerchant, ReceiptOrder } from "@/lib/receipt/types";
@@ -36,7 +38,27 @@ type OrderStatusResponse = {
   merchant: ReceiptMerchant & { slug: string; receiptLayout?: unknown } | null;
   tableNumber: string | null;
   whatsappJoinUrl: string | null;
+  joinOffer: {
+    headline: string;
+    subtitle: string;
+    badge: string;
+    ctaLabel?: string;
+    campaignId: string | null;
+    campaignName: string | null;
+  } | null;
   tier: TierInfo | null;
+  stamps: {
+    enabled: boolean;
+    filled: number;
+    size: number;
+    remaining: number;
+    rewardLabel: string | null;
+    voucher?: {
+      name: string;
+      code: string | null;
+      description: string;
+    } | null;
+  } | null;
 };
 
 type ThankYouShellProps = {
@@ -182,85 +204,124 @@ export function ThankYouShell({ merchantSlug, tableId, orderId }: ThankYouShellP
               </h1>
             </div>
 
+            {!data.tier && (
+              <section className="overflow-hidden border-2 border-primary bg-surface-container-lowest">
+                <div className="bg-primary px-5 py-3 text-center">
+                  <p className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-on-primary/90">
+                    Members-only welcome gift
+                  </p>
+                  {data.joinOffer?.badge && (
+                    <p className="mt-1 font-display text-[28px] font-bold leading-none tracking-tight text-on-primary">
+                      {data.joinOffer.badge}
+                    </p>
+                  )}
+                </div>
+                <div className="px-5 py-5 text-center">
+                  <h2 className="font-display text-[22px] font-bold leading-tight tracking-tight text-primary">
+                    {data.joinOffer?.headline ?? "Don't leave empty-handed"}
+                  </h2>
+                  <p className="mt-2 text-[13px] leading-relaxed text-on-surface-variant">
+                    {data.joinOffer?.subtitle ??
+                      "Join free on WhatsApp in 10 seconds — unlock points, stamps, and member-only drops."}
+                  </p>
+                  <ul className="mt-4 space-y-2 text-left">
+                    {[
+                      "Free to join — no app download",
+                      "Earn points on every order",
+                      "Stamp card toward free drinks",
+                      "Welcome gift unlocked on WhatsApp",
+                    ].map((line) => (
+                      <li
+                        key={line}
+                        className="flex items-start gap-2 text-[13px] text-on-surface"
+                      >
+                        <Icon
+                          name="check_circle"
+                          className="mt-0.5 shrink-0 text-[16px] text-primary"
+                          filled
+                        />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {data.whatsappJoinUrl ? (
+                  <div className="flex flex-col gap-2.5 border-t border-surface-container-highest px-5 py-4">
+                    <a
+                      href={data.whatsappJoinUrl}
+                      className="flex w-full items-center justify-center gap-2 bg-primary py-4 text-on-primary transition-colors hover:bg-surface-tint"
+                    >
+                      <Icon name="chat" />
+                      <span className="font-display text-[15px] font-semibold">
+                        {data.joinOffer?.ctaLabel ?? "Join free on WhatsApp"}
+                      </span>
+                      <Icon name="arrow_forward" className="text-lg" />
+                    </a>
+                    <p className="text-center text-[11px] text-on-surface-variant">
+                      Takes ~10 seconds · Your gift waits on WhatsApp
+                    </p>
+                    <a
+                      href={`/m/${merchantSlug}/table/${tableId}`}
+                      className="pt-1 text-center font-mono text-[10px] uppercase tracking-widest text-on-surface-variant/80 transition-colors hover:text-on-surface-variant"
+                    >
+                      Skip — miss this gift
+                    </a>
+                  </div>
+                ) : (
+                  <p className="border-t border-surface-container-highest p-5 text-center text-body-md text-on-surface-variant">
+                    WhatsApp join link will appear once your join token is ready.
+                  </p>
+                )}
+              </section>
+            )}
+
             <ReceiptView
               merchant={merchant}
               order={receiptOrderFromResponse(data.order)}
               layout={data.merchant?.receiptLayout}
             />
 
-            {data.tier && (
-              <section className="border border-surface-container-highest bg-surface-container-lowest p-6">
-                <h2 className="text-center font-display text-eyebrow uppercase tracking-wider text-on-surface-variant">
-                  iRewards status
-                </h2>
-                <p className="mt-2 text-center font-display text-headline-sm text-primary">
-                  Your level: {data.tier.name}
-                </p>
-                {data.tier.perkDescription && (
-                  <p className="mt-1 text-center text-body-md text-on-surface-variant">
-                    {data.tier.perkDescription}
-                  </p>
-                )}
-                <div className="mt-4 border-t border-surface-container-high pt-4">
-                  <div className="mb-2 flex items-end justify-between">
-                    <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-                      {data.tier.lifetimePointsEarned} lifetime pts
-                    </span>
-                    {data.tier.nextLevelName && (
-                      <span className="font-mono text-label-mono text-primary">
-                        Next: {data.tier.nextLevelName}
-                      </span>
-                    )}
-                  </div>
-                  <div className="h-1 w-full bg-surface-container-highest">
-                    <div
-                      className="h-full bg-primary transition-all"
-                      style={{
-                        width: data.tier.pointsToNextLevel
-                          ? `${Math.min(95, Math.max(8, 100 - (data.tier.pointsToNextLevel / (data.tier.pointsToNextLevel + data.tier.lifetimePointsEarned)) * 100))}%`
-                          : "100%",
-                      }}
-                    />
-                  </div>
-                  {data.tier.pointsToNextLevel !== null && data.tier.nextLevelName && (
-                    <p className="mt-2 text-center text-body-md text-on-surface-variant">
-                      {data.tier.pointsToNextLevel} points to {data.tier.nextLevelName}
+            {data.stamps?.enabled && (
+              <>
+                <StampCardVisual
+                  filled={data.stamps.filled}
+                  size={data.stamps.size}
+                  cafeName={merchant.name}
+                  rewardLabel={data.stamps.rewardLabel}
+                />
+                {data.stamps.voucher && (
+                  <section className="border border-surface-container-highest bg-surface-container-lowest p-5 text-center">
+                    <p className="font-mono text-[10px] uppercase tracking-wider text-on-surface-variant">
+                      Stamp voucher unlocked
                     </p>
-                  )}
-                </div>
-              </section>
+                    <p className="mt-2 font-display text-headline-sm text-primary">
+                      {data.stamps.voucher.name}
+                    </p>
+                    <p className="mt-1 text-[13px] text-on-surface-variant">
+                      {data.stamps.voucher.description}
+                    </p>
+                    {data.stamps.voucher.code && (
+                      <p className="mt-3 border border-dashed border-primary/40 bg-primary/5 px-3 py-2 font-mono text-[13px] tracking-widest text-primary">
+                        {data.stamps.voucher.code}
+                      </p>
+                    )}
+                    <p className="mt-2 text-[12px] text-on-surface-variant">
+                      Apply this code in your cart on your next visit
+                    </p>
+                  </section>
+                )}
+              </>
             )}
 
-            <section className="flex flex-col gap-4">
-              {data.whatsappJoinUrl ? (
-                <>
-                  <a
-                    href={data.whatsappJoinUrl}
-                    className="relative flex w-full items-center justify-center gap-3 overflow-hidden bg-primary py-4 px-6 text-on-primary transition-colors hover:bg-surface-tint"
-                  >
-                    <Icon name="chat" />
-                    <span className="font-display text-headline-sm">Join iRewards on WhatsApp</span>
-                    <span className="absolute right-4 flex items-center gap-1 bg-surface-container-lowest px-2 py-1 font-display text-[10px] uppercase tracking-wider text-primary">
-                      <Icon name="redeem" className="text-xs" />
-                      +1 Pt
-                    </span>
-                  </a>
-                  <p className="text-center text-body-md text-on-surface-variant">
-                    Save your progress and get exclusive drops.
-                  </p>
-                  <a
-                    href={`/m/${merchantSlug}/table/${tableId}`}
-                    className="text-center font-mono text-label-mono uppercase tracking-widest text-on-surface-variant underline decoration-outline-variant underline-offset-4 transition-colors hover:text-primary hover:decoration-primary"
-                  >
-                    Skip for now
-                  </a>
-                </>
-              ) : (
-                <p className="text-center text-body-md text-on-surface-variant">
-                  WhatsApp join link will appear once your join token is ready.
-                </p>
-              )}
-            </section>
+            {data.tier && (
+              <IRewardsStatusCard
+                levelName={data.tier.name}
+                perkDescription={data.tier.perkDescription}
+                lifetimePointsEarned={data.tier.lifetimePointsEarned}
+                nextLevelName={data.tier.nextLevelName}
+                pointsToNextLevel={data.tier.pointsToNextLevel}
+              />
+            )}
           </>
         )}
       </div>

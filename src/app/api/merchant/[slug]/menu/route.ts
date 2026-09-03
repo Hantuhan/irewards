@@ -92,11 +92,14 @@ const itemSchema = z.object({
     .max(8)
     .optional(),
   takeawayCharge: takeawayChargeSchema.optional(),
+  availableDineIn: z.boolean().optional(),
+  availableTakeaway: z.boolean().optional(),
   kcal: z.number().int().min(0).nullable().optional(),
   sugarG: z.number().min(0).nullable().optional(),
   ingredients: z.string().nullable().optional(),
   itemNotes: z.string().nullable().optional(),
   ingredientIds: z.array(z.string().min(1)).optional(),
+  mainIngredientIds: z.array(z.string().min(1)).max(2).optional(),
   coffeeProfile: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -132,6 +135,12 @@ export async function GET(request: Request, context: RouteContext) {
         merchant: {
           name: merchant.name,
           currency: merchant.currency,
+          pointsProgramEnabled: merchant.points_program_enabled !== false,
+          stampsProgramEnabled: Boolean(merchant.stamps_program_enabled),
+          pointsPerRinggit: Number(merchant.points_per_ringgit ?? 0.1),
+          pointsRedeemCentsPerPoint: Number(
+            merchant.points_redeem_cents_per_point ?? 10,
+          ),
         },
       });
     }
@@ -176,6 +185,8 @@ export async function GET(request: Request, context: RouteContext) {
         upsellLinks: upsellMap.get(item.id) ?? [],
         upsellItemSlugs: (upsellMap.get(item.id) ?? []).map((link) => link.slug),
         takeawayCharge: takeawayChargeFromRow(item),
+        availableDineIn: item.available_dine_in ?? true,
+        availableTakeaway: item.available_takeaway ?? true,
         kcal: item.kcal ?? null,
         sugarG: item.sugar_g ?? null,
         ingredients: item.ingredients ?? null,
@@ -183,6 +194,7 @@ export async function GET(request: Request, context: RouteContext) {
         itemNotes: item.item_notes ?? null,
         itemNotesI18n: item.item_notes_i18n ?? { en: item.item_notes ?? "" },
         ingredientIds: item.ingredient_ids ?? [],
+        mainIngredientIds: item.main_ingredient_ids ?? [],
         coffeeProfile: item.coffee_profile_json ?? {},
       })),
     });
@@ -216,11 +228,14 @@ export async function PUT(request: Request, context: RouteContext) {
       upsellLinks: body.upsellLinks,
       upsellItemSlugs: body.upsellLinks ? undefined : body.upsellItemSlugs,
       takeawayCharge: body.takeawayCharge,
+      availableDineIn: body.availableDineIn,
+      availableTakeaway: body.availableTakeaway,
       kcal: body.kcal,
       sugarG: body.sugarG,
       ingredients: body.ingredients,
       itemNotes: body.itemNotes,
       ingredientIds: body.ingredientIds,
+      mainIngredientIds: body.mainIngredientIds,
     });
 
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { suggestStoreBundles } from "@/lib/ai/store-intelligence";
+import { sanitizeSuggestBundle, suggestStoreBundles } from "@/lib/ai/store-intelligence";
 import { listGlobalUpsellLinks } from "@/lib/db/global-upsell-repository";
 import { getActiveMenuForStorefront } from "@/lib/db/merchant-repository";
 import { getMerchantBySlug } from "@/lib/db/repository";
@@ -49,7 +49,7 @@ export async function POST(request: Request, context: RouteContext) {
       hour: new Date().getHours(),
     });
 
-    return NextResponse.json(bundle);
+    return NextResponse.json(sanitizeSuggestBundle(bundle));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Store suggest failed";
     return NextResponse.json({ error: message }, { status: 500 });

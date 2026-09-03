@@ -2,13 +2,18 @@ import type { ProgramLanguage } from "@/lib/i18n/program-locale";
 import { menuLocalizedText } from "@/lib/menu/i18n";
 import type { ModifierGroup } from "@/lib/menu/modifiers";
 import {
-  formatIngredientList,
+  formatCustomIngredients,
   parseMenuIngredientPresets,
+  stripCoffeeDisclosureIngredientIds,
+  stripFoodOnlyIngredientIds,
   type MenuIngredientPreset,
 } from "@/lib/menu/menu-ingredients";
+import { normalizeMainIngredientIds } from "@/lib/menu/main-ingredients";
 import { takeawayChargeFromRow } from "@/lib/menu/takeaway-charge";
 import type { UpsellLinkConfig } from "@/lib/menu/upsell-rules";
 import { parseCoffeeProfile } from "@/lib/menu/coffee-profile";
+import { parseCategoryProfile, resolveSimpleCategory } from "@/lib/menu/simple-category-options";
+import { isCoffeeMenuCategory, isDrinkMenuCategory } from "@/lib/menu/coffee-templates";
 import type { StorefrontMenuItem } from "@/lib/menu/storefront";
 
 export type MenuItemDetailRow = {
@@ -28,11 +33,14 @@ export type MenuItemDetailRow = {
   item_notes?: string | null;
   item_notes_i18n?: Record<string, string> | null;
   ingredient_ids?: string[] | null;
+  main_ingredient_ids?: string[] | null;
   coffee_profile_json?: Record<string, unknown> | null;
   takeaway_charge_enabled?: boolean | null;
   takeaway_surcharge_type?: string | null;
   takeaway_surcharge_value?: number | null;
   takeaway_surcharge_priority?: number | null;
+  available_dine_in?: boolean | null;
+  available_takeaway?: boolean | null;
 };
 
 type MapStorefrontItemInput = {
@@ -55,15 +63,20 @@ export function mapStorefrontMenuItem({
   lang = "en",
 }: MapStorefrontItemInput): StorefrontMenuItem {
   const catalog = ingredientCatalog.length > 0 ? ingredientCatalog : parseMenuIngredientPresets(null);
-  const ingredientIds = item.ingredient_ids ?? [];
-  const resolvedIngredients = formatIngredientList(
-    ingredientIds,
-    catalog,
+  const coffeeItem = isCoffeeMenuCategory(categorySlug);
+  const drinkItem = isDrinkMenuCategory(categorySlug);
+  let ingredientIds = coffeeItem
+    ? stripCoffeeDisclosureIngredientIds(item.ingredient_ids ?? [], catalog)
+    : (item.ingredient_ids ?? []);
+  if (drinkItem) ingredientIds = stripFoodOnlyIngredientIds(ingredientIds);
+  const resolvedIngredients = formatCustomIngredients(
     item.ingredients,
     lang,
     item.ingredients_i18n,
   );
   const resolvedNotes = menuLocalizedText(item.item_notes_i18n, lang, item.item_notes ?? "");
+
+  const simpleKind = resolveSimpleCategory(categorySlug);
 
   return {
     id: item.slug,
@@ -80,10 +93,16 @@ export function mapStorefrontMenuItem({
     ingredients: resolvedIngredients,
     notes: resolvedNotes || null,
     ingredientIds,
-    coffeeProfile: parseCoffeeProfile(item.coffee_profile_json),
+    mainIngredientIds: normalizeMainIngredientIds(item.main_ingredient_ids ?? []),
+    coffeeProfile: coffeeItem ? parseCoffeeProfile(item.coffee_profile_json) : undefined,
+    simpleCategoryProfile: simpleKind
+      ? parseCategoryProfile(simpleKind, item.coffee_profile_json)
+      : undefined,
     upsellLinks,
     upsellItemIds: upsellLinks.map((link) => link.slug),
     modifierGroups,
     takeawayCharge: takeawayChargeFromRow(item),
+    availableDineIn: item.available_dine_in ?? true,
+    availableTakeaway: item.available_takeaway ?? true,
   };
 }

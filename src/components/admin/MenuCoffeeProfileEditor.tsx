@@ -1,273 +1,116 @@
 "use client";
 
+import type { CoffeeProfile } from "@/lib/menu/coffee-profile";
 import {
-  COFFEE_PROCESS_OPTIONS,
-  COFFEE_ROAST_OPTIONS,
-  COFFEE_TASTING_NOTE_SUGGESTIONS,
-  type CoffeeDetailLevel,
-  type CoffeeFlavorProfile,
-  type CoffeeProductKind,
-  type CoffeeProfile,
-  type FlavorIntensity,
-} from "@/lib/menu/coffee-profile";
+  DRINK_ICE_OPTIONS,
+  DRINK_SIZE_OPTIONS,
+  DRINK_SWEETNESS_OPTIONS,
+  DRINK_TEMPERATURE_OPTIONS,
+} from "@/lib/menu/simple-drink-options";
 
 type MenuCoffeeProfileEditorProps = {
   value: CoffeeProfile;
   onChange: (next: CoffeeProfile) => void;
 };
 
-function IntensitySlider({
+function ChipRow<T extends string>({
   label,
+  hint,
+  options,
   value,
   onChange,
 }: {
   label: string;
-  value?: FlavorIntensity;
-  onChange: (next?: FlavorIntensity) => void;
+  hint?: string;
+  options: Array<{ value: T; label: string; hint?: string }>;
+  value: T | undefined;
+  onChange: (next: T) => void;
 }) {
   return (
-    <label className="flex flex-col gap-2">
-      <span className="font-mono text-label-mono text-on-surface-variant">{label}</span>
-      <div className="flex items-center gap-2">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => onChange(value === n ? undefined : (n as FlavorIntensity))}
-            className={`h-8 w-8 border font-mono text-label-mono transition-colors ${
-              value === n
-                ? "border-primary bg-primary text-on-primary"
-                : "border-surface-container-highest text-on-surface-variant"
-            }`}
-            aria-label={`${label} ${n}`}
-          >
-            {n}
-          </button>
-        ))}
-        <span className="text-body-md text-on-surface-variant">1 = low · 5 = high</span>
+    <div>
+      <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
+        {label}
+      </p>
+      {hint && <p className="mt-0.5 text-[12px] text-on-surface-variant">{hint}</p>}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={`border px-3 py-1.5 text-body-md transition-colors ${
+                selected
+                  ? "border-primary bg-primary text-on-primary"
+                  : "border-surface-container-highest bg-white text-on-surface-variant"
+              }`}
+            >
+              {option.label}
+              {option.hint ? (
+                <span className={`ml-1 text-[11px] ${selected ? "text-on-primary/80" : ""}`}>
+                  {option.hint}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
-    </label>
+    </div>
   );
 }
 
 export function MenuCoffeeProfileEditor({ value, onChange }: MenuCoffeeProfileEditorProps) {
-  const detailLevel = value.detailLevel ?? "simple";
-  const flavor = value.flavorProfile ?? {};
-  const tastingNotes = value.tastingNotes ?? [];
-
-  function setDetailLevel(level: CoffeeDetailLevel) {
-    onChange({ ...value, detailLevel: level });
-  }
-
-  function setFlavor(patch: Partial<CoffeeFlavorProfile>) {
-    onChange({ ...value, flavorProfile: { ...flavor, ...patch } });
-  }
-
-  function toggleTastingNote(note: string) {
-    const next = tastingNotes.includes(note)
-      ? tastingNotes.filter((n) => n !== note)
-      : [...tastingNotes, note];
-    onChange({ ...value, tastingNotes: next });
-  }
-
   return (
     <div className="flex flex-col gap-5">
       <div>
         <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-          Coffee product type
+          Order defaults
         </p>
         <p className="mt-1 text-body-md text-on-surface-variant">
-          Simple keeps setup minimal. Advanced lets you add taste profile fields — only filled
-          fields appear on the diner menu.
+          What diners see first when they customise this drink. Same options for Coffee, Kopi, and
+          Teh.
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {(
-            [
-              { level: "simple" as CoffeeDetailLevel, label: "Simple" },
-              { level: "advanced" as CoffeeDetailLevel, label: "Advanced" },
-            ] as const
-          ).map(({ level, label }) => (
-            <button
-              key={level}
-              type="button"
-              onClick={() => setDetailLevel(level)}
-              className={`border px-4 py-2 font-display text-headline-sm transition-colors ${
-                detailLevel === level
-                  ? "border-primary bg-primary text-on-primary"
-                  : "border-surface-container-highest text-on-surface-variant"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
       </div>
 
-      <div className="border border-surface-container-highest bg-surface-container-low p-4">
-        <p className="font-mono text-label-mono text-on-surface-variant">Product kind</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {(
-            [
-              { kind: "drink" as CoffeeProductKind, label: "Drink" },
-              { kind: "retail_beans" as CoffeeProductKind, label: "Retail beans" },
-            ] as const
-          ).map(({ kind, label }) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => onChange({ ...value, kind })}
-              className={`border px-3 py-1.5 text-body-md transition-colors ${
-                value.kind === kind
-                  ? "border-primary bg-primary text-on-primary"
-                  : "border-surface-container-highest text-on-surface-variant"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {value.kind === "drink" && (
-          <label className="mt-4 block">
-            <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-              Default temperature
-            </span>
-            <select
-              value={value.defaultTemperature ?? ""}
-              onChange={(e) =>
-                onChange({
-                  ...value,
-                  defaultTemperature:
-                    e.target.value === "hot" || e.target.value === "cold"
-                      ? e.target.value
-                      : undefined,
-                })
-              }
-              className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
-            >
-              <option value="">Not set</option>
-              <option value="hot">Hot</option>
-              <option value="cold">Cold</option>
-            </select>
-          </label>
-        )}
+      <div className="flex flex-col gap-5 border border-surface-container-highest bg-surface-container-low p-4">
+        <ChipRow
+          label="Temperature"
+          hint="Default diners see first"
+          options={DRINK_TEMPERATURE_OPTIONS}
+          value={value.defaultTemperature ?? "hot"}
+          onChange={(defaultTemperature) =>
+            onChange({ ...value, kind: "drink", detailLevel: "simple", defaultTemperature })
+          }
+        />
+        <ChipRow
+          label="Size"
+          hint="Regular is the base price · Large adds a surcharge"
+          options={DRINK_SIZE_OPTIONS}
+          value={value.defaultSize ?? "regular"}
+          onChange={(defaultSize) =>
+            onChange({ ...value, kind: "drink", detailLevel: "simple", defaultSize })
+          }
+        />
+        <ChipRow
+          label="Sweetness"
+          hint="Default sugar level for this drink"
+          options={DRINK_SWEETNESS_OPTIONS}
+          value={value.defaultSweetness ?? "regular"}
+          onChange={(defaultSweetness) =>
+            onChange({ ...value, kind: "drink", detailLevel: "simple", defaultSweetness })
+          }
+        />
+        <ChipRow
+          label="Ice"
+          hint="Used when the drink is iced"
+          options={DRINK_ICE_OPTIONS}
+          value={value.defaultIce ?? "regular"}
+          onChange={(defaultIce) =>
+            onChange({ ...value, kind: "drink", detailLevel: "simple", defaultIce })
+          }
+        />
       </div>
-
-      {detailLevel === "advanced" && (
-        <div className="flex flex-col gap-5 border border-surface-container-highest bg-surface-container-low p-4">
-          <p className="font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-            Taste profile (optional)
-          </p>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label>
-              <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Roast level
-              </span>
-              <select
-                value={value.roastLevel ?? ""}
-                onChange={(e) =>
-                  onChange({
-                    ...value,
-                    roastLevel: (e.target.value as CoffeeProfile["roastLevel"]) || null,
-                  })
-                }
-                className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
-              >
-                <option value="">Not set</option>
-                {COFFEE_ROAST_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Process method
-              </span>
-              <select
-                value={value.processMethod ?? ""}
-                onChange={(e) =>
-                  onChange({
-                    ...value,
-                    processMethod: (e.target.value as CoffeeProfile["processMethod"]) || null,
-                  })
-                }
-                className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
-              >
-                <option value="">Not set</option>
-                {COFFEE_PROCESS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="sm:col-span-2">
-              <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Origin / region
-              </span>
-              <input
-                value={value.origin ?? ""}
-                onChange={(e) => onChange({ ...value, origin: e.target.value })}
-                placeholder="e.g. Ethiopia Yirgacheffe, Colombia Huila"
-                className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
-              />
-            </label>
-            <label className="sm:col-span-2">
-              <span className="mb-1.5 block font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-                Bean variety
-              </span>
-              <input
-                value={value.beanVariety ?? ""}
-                onChange={(e) => onChange({ ...value, beanVariety: e.target.value })}
-                placeholder="e.g. 100% Arabica, Bourbon, Geisha"
-                className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
-              />
-            </label>
-          </div>
-
-          <div>
-            <p className="mb-2 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-              Tasting notes
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {COFFEE_TASTING_NOTE_SUGGESTIONS.map((note) => {
-                const selected = tastingNotes.includes(note);
-                return (
-                  <button
-                    key={note}
-                    type="button"
-                    onClick={() => toggleTastingNote(note)}
-                    className={`border px-3 py-1.5 text-body-md transition-colors ${
-                      selected
-                        ? "border-primary bg-primary text-on-primary"
-                        : "border-surface-container-highest text-on-surface-variant"
-                    }`}
-                  >
-                    {note}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <IntensitySlider
-              label="Acidity"
-              value={flavor.acidity}
-              onChange={(n) => setFlavor({ acidity: n })}
-            />
-            <IntensitySlider
-              label="Body"
-              value={flavor.body}
-              onChange={(n) => setFlavor({ body: n })}
-            />
-            <IntensitySlider
-              label="Sweetness"
-              value={flavor.sweetness}
-              onChange={(n) => setFlavor({ sweetness: n })}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

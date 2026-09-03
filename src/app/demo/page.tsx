@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
+import { DemoDinerSim } from "@/components/demo/DemoDinerSim";
 import { customerRoutes, dashboardRoutes } from "@/lib/navigation/routes";
 
 const DEMO_SLUG = "demo-cafe";
@@ -60,25 +61,13 @@ export default function DemoHubPage() {
               /m/{"{slug}"}/table/{"{id}"}
             </code>
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(
-              [
-                { href: customer.shop, label: "Shop", icon: "storefront" },
-                { href: customer.rewards, label: "iRewards", icon: "confirmation_number" },
-                { href: customer.cart, label: "Cart", icon: "shopping_bag" },
-                { href: customer.profile, label: "Profile", icon: "person" },
-              ] as const
-            ).map((page) => (
-              <Link
-                key={page.href}
-                href={page.href}
-                className="flex items-center gap-3 border border-surface-container-highest px-4 py-3 hover:border-primary"
-              >
-                <Icon name={page.icon} />
-                <span className="font-display text-headline-sm">{page.label}</span>
-              </Link>
-            ))}
-          </div>
+
+          <DemoDinerSim
+            shopHref={customer.shop}
+            rewardsHref={customer.rewards}
+            cartHref={customer.cart}
+            profileHref={customer.profile}
+          />
         </section>
 
         <Link

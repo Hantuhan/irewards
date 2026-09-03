@@ -15,6 +15,13 @@ import {
 } from "@/lib/loyalty/points-roi";
 import type { PointsRule } from "@/lib/loyalty/points-rules";
 import type { RewardLevelConfig } from "@/lib/loyalty/default-reward-levels";
+import {
+  activeMembershipLevels,
+  formatEarnCalculation,
+  moneyForPoints,
+  topActiveMembershipLevel,
+} from "@/lib/loyalty/membership-setup";
+import { manusLabelClass } from "@/lib/ui/manus";
 
 type PointsRoiPanelProps = {
   merchantSlug: string;
@@ -22,10 +29,18 @@ type PointsRoiPanelProps = {
   settings: { pointsPerRinggit: number; pointsRedeemCentsPerPoint: number };
   levels: RewardLevelConfig[];
   rules: PointsRule[];
+  /** `guide` = wizard-friendly calculator (no chat). `full` = admin tab with chat. */
+  variant?: "full" | "guide";
+  /** Guide defaults to RM/S$ 10 so owners can follow the maths. */
+  defaultAvgOrder?: number;
+  customerName?: string;
 };
 
 const inputClass =
   "mt-1 w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2 text-body-md";
+
+const guideInputClass =
+  "mt-1 w-full border-0 border-b border-surface-container-highest bg-transparent py-2 font-display text-headline-sm text-[#1a3d2e] focus:border-[#1a3d2e] focus:outline-none";
 
 export function PointsRoiPanel({
   merchantSlug,
@@ -33,29 +48,46 @@ export function PointsRoiPanel({
   settings,
   levels,
   rules,
+  variant = "full",
+  defaultAvgOrder,
+  customerName = "Amina",
 }: PointsRoiPanelProps) {
+  const isGuide = variant === "guide";
   const symbol = currency === "SGD" ? "S$" : "RM";
-  const [scenario, setScenario] = useState<PointsRoiScenario>(DEFAULT_ROI_SCENARIO);
+  const unitNamePlural = currency === "SGD" ? "cents" : "sen";
+  const activeLevels = useMemo(() => activeMembershipLevels(levels), [levels]);
+  const defaultTop = useMemo(() => topActiveMembershipLevel(levels), [levels]);
+
+  const [levelNumber, setLevelNumber] = useState(
+    () => defaultTop?.levelNumber ?? activeLevels[activeLevels.length - 1]?.levelNumber ?? 1,
+  );
+  const [scenario, setScenario] = useState<PointsRoiScenario>(() => ({
+    ...DEFAULT_ROI_SCENARIO,
+    avgOrderRm: defaultAvgOrder ?? (isGuide ? 10 : DEFAULT_ROI_SCENARIO.avgOrderRm),
+  }));
   const [input, setInput] = useState("");
   const [chatOpen, setChatOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const topTier = useMemo(() => {
-    const active = levels.filter((l) => l.tierActive !== false);
-    return active[active.length - 1] ?? levels[levels.length - 1];
-  }, [levels]);
+  useEffect(() => {
+    const stillActive = activeLevels.some((l) => l.levelNumber === levelNumber);
+    if (!stillActive && defaultTop) setLevelNumber(defaultTop.levelNumber);
+  }, [activeLevels, defaultTop, levelNumber]);
+
+  const selectedLevel =
+    activeLevels.find((l) => l.levelNumber === levelNumber) ?? defaultTop ?? activeLevels[0];
 
   const program = useMemo(
     () => ({
       pointsPerRinggit: settings.pointsPerRinggit,
       centsPerPoint: settings.pointsRedeemCentsPerPoint,
       currency,
-      topTierName: topTier?.name ?? "Platinum",
-      topTierMultiplier: topTier?.pointsMultiplier ?? 1.5,
+      topTierName: selectedLevel?.name ?? "Platinum",
+      topTierMultiplier: selectedLevel?.pointsMultiplier ?? 1,
       rules,
     }),
-    [settings, currency, topTier, rules],
+    [settings, currency, selectedLevel, rules],
   );
 
   const roi = useMemo(() => calculatePointsRoi(program, scenario), [program, scenario]);
@@ -65,16 +97,29 @@ export function PointsRoiPanel({
     program,
   );
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  const fullRedeemRm = moneyForPoints(roi.pointsPerVisit, settings.pointsRedeemCentsPerPoint);
+  const visitEarnBackPct =
+    scenario.avgOrderRm > 0 ? (fullRedeemRm / scenario.avgOrderRm) * 100 : 0;
+  const earnCalc = formatEarnCalculation(
+    symbol,
+    scenario.avgOrderRm,
+    settings.pointsPerRinggit,
+    selectedLevel?.pointsMultiplier ?? 1,
+    selectedLevel?.name,
+  );
 
   useEffect(() => {
+    if (isGuide) return;
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading, isGuide]);
+
+  useEffect(() => {
+    if (isGuide) return;
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, [input]);
+  }, [input, isGuide]);
 
   async function handleSubmit() {
     const ok = await send(input);
@@ -85,102 +130,209 @@ export function PointsRoiPanel({
     setScenario((prev) => ({ ...prev, [key]: value }));
   }
 
+  const levelSelect = (
+    <label className="block sm:col-span-2">
+      <span
+        className={
+          isGuide
+            ? "mb-1 block font-mono text-[10px] uppercase tracking-wider text-on-surface-variant"
+            : "font-display text-eyebrow uppercase text-on-surface-variant"
+        }
+      >
+        Calculate for level
+      </span>
+      <select
+        value={selectedLevel?.levelNumber ?? 1}
+        onChange={(e) => setLevelNumber(Number(e.target.value))}
+        className={isGuide ? guideInputClass : inputClass}
+      >
+        {activeLevels.map((level) => (
+          <option key={level.levelNumber} value={level.levelNumber}>
+            {level.name} · {formatDecimal(level.pointsMultiplier)}× collecting speed
+          </option>
+        ))}
+      </select>
+      <p className="mt-1 text-[12px] text-on-surface-variant">
+        Cost story uses <strong>{selectedLevel?.name ?? "this level"}</strong> — not every member
+        is at the top of the ladder.
+      </p>
+    </label>
+  );
+
+  const scenarioFields = (
+    <div className={`grid gap-4 ${isGuide ? "sm:grid-cols-2" : "sm:grid-cols-2"}`}>
+      {levelSelect}
+      <label className="block">
+        <span
+          className={
+            isGuide
+              ? "mb-1 block font-mono text-[10px] uppercase tracking-wider text-on-surface-variant"
+              : "font-display text-eyebrow uppercase text-on-surface-variant"
+          }
+        >
+          Avg order ({symbol})
+        </span>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={scenario.avgOrderRm}
+          onChange={(e) => updateScenario("avgOrderRm", Number(e.target.value))}
+          className={isGuide ? guideInputClass : inputClass}
+        />
+      </label>
+      <label className="block">
+        <span
+          className={
+            isGuide
+              ? "mb-1 block font-mono text-[10px] uppercase tracking-wider text-on-surface-variant"
+              : "font-display text-eyebrow uppercase text-on-surface-variant"
+          }
+        >
+          Active members
+        </span>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={scenario.activeMembers}
+          onChange={(e) => updateScenario("activeMembers", Number(e.target.value))}
+          className={isGuide ? guideInputClass : inputClass}
+        />
+      </label>
+      <label className="block">
+        <span
+          className={
+            isGuide
+              ? "mb-1 block font-mono text-[10px] uppercase tracking-wider text-on-surface-variant"
+              : "font-display text-eyebrow uppercase text-on-surface-variant"
+          }
+        >
+          Visits / member / month
+        </span>
+        <input
+          type="number"
+          min={0}
+          step={0.5}
+          value={scenario.visitsPerMemberMonth}
+          onChange={(e) => updateScenario("visitsPerMemberMonth", Number(e.target.value))}
+          className={isGuide ? guideInputClass : inputClass}
+        />
+      </label>
+      {!isGuide && (
+        <label className="block">
+          <span className="font-display text-eyebrow uppercase text-on-surface-variant">
+            Gross margin %
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={scenario.grossMarginPercent}
+            onChange={(e) => updateScenario("grossMarginPercent", Number(e.target.value))}
+            className={inputClass}
+          />
+        </label>
+      )}
+      <label className={`block ${isGuide ? "sm:col-span-2" : "sm:col-span-2"}`}>
+        <span
+          className={
+            isGuide
+              ? "mb-1 block font-mono text-[10px] uppercase tracking-wider text-on-surface-variant"
+              : "font-display text-eyebrow uppercase text-on-surface-variant"
+          }
+        >
+          Redemption rate % (points actually used)
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={scenario.redemptionRatePercent}
+          onChange={(e) => updateScenario("redemptionRatePercent", Number(e.target.value))}
+          className={`mt-2 w-full ${isGuide ? "accent-[#1a3d2e]" : "accent-primary"}`}
+        />
+        <p
+          className={`mt-1 font-mono text-label-mono ${isGuide ? "text-[#1a3d2e]" : "text-primary"}`}
+        >
+          {formatDecimal(scenario.redemptionRatePercent, 0)}%
+        </p>
+      </label>
+    </div>
+  );
+
+  if (isGuide) {
+    return (
+      <div className="space-y-6">
+        <div className="border border-[#1a3d2e]/20 bg-white p-4">
+          <p className={manusLabelClass}>ROI calculator</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-on-surface">
+            Tweak the numbers below. Results update for the level you pick — right now{" "}
+            <strong>{selectedLevel?.name ?? "top level"}</strong>.
+          </p>
+          <div className="mt-4">{scenarioFields}</div>
+        </div>
+
+        <div className="space-y-3">
+          <LaymanStat
+            title="Points on one visit"
+            value={`${roi.pointsPerVisit} pts`}
+            story={`On a ${symbol} ${formatDecimal(scenario.avgOrderRm)} bill, a ${selectedLevel?.name ?? "member"} (${formatDecimal(selectedLevel?.pointsMultiplier ?? 1)}× speed) collects ${roi.pointsPerVisit} point${roi.pointsPerVisit === 1 ? "" : "s"}.`}
+            calc={earnCalc}
+          />
+          <LaymanStat
+            title="What those points are worth"
+            value={`${formatDecimal(visitEarnBackPct)}%`}
+            story={`If ${customerName} is on ${selectedLevel?.name ?? "this level"}, spends ${symbol} ${formatDecimal(scenario.avgOrderRm)}, and later uses every point from that visit, she gets about ${symbol} ${fullRedeemRm.toFixed(2)} off. So about ${formatDecimal(visitEarnBackPct)}% of what she spent can come back as a discount.`}
+            calc={`${symbol} ${formatDecimal(scenario.avgOrderRm)} → ${roi.pointsPerVisit} pts → ${symbol} ${fullRedeemRm.toFixed(2)} off (= ${formatDecimal(visitEarnBackPct)}%)`}
+          />
+          <LaymanStat
+            title="Not everyone uses their points"
+            value={`${formatDecimal(roi.costAsPercentOfRevenue)}% of sales`}
+            story={`In real life many people save points or forget them. At ${formatDecimal(scenario.redemptionRatePercent, 0)}% used, your true cost for ${selectedLevel?.name ?? "this level"} members is closer to ${formatDecimal(roi.costAsPercentOfRevenue)}% of member sales — not the full ${formatDecimal(visitEarnBackPct)}%.`}
+            calc={`~${formatDecimal(scenario.redemptionRatePercent, 0)}% of points used → cost ≈ ${formatDecimal(roi.costAsPercentOfRevenue)}% of sales`}
+          />
+          <LaymanStat
+            title="Busy month for the whole cafe"
+            value={`${symbol} ${formatDecimal(roi.monthlyRedemptionLiabilityRm, 0)}`}
+            story={`Imagine ~${formatDecimal(scenario.activeMembers, 0)} members (modelled as ${selectedLevel?.name ?? "this level"}), each visiting ${formatDecimal(scenario.visitsPerMemberMonth)}× a month, each spending about ${symbol} ${formatDecimal(scenario.avgOrderRm)}. If they use about ${formatDecimal(scenario.redemptionRatePercent, 0)}% of their points, you give roughly ${symbol} ${formatDecimal(roi.monthlyRedemptionLiabilityRm, 0)} off across the whole month.`}
+            calc={`${formatDecimal(scenario.activeMembers, 0)} members × ${formatDecimal(scenario.visitsPerMemberMonth)} visits × ~${symbol} ${(roi.rewardValuePerVisitRm ?? 0).toFixed(2)} used per visit ≈ ${symbol} ${formatDecimal(roi.monthlyRedemptionLiabilityRm, 0)}`}
+          />
+        </div>
+
+        <p className="text-[12px] text-on-surface-variant">
+          Tip: try Starter first (cheapest), then your top level — so you see the range, not only
+          the most expensive members.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
       <div className="space-y-6">
         <section className="border border-surface-container-highest bg-surface-container-lowest p-6">
-          <h2 className="font-display text-headline-sm text-primary">Point ROI calculator</h2>
+          <h2 className="font-display text-headline-sm text-primary">What this costs you</h2>
           <p className="mt-1 text-body-md text-on-surface-variant">
-            Model earn-back, monthly reward liability, and margin impact. Answers use{" "}
-            <strong>your store&apos;s live sales &amp; member data</strong> and compare to MY/SG
-            industry benchmarks.
+            Same story as the iRewards guide — how much of sales can come back as rewards, and a
+            rough monthly cost. Pick a level so the maths matches that collecting speed.
           </p>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-                Avg order ({symbol})
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={scenario.avgOrderRm}
-                onChange={(e) => updateScenario("avgOrderRm", Number(e.target.value))}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-                Active members
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={scenario.activeMembers}
-                onChange={(e) => updateScenario("activeMembers", Number(e.target.value))}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-                Visits / member / month
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                value={scenario.visitsPerMemberMonth}
-                onChange={(e) => updateScenario("visitsPerMemberMonth", Number(e.target.value))}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-                Gross margin %
-              </span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                value={scenario.grossMarginPercent}
-                onChange={(e) => updateScenario("grossMarginPercent", Number(e.target.value))}
-                className={inputClass}
-              />
-            </label>
-            <label className="block sm:col-span-2">
-              <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-                Redemption rate % (points actually redeemed)
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={scenario.redemptionRatePercent}
-                onChange={(e) => updateScenario("redemptionRatePercent", Number(e.target.value))}
-                className="mt-2 w-full accent-primary"
-              />
-              <p className="mt-1 font-mono text-label-mono text-primary">
-                {formatDecimal(scenario.redemptionRatePercent, 0)}%
-              </p>
-            </label>
-          </div>
+          <div className="mt-6">{scenarioFields}</div>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
             {
-              label: "Earn-back rate",
-              value: `${formatDecimal(roi.earnBackPercent)}%`,
-              hint: "Theoretical cashback from earn + redeem",
+              label: "Comes back as rewards",
+              value: `${formatDecimal(visitEarnBackPct)}%`,
+              hint: `If a ${selectedLevel?.name ?? "member"} later uses every point from a visit`,
             },
             {
-              label: "Reward cost / revenue",
+              label: "True cost / sales",
               value: `${formatDecimal(roi.costAsPercentOfRevenue)}%`,
-              hint: "Monthly liability vs gross sales",
+              hint: `After ~${formatDecimal(scenario.redemptionRatePercent, 0)}% of points actually get used`,
             },
             {
               label: "Net margin after rewards",
@@ -190,12 +342,12 @@ export function PointsRoiPanel({
             {
               label: "Points per visit",
               value: String(roi.pointsPerVisit),
-              hint: `${topTier?.name ?? "Top tier"} multiplier applied`,
+              hint: `${selectedLevel?.name ?? "Level"} · ${formatDecimal(selectedLevel?.pointsMultiplier ?? 1)}× speed`,
             },
             {
               label: "Monthly liability",
               value: `${symbol} ${formatDecimal(roi.monthlyRedemptionLiabilityRm)}`,
-              hint: `${formatDecimal(roi.monthlyPointsIssued, 0)} pts issued`,
+              hint: `${formatDecimal(roi.monthlyPointsIssued, 0)} pts issued (${selectedLevel?.name ?? "level"})`,
             },
             {
               label: "Break-even visits",
@@ -283,9 +435,7 @@ export function PointsRoiPanel({
                     <ChatMarkdown content={msg.content} />
                   </div>
                 ))}
-                {loading && (
-                  <p className="text-body-md text-on-surface-variant">Thinking…</p>
-                )}
+                {loading && <p className="text-body-md text-on-surface-variant">Thinking…</p>}
                 <div ref={endRef} />
               </div>
             </div>
@@ -327,6 +477,29 @@ export function PointsRoiPanel({
           </div>
         )}
       </aside>
+    </div>
+  );
+}
+
+function LaymanStat({
+  title,
+  value,
+  story,
+  calc,
+}: {
+  title: string;
+  value: string;
+  story: string;
+  calc: string;
+}) {
+  return (
+    <div className="border border-surface-container-highest bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className={manusLabelClass}>{title}</p>
+        <p className="font-display text-headline-sm text-[#1a3d2e]">{value}</p>
+      </div>
+      <p className="mt-2 text-[14px] leading-relaxed text-on-surface">{story}</p>
+      <p className="mt-2 font-mono text-[11px] leading-snug text-[#1a3d2e]">{calc}</p>
     </div>
   );
 }

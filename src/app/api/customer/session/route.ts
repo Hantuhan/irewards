@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getMerchantBySlug, getCustomerById, getOrderById } from "@/lib/db/repository";
+import {
+  getMerchantBySlug,
+  getCustomerById,
+  getOrderById,
+  sumPendingPointsRedeemed,
+} from "@/lib/db/repository";
 import {
   createMemberSessionToken,
   getMemberSessionFromRequest,
   memberSessionCookieHeader,
+  clearMemberSessionCookieHeader,
 } from "@/lib/customer/session";
+import {
+  getRedeemAuthFromRequest,
+  clearRedeemAuthCookieHeader,
+} from "@/lib/customer/redeem-session";
 
 /**
  * Bind a browser session only from a paid order that already has a customer_id
@@ -20,24 +30,37 @@ const bindSchema = z.object({
 export async function GET(request: Request) {
   const session = getMemberSessionFromRequest(request);
   if (!session) {
-    return NextResponse.json({ member: null });
+    return NextResponse.json({ member: null, redeemAuthorized: false });
   }
 
   const customer = await getCustomerById(session.customerId);
   if (!customer?.is_member || customer.merchant_id !== session.merchantId) {
-    return NextResponse.json({ member: null });
+    return NextResponse.json({ member: null, redeemAuthorized: false });
   }
+
+  const redeemAuth = getRedeemAuthFromRequest(request);
+  const redeemAuthorized =
+    Boolean(redeemAuth) &&
+    redeemAuth!.customerId === customer.id &&
+    redeemAuth!.merchantId === session.merchantId;
+
+  const reservedPoints = await sumPendingPointsRedeemed(customer.id);
+  const availablePoints = Math.max(0, customer.points_balance - reservedPoints);
 
   return NextResponse.json({
     member: {
       id: customer.id,
       points: customer.points_balance,
+      availablePoints,
+      reservedPoints,
       tierPoints: customer.lifetime_points_earned,
       usualOrder: customer.usual_order,
       favoriteItem: customer.favorite_item_name,
       displayName: customer.display_name,
+      phone: customer.phone,
       marketingOptOut: customer.marketing_opt_out,
     },
+    redeemAuthorized,
   });
 }
 
@@ -79,4 +102,12 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Failed to bind session";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+/** Clear member browser session (sign out). */
+export async function DELETE() {
+  const res = NextResponse.json({ ok: true });
+  res.headers.append("Set-Cookie", clearMemberSessionCookieHeader());
+  res.headers.append("Set-Cookie", clearRedeemAuthCookieHeader());
+  return res;
 }

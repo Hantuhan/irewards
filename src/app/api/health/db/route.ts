@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { sqlHealthcheck } from "@/lib/db/sql";
 
 /**
- * DB health for ops. Uses Hyperdrive on Workers when bound, else DATABASE_URL.
+ * DB health for ops, over DATABASE_URL / INSFORGE_DATABASE_URL.
  * App queries use InsForge via adminDb().
  */
 export async function GET() {

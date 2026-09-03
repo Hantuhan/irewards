@@ -27,17 +27,11 @@
     "zeabur:setup": "sh scripts/zeabur-setup.sh",
     "zeabur:template:deploy": "npx zeabur@latest template deploy -f zeabur-template.yaml",
     "check:production-env": "sh scripts/check-production-env.sh",
-    "cf:build": "opennextjs-cloudflare build",
-    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "test:alerts": "node scripts/test-kitchen-alerts.mjs",
     "test:optout": "node scripts/test-opt-out.mjs"
   },
   "dependencies": {
     "@insforge/sdk": "^1.5.2",
-    "@opennextjs/cloudflare": "^1.20.6",
     "next": "^15.2.0",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
@@ -59,7 +53,6 @@
     "eslint-config-next": "^15.2.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.2",
-    "wrangler": "^4.128.0"
+    "typescript": "^5.8.2"
   }
 }

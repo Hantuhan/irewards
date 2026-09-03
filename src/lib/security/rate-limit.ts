@@ -24,9 +24,9 @@ export type RateLimitResult = {
 };
 
 /**
- * The caller's address. Cloudflare's header is authoritative when present;
- * `x-forwarded-for` can be spoofed, so it is only a fallback and the limit is
- * never the sole defence.
+ * The caller's address, read from the proxy headers Zeabur sets. These can be
+ * spoofed by a determined caller, so the limit slows abuse down and is never
+ * the sole defence.
  */
 export function requestIdentifier(request: Request): string {
   const cf = request.headers.get("cf-connecting-ip");

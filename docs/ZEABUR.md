@@ -74,9 +74,16 @@ Menu/banner images → `public/uploads/`. Attach a Zeabur volume at `/app/public
 
 ## Cron & webhooks
 
+The automation cron is **required**, not optional. Nothing inside the app
+schedules it, so without this caller every campaign sits at *Active* and sends
+nothing. Point a Zeabur cron (or any external scheduler) at it every minute.
+Each completed run stamps `system_heartbeats`; the Campaigns overview shows a
+red alarm if automation has never run or has been quiet for 30 minutes, so a
+missing scheduler is visible rather than silent.
+
 | Job | URL |
 |-----|-----|
-| Automation | `POST https://irewards.store/api/cron/automation` + `Bearer $CRON_SECRET` |
+| Automation (every minute) | `POST https://irewards.store/api/cron/automation` + `Bearer $CRON_SECRET` |
 | Meta | `https://irewards.store/api/webhooks/meta` |
 | HitPay | `https://irewards.store/api/webhooks/payments` |
 

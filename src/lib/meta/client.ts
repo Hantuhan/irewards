@@ -1,7 +1,7 @@
 /**
  * Meta WhatsApp Cloud API (Graph API) client.
  *
- * Plain `fetch` so it runs unchanged on Node and on Cloudflare Workers.
+ * Plain `fetch`, no SDK.
  * Two Meta resources are used:
  *   - the WhatsApp Business Account (WABA) for message templates + approvals
  *   - the phone number id for sending messages
@@ -119,7 +119,7 @@ function toHex(bytes: ArrayBuffer): string {
 
 /**
  * Validates Meta's `X-Hub-Signature-256` header (HMAC-SHA256 of the raw body
- * with the app secret). Uses Web Crypto so it works on Cloudflare Workers.
+ * with the app secret). Uses Web Crypto rather than node:crypto.
  */
 export async function verifyMetaSignature(
   rawBody: string,

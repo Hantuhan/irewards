@@ -2,7 +2,7 @@
  * Background-task heartbeats.
  *
  * Nothing in the app schedules the automation cron — it is an external caller
- * (Zeabur, cron-job.org, Cloudflare). If nobody wires it, campaigns still show
+ * (a Zeabur cron, cron-job.org, …). If nobody wires it, campaigns still show
  * "Active" and silently send nothing, which is the worst way for a merchant to
  * find out. Each successful run stamps a heartbeat, and the dashboard alarms
  * when it goes quiet.

@@ -1,10 +1,10 @@
 /**
  * Postgres health / ops SQL. Uses INSFORGE_DATABASE_URL or DATABASE_URL.
- * App queries use InsForge SDK (adminDb) by default on Zeabur.
+ * App queries use the InsForge SDK (adminDb); this is for health checks and
+ * one-off ops work.
  */
 
 import { Client } from "pg";
-import { resolveWorkerOrEnvDatabaseUrl } from "@/lib/db/hyperdrive";
 
 export type SqlClient = Client;
 
@@ -16,7 +16,7 @@ export function resolveDatabaseUrl(override?: string): string {
     process.env.INSFORGE_DATABASE_URL;
   if (!url) {
     throw new Error(
-      "Set DATABASE_URL (Supabase direct / Hyperdrive) or INSFORGE_DATABASE_URL for local Postgres",
+      "Set DATABASE_URL (Supabase direct) or INSFORGE_DATABASE_URL for local Postgres",
     );
   }
   return url;
@@ -55,43 +55,17 @@ export async function withSql<T>(
   }
 }
 
-/** Prefer Hyperdrive on Workers; otherwise env DATABASE_URL / InsForge. */
-export async function withHyperdriveSql<T>(fn: (client: SqlClient) => Promise<T>): Promise<{
-  result: T;
-  source: "hyperdrive" | "env";
-}> {
-  const { connectionString, source } = await resolveWorkerOrEnvDatabaseUrl();
-  const result = await withSql(fn, connectionString);
-  return { result, source };
-}
-
 export async function sqlHealthcheck(
   connectionString?: string,
-): Promise<{ ok: boolean; backend: string; source: "hyperdrive" | "env" }> {
-  if (connectionString) {
-    await withSql(async (client) => client.query("select 1 as ok"), connectionString);
-    return {
-      ok: true,
-      source: "env",
-      backend: /supabase/i.test(connectionString) ? "supabase" : "postgres",
-    };
-  }
-  const { result, source } = await withHyperdriveSql(async (client) => {
-    await client.query("select 1 as ok");
-    return true;
-  });
-  void result;
-  const url =
-    source === "env"
-      ? resolveDatabaseUrl()
-      : "hyperdrive";
-  const backend =
-    source === "hyperdrive"
-      ? "hyperdrive"
-      : /supabase/i.test(url)
-        ? "supabase"
-        : /127\.0\.0\.1|localhost/i.test(url)
-          ? "local-postgres"
-          : "postgres";
-  return { ok: true, backend, source };
+): Promise<{ ok: boolean; backend: string }> {
+  const url = connectionString ?? resolveDatabaseUrl();
+  await withSql(async (client) => client.query("select 1 as ok"), url);
+
+  const backend = /supabase/i.test(url)
+    ? "supabase"
+    : /127\.0\.0\.1|localhost/i.test(url)
+      ? "local-postgres"
+      : "postgres";
+
+  return { ok: true, backend };
 }

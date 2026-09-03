@@ -1,6 +1,7 @@
 /**
  * Simple in-memory login throttle (per process).
- * On Cloudflare Workers, replace with KV/Durable Object later.
+ * Per-instance only; move to the shared rate_limits table if this needs to
+ * hold across containers.
  */
 
 type Bucket = { failures: number; firstAt: number; lockedUntil: number };

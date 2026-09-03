@@ -1,7 +1,0 @@
-# Used only for local `wrangler` / OpenNext preview.
-# Never put DEEPSEEK_API_KEY, Meta, HitPay, or DB passwords here if this file might be shared.
-# Prefer `.env.local` for Next.js; set Cloudflare secrets separately with:
-#   npx wrangler secret put DEEPSEEK_API_KEY
-# — and only when you explicitly want that key on Cloudflare.
-
-NEXTJS_ENV=development

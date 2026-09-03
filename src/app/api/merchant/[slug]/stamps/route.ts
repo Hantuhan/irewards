@@ -9,7 +9,11 @@ import {
 import { listMenuCategories, listMenuItems } from "@/lib/db/merchant-repository";
 import { updateMerchant } from "@/lib/db/merchant-repository";
 import { STAMP_SIZE_PRESETS } from "@/lib/loyalty/stamps";
-import { verifyMerchantAccess } from "@/lib/merchant/access";
+import {
+  roleDeniedMessage,
+  verifyMerchantAccess,
+  verifyMerchantRole,
+} from "@/lib/merchant/access";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -86,6 +90,9 @@ export async function PUT(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "manager"))) {
+      return NextResponse.json({ error: roleDeniedMessage("manager") }, { status: 403 });
     }
 
     const merchant = await getMerchantBySlug(slug);

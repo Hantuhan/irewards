@@ -3,7 +3,11 @@ import { getMerchantBySlug } from "@/lib/db/repository";
 import { updateMerchant } from "@/lib/db/merchant-repository";
 import { listGlobalUpsellLinks, replaceGlobalUpsells } from "@/lib/db/global-upsell-repository";
 import { defaultUpsellLink, type UpsellLinkConfig } from "@/lib/menu/upsell-rules";
-import { verifyMerchantAccess } from "@/lib/merchant/access";
+import {
+  roleDeniedMessage,
+  verifyMerchantAccess,
+  verifyMerchantRole,
+} from "@/lib/merchant/access";
 import { syncTaxFlagsForCurrency } from "@/lib/merchant/charge-settings";
 import { z } from "zod";
 
@@ -176,6 +180,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "owner"))) {
+      return NextResponse.json({ error: roleDeniedMessage("owner") }, { status: 403 });
     }
 
     const merchant = await getMerchantBySlug(slug);

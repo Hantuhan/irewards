@@ -80,5 +80,44 @@ echo "$idor" | grep -qi "not found" \
   && pass "Unknown campaign id rejected cleanly (no raw database error)" \
   || fail "Expected a clean 'not found'; got: $idor"
 
+# --- 5. Roles: a staff account must not hold owner powers. ------------------
+# Skipped unless staff credentials are configured, so the suite still runs on
+# a bare setup — but when they exist these are the expensive ones: the loyalty
+# earn rate, the tax settings, and minting discount codes.
+if [ -n "${SMOKE_STAFF_EMAIL:-}" ] && [ -n "${SMOKE_STAFF_PASSWORD:-}" ]; then
+  SJAR="$(mktemp)"
+  trap 'rm -f "$JAR" "$SJAR"' EXIT
+  curl -s -X POST "$BASE_URL/api/merchant/auth/login" \
+    -H 'Content-Type: application/json' -c "$SJAR" \
+    -d "{\"email\":\"${SMOKE_STAFF_EMAIL}\",\"password\":\"${SMOKE_STAFF_PASSWORD}\"}" >/dev/null
+
+  role=$(curl -s -b "$SJAR" "$BASE_URL/api/merchant/auth/me" \
+    | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));console.log(d.role||'')" 2>/dev/null || true)
+  [ "$role" = "staff" ] || fail "Expected a staff session, got role='$role'"
+  pass "Staff session established"
+
+  # Reads and day-to-day work must keep working.
+  for path in orders customers; do
+    got=$(code -b "$SJAR" "$BASE_URL/api/merchant/$VICTIM_SLUG/$path")
+    [ "$got" = "200" ] || fail "staff GET /$path returned $got — staff must keep day-to-day access"
+  done
+  pass "Staff keeps day-to-day reads (orders, customers)"
+
+  # Changing the loyalty earn rate is an owner decision.
+  got=$(code -X PATCH -b "$SJAR" -H 'Content-Type: application/json' \
+    -d '{"pointsPerRinggit":99}' "$BASE_URL/api/merchant/$VICTIM_SLUG/settings")
+  [ "$got" = "403" ] || fail "staff PATCH /settings returned $got — expected 403"
+  pass "Staff cannot change store settings (403)"
+
+  # Minting a 100% discount code is not a counter-staff power.
+  got=$(code -X POST -b "$SJAR" -H 'Content-Type: application/json' \
+    -d '{"name":"Tenancy probe","code":"TENANCYPROBE","type":"percentage","value":100}' \
+    "$BASE_URL/api/merchant/$VICTIM_SLUG/promos")
+  [ "$got" = "403" ] || fail "staff POST /promos returned $got — expected 403"
+  pass "Staff cannot mint discount codes (403)"
+else
+  printf '· staff role checks skipped (set SMOKE_STAFF_EMAIL / SMOKE_STAFF_PASSWORD)\n'
+fi
+
 echo ""
 echo "Tenancy smoke tests passed."

@@ -10,7 +10,11 @@ import {
 } from "@/lib/db/merchant-repository";
 import { listModifierGroupsByItemIds } from "@/lib/db/modifiers-repository";
 import { listUpsellLinksByItemIds } from "@/lib/db/upsell-repository";
-import { verifyMerchantAccess } from "@/lib/merchant/access";
+import {
+  roleDeniedMessage,
+  verifyMerchantAccess,
+  verifyMerchantRole,
+} from "@/lib/merchant/access";
 import { parseMenuBadges } from "@/lib/menu/menu-badges";
 import { MAX_DETAIL_STATS, parseMenuItemDetail } from "@/lib/menu/detail";
 import type { ProgramLanguage } from "@/lib/i18n/program-locale";
@@ -227,6 +231,9 @@ export async function PUT(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "manager"))) {
+      return NextResponse.json({ error: roleDeniedMessage("manager") }, { status: 403 });
     }
 
     const merchant = await getMerchantBySlug(slug);

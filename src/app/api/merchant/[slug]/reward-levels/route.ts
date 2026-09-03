@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { formatZodError } from "@/lib/api/zod-error";
 import { getMerchantBySlug, upsertRewardLevels } from "@/lib/db/repository";
-import { verifyMerchantAccess } from "@/lib/merchant/access";
+import {
+  roleDeniedMessage,
+  verifyMerchantAccess,
+  verifyMerchantRole,
+} from "@/lib/merchant/access";
 import { normalizeRewardLevels } from "@/lib/loyalty/default-reward-levels";
 import { mapRewardLevel } from "@/lib/loyalty/reward-level-map";
 import { validateRewardLevels } from "@/lib/loyalty/tiers";
@@ -66,6 +70,9 @@ export async function PUT(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "owner"))) {
+      return NextResponse.json({ error: roleDeniedMessage("owner") }, { status: 403 });
     }
 
     const merchant = await getMerchantBySlug(slug);

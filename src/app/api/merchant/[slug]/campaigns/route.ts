@@ -8,7 +8,11 @@ import {
   updateCampaignStatus,
 } from "@/lib/db/merchant-repository";
 import { getCampaignById } from "@/lib/services/campaign-send";
-import { verifyMerchantAccess } from "@/lib/merchant/access";
+import {
+  roleDeniedMessage,
+  verifyMerchantAccess,
+  verifyMerchantRole,
+} from "@/lib/merchant/access";
 import { campaignChannelLabel } from "@/lib/campaigns/channels";
 import { asWorkflow, workflowBannerFields, workflowMessageBody } from "@/lib/campaigns/workflow-spec";
 import {
@@ -107,6 +111,9 @@ export async function POST(request: Request, context: RouteContext) {
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!(await verifyMerchantRole(request, slug, "manager"))) {
+      return NextResponse.json({ error: roleDeniedMessage("manager") }, { status: 403 });
+    }
 
     const merchant = await getMerchantBySlug(slug);
     if (!merchant) {
@@ -170,6 +177,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "manager"))) {
+      return NextResponse.json({ error: roleDeniedMessage("manager") }, { status: 403 });
     }
 
     const merchant = await getMerchantBySlug(slug);

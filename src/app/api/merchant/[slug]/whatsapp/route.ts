@@ -7,7 +7,11 @@ import {
   summarizeWhatsAppAccount,
   upsertWhatsAppAccount,
 } from "@/lib/db/whatsapp-account-repository";
-import { verifyMerchantAccess } from "@/lib/merchant/access";
+import {
+  roleDeniedMessage,
+  verifyMerchantAccess,
+  verifyMerchantRole,
+} from "@/lib/merchant/access";
 import { getMetaAppConfig, graphFetch, isWhatsAppDevMode } from "@/lib/meta/client";
 import { getNumberHealth, summarizeNumberHealth } from "@/lib/whatsapp/number-health";
 
@@ -60,6 +64,9 @@ export async function POST(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "owner"))) {
+      return NextResponse.json({ error: roleDeniedMessage("owner") }, { status: 403 });
     }
     const merchant = await getMerchantBySlug(slug);
     if (!merchant) return NextResponse.json({ error: "Merchant not found" }, { status: 404 });
@@ -145,6 +152,9 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "owner"))) {
+      return NextResponse.json({ error: roleDeniedMessage("owner") }, { status: 403 });
     }
     const merchant = await getMerchantBySlug(slug);
     if (!merchant) return NextResponse.json({ error: "Merchant not found" }, { status: 404 });

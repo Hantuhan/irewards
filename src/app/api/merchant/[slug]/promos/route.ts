@@ -7,7 +7,11 @@ import {
   updatePromo,
 } from "@/lib/db/merchant-repository";
 import { promoDeactivateBlocker } from "@/lib/campaigns/campaign-voucher";
-import { verifyMerchantAccess } from "@/lib/merchant/access";
+import {
+  roleDeniedMessage,
+  verifyMerchantAccess,
+  verifyMerchantRole,
+} from "@/lib/merchant/access";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -61,6 +65,9 @@ export async function POST(request: Request, context: RouteContext) {
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!(await verifyMerchantRole(request, slug, "manager"))) {
+      return NextResponse.json({ error: roleDeniedMessage("manager") }, { status: 403 });
+    }
 
     const merchant = await getMerchantBySlug(slug);
     if (!merchant) {
@@ -100,6 +107,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { slug } = await context.params;
     if (!(await verifyMerchantAccess(request, slug))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await verifyMerchantRole(request, slug, "manager"))) {
+      return NextResponse.json({ error: roleDeniedMessage("manager") }, { status: 403 });
     }
 
     const merchant = await getMerchantBySlug(slug);

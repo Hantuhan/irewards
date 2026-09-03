@@ -32,3 +32,28 @@
 - Redeem: WhatsApp 4-digit OTP → `irewards_redeem_auth` cookie (~30 min)
 
 Never trust phone numbers from URL params or form input alone for awards.
+
+## Roles
+
+Merchant accounts are `owner`, `manager` or `staff`. Access checks used to ask
+only "is this your store?", so a counter staff account could change the loyalty
+earn rate or mint a 100% discount code.
+
+| Action | Minimum role |
+|---|---|
+| Store settings (pricing, tax, loyalty rate), reward levels, WhatsApp connection | owner |
+| Team management | manager |
+| Menu, campaigns, promo codes, stamp program | manager |
+| Orders, customers, kitchen, reports — day-to-day work | staff |
+
+Enforced by `verifyMerchantRole` in `src/lib/merchant/access.ts` and covered by
+`npm run test:smoke:tenancy` (needs `SMOKE_STAFF_EMAIL` / `SMOKE_STAFF_PASSWORD`).
+
+The local auth bypass is opt-in via `ALLOW_INSECURE_MERCHANT_ACCESS=true`; it
+used to switch itself on whenever `MERCHANT_SESSION_SECRET` was unset, which
+meant no local test ever exercised authorization.
+
+Fake payments (`PAYMENT_PROVIDER=dev`) accept unsigned webhooks and expose an
+unauthenticated "mark this order paid" endpoint. `isDevPaymentMode()` refuses
+to enable them when `NODE_ENV=production`, regardless of the variable, so a
+stray value cannot cost real revenue.

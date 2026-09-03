@@ -12,7 +12,7 @@
     "test:smoke:campaigns": "sh scripts/smoke-campaigns.sh",
     "test:smoke:stamps": "sh scripts/smoke-stamps.sh",
     "test:smoke:tenancy": "sh scripts/smoke-tenancy.sh",
-    "verify": "npm run typecheck && npm run lint && npm run test:alerts && npm run test:optout && npm run test:crypto && npm run build && npm run test",
+    "verify": "npm run typecheck && npm run lint && npm run test:alerts && npm run test:optout && npm run test:crypto && npm run test:guards && npm run build && npm run test",
     "typecheck": "tsc --noEmit",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
     "docker:dev:detach": "docker compose -f docker-compose.dev.yml up --build -d",
@@ -30,7 +30,8 @@
     "check:production-env": "sh scripts/check-production-env.sh",
     "test:alerts": "node scripts/test-kitchen-alerts.mjs",
     "test:optout": "node scripts/test-opt-out.mjs",
-    "test:crypto": "node scripts/test-token-crypto.mjs"
+    "test:crypto": "node scripts/test-token-crypto.mjs",
+    "test:guards": "node scripts/test-prod-guards.mjs"
   },
   "dependencies": {
     "@insforge/sdk": "^1.5.2",

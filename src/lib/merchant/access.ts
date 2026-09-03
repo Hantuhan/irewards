@@ -19,7 +19,15 @@ export async function verifyMerchantAccess(
       return false;
     }
   }
-  if (process.env.NODE_ENV === "development" && !process.env.MERCHANT_SESSION_SECRET) {
+  // Opt-in only. This used to switch itself on whenever MERCHANT_SESSION_SECRET
+  // was unset, which is the default local setup — so every dashboard route ran
+  // with authorization disabled, no smoke test ever exercised the access rules,
+  // and anyone pointing a NODE_ENV=development process at real data could read
+  // every tenant. It now needs the same explicit flag the admin bypass uses.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ALLOW_INSECURE_MERCHANT_ACCESS === "true"
+  ) {
     return true;
   }
   return verifyMerchantAdmin(request);

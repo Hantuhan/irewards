@@ -148,6 +148,13 @@ npm run test     # smoke tests only (merchant login, APIs, checkout, kitchen boa
 
 Smoke tests default to `http://localhost:3002`. Override with `BASE_URL=... npm run test`.
 
+`npm run test:smoke:tenancy` checks that one merchant cannot reach another's
+data. **Set `MERCHANT_SESSION_SECRET` in `.env.local`** before running any of
+these: without it the dashboard used to run with authorization disabled, so the
+suites passed without ever exercising the access rules. The tenancy suite now
+refuses to run in that state rather than passing vacuously. The local bypass is
+opt-in only, via `ALLOW_INSECURE_MERCHANT_ACCESS=true`.
+
 ### Automation cron
 
 Every automated journey is a campaign with a trigger (order paid, first visit, no visit for N days, points milestone, member opted in). The cron drains the job queue, runs the daily inactivity sweep and polls Meta for template verdicts:

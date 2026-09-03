@@ -16,8 +16,12 @@ import {
   listLatestTemplatesByCampaign,
 } from "@/lib/db/whatsapp-template-repository";
 import type { WhatsAppTemplateRow } from "@/lib/db/types";
-import { goLiveBlocker } from "@/lib/services/campaign-status";
-import { ensureCampaignVoucherForGoLive, pauseCampaignAndVoucher } from "@/lib/campaigns/campaign-voucher";
+import { CampaignStatusError, goLiveBlocker } from "@/lib/services/campaign-status";
+import {
+  CampaignVoucherError,
+  ensureCampaignVoucherForGoLive,
+  pauseCampaignAndVoucher,
+} from "@/lib/campaigns/campaign-voucher";
 import { summarizeTemplate } from "@/lib/whatsapp/templates";
 import { getNumberHealth, summarizeNumberHealth } from "@/lib/whatsapp/number-health";
 import { getAutomationHealth } from "@/lib/services/heartbeat";
@@ -176,13 +180,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = patchSchema.parse(await request.json());
     const { campaignId, status, deactivateVoucher, ...content } = body;
 
+    // Confirm the campaign is this merchant's before touching anything. The
+    // writes below are all scoped by merchant_id anyway, but without this a
+    // request naming someone else's campaign fell through to a raw PostgREST
+    // "no rows returned" error instead of a clean 404.
+    const target = await getCampaignById(merchant.id, campaignId);
+    if (!target) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
+
     let workflowPatch = {};
     if (content.workflow !== undefined && content.workflow !== null) {
-      const existing = await getCampaignById(merchant.id, campaignId);
-      if (!existing) {
-        return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
-      }
-      const workflow = asWorkflow(content.workflow, existing.channel);
+      const workflow = asWorkflow(content.workflow, target.channel);
       const banner = workflowBannerFields(workflow);
       workflowPatch = {
         workflow,
@@ -241,7 +250,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json(mapCampaign(campaign, await getLatestTemplateForCampaign(campaign.id)));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update campaign";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // CampaignStatusError and CampaignVoucherError are written for merchants;
+    // anything else is ours to debug and must not be echoed back.
+    if (error instanceof CampaignStatusError || error instanceof CampaignVoucherError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    console.error("Campaign update failed:", error);
+    return NextResponse.json({ error: "Could not update that campaign." }, { status: 500 });
   }
 }

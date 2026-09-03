@@ -21,6 +21,7 @@ import { MobileShell } from "@/components/ui/MobileShell";
 import { formatMerchantPrice } from "@/lib/merchant/currency";
 import { calculateOrderTotals } from "@/lib/services/order-totals";
 import { pointsDiscountCents } from "@/lib/loyalty/points";
+import { defaultSelections } from "@/lib/menu/modifiers";
 import { applyLevelDiscount } from "@/lib/loyalty/tiers";
 import type { StorefrontPaymentMethod } from "@/lib/payments/hitpay";
 
@@ -45,6 +46,7 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
     setLineQuantity,
     setLinePackedForTakeaway,
     addItem,
+    addConfiguredItem,
   } = useTableCart(merchantSlug, tableId, allItems);
   const [step, setStep] = useState<CartStep>("review");
   const [checkoutState, setCheckoutState] = useState<"idle" | "loading">("idle");
@@ -328,7 +330,15 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
 
   function handleAddSuggestion(suggestion: StoreSuggestion) {
     if (!suggestion.itemId) return;
-    addItem(suggestion.itemId, 1, suggestion.promoPriceCents);
+    // Suggested items can have required options. Apply each group's default so
+    // the line is valid at checkout instead of failing there — the diner is
+    // mid-payment and should not be sent back to the product page.
+    const groups = itemById.get(suggestion.itemId)?.modifierGroups ?? [];
+    if (groups.length > 0) {
+      addConfiguredItem(suggestion.itemId, defaultSelections(groups), 1, suggestion.promoPriceCents);
+    } else {
+      addItem(suggestion.itemId, 1, suggestion.promoPriceCents);
+    }
     void refreshSuggestions();
   }
 

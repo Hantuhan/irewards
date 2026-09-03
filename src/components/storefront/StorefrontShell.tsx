@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CustomerMobileNav } from "@/components/customer/CustomerMobileNav";
-import { MenuItemCustomizeSheet } from "@/components/storefront/MenuItemCustomizeSheet";
 import {
   StorefrontCategoryPills,
   StorefrontMenuHeader,
@@ -20,7 +19,6 @@ import { useTableCart } from "@/hooks/useTableCart";
 import { formatMerchantPrice } from "@/lib/merchant/currency";
 import { customerRoutes } from "@/lib/navigation/routes";
 import type { StorefrontMenuItem } from "@/lib/menu/storefront";
-import { fetchStorefrontMenuItem } from "@/lib/menu/storefront";
 import { Icon } from "@/components/ui/Icon";
 import { useMemberSession, type MemberProfile } from "@/hooks/useMemberSession";
 import { MobileShell } from "@/components/ui/MobileShell";
@@ -85,16 +83,11 @@ export function StorefrontShell({
     cartTotal,
     cartLines,
     addItem,
-    addConfiguredItem,
     quantityInCart,
     serviceType,
   } = useTableCart(merchantSlug, tableId, allItems);
 
   const router = useRouter();
-  const [activeItem, setActiveItem] = useState<StorefrontMenuItem | null>(null);
-  const [sheetMode, setSheetMode] = useState<"customize" | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [banner, setBanner] = useState<{
@@ -316,30 +309,14 @@ export function StorefrontShell({
     router.push(embed ? `${href}?embed=1` : href);
   }
 
-  function openCustomize(item: StorefrontMenuItem) {
-    setActiveItem(item);
-    setSheetMode("customize");
-    setDetailError(null);
-    setDetailLoading(true);
-    void fetchStorefrontMenuItem(merchantSlug, item.id, lang)
-      .then((fresh) => setActiveItem(fresh))
-      .catch((err) =>
-        setDetailError(err instanceof Error ? err.message : "Failed to load product details"),
-      )
-      .finally(() => setDetailLoading(false));
-  }
-
-  function closeSheet() {
-    setActiveItem(null);
-    setSheetMode(null);
-    setDetailLoading(false);
-    setDetailError(null);
-  }
-
+  /**
+   * Anything with choices to make goes to the product page, so options are
+   * picked in one place. Only a product with no options adds in a single tap.
+   */
   function handleQuickAdd(item: StorefrontMenuItem, e?: React.MouseEvent) {
     e?.stopPropagation();
     if ((item.modifierGroups?.length ?? 0) > 0) {
-      openCustomize(item);
+      openItemDetail(item);
       return;
     }
     addItem(item.id);
@@ -627,27 +604,6 @@ export function StorefrontShell({
         }}
       />
 
-      {activeItem && sheetMode === "customize" && detailError && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
-          <button type="button" className="absolute inset-0" aria-label="Close" onClick={closeSheet} />
-          <div className="relative w-full max-w-[382px] bg-surface p-5">
-            <p className="text-body-md text-red-700" role="alert">
-              {detailError}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {activeItem && sheetMode === "customize" && !detailLoading && !detailError && (
-        <MenuItemCustomizeSheet
-          item={activeItem}
-          onClose={closeSheet}
-          onConfirm={(selections) => {
-            addConfiguredItem(activeItem.id, selections);
-            closeSheet();
-          }}
-        />
-      )}
     </MobileShell>
   );
 }

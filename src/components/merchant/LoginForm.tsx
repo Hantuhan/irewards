@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { MerchantAuthShell } from "@/components/merchant/MerchantAuthShell";
 import { Icon } from "@/components/ui/Icon";
+import {
+  manusInputClass,
+  manusLabelClass,
+  manusPanelClass,
+  manusPrimaryButtonClass,
+} from "@/lib/ui/manus";
 
 export function LoginForm() {
   const router = useRouter();
@@ -47,67 +54,58 @@ export function LoginForm() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-surface p-6">
-      <div className="w-full max-w-md">
-        <header className="zenith-surface mb-6 px-8 py-6 text-center">
-          <span className="font-display text-headline-sm font-bold text-primary">
-            iRewards
-          </span>
-          <p className="mt-2 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-            Merchant sign in
-          </p>
-        </header>
+    <MerchantAuthShell
+      eyebrow="iRewards · Merchant"
+      title="Sign in"
+      description="Access your cafe dashboard — menus, orders, loyalty, and campaigns."
+    >
+      <form
+        onSubmit={(e) => void handleSubmit(e)}
+        className={`flex flex-col gap-4 p-8 ${manusPanelClass}`}
+      >
+        <label className="block">
+          <span className={manusLabelClass}>Email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            className={manusInputClass}
+            required
+          />
+        </label>
+        <label className="block">
+          <span className={manusLabelClass}>Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            className={manusInputClass}
+            required
+          />
+        </label>
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="zenith-surface flex flex-col gap-4 p-8">
-          <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-              Email
-            </span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="username"
-              className="mt-2 w-full border border-surface-container-highest px-3 py-2"
-              required
-            />
-          </label>
-          <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-              Password
-            </span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              className="mt-2 w-full border border-surface-container-highest px-3 py-2"
-              required
-            />
-          </label>
-
-          {error && (
-            <p className="text-body-md text-red-700" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center justify-center gap-2 bg-primary py-3 font-display text-headline-sm text-on-primary disabled:opacity-60"
+        {error && (
+          <p
+            className="border border-red-200 bg-red-50 px-4 py-3 text-body-md text-red-800"
+            role="alert"
           >
-            <Icon name="login" />
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
-
-          <p className="text-center text-body-md text-on-surface-variant">
-            <Link href="/signup" className="underline">
-              Create a cafe
-            </Link>
+            {error}
           </p>
-        </form>
-      </div>
-    </main>
+        )}
+
+        <button type="submit" disabled={loading} className={manusPrimaryButtonClass}>
+          <Icon name="login" />
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
+
+        <p className="text-center text-body-md text-on-surface-variant">
+          <Link href="/signup" className="font-medium text-[#1a3d2e] underline underline-offset-2">
+            Create a cafe portal
+          </Link>
+        </p>
+      </form>
+    </MerchantAuthShell>
   );
 }

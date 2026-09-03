@@ -1,11 +1,6 @@
 /**
- * Postgres access for Cloudflare Workers (Hyperdrive → Supabase) and local Docker.
- *
- * Production (Workers): Hyperdrive binding via getCloudflareContext().
- * Local / Docker / CI: DATABASE_URL | SUPABASE_DB_URL | INSFORGE_DATABASE_URL
- *
- * App repositories still use the InsForge PostgREST SDK until cut over;
- * this module is the Hyperdrive/Supabase seam + ops health checks.
+ * Postgres health / ops SQL. Uses INSFORGE_DATABASE_URL or DATABASE_URL.
+ * App queries use InsForge SDK (adminDb) by default on Zeabur.
  */
 
 import { Client } from "pg";

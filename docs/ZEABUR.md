@@ -1,129 +1,85 @@
-# Deploy on Zeabur (Docker + Supabase)
+# Deploy on Zeabur (Docker + InsForge)
 
-Production target: **Zeabur** runs the Next.js app from `Dockerfile`; **Supabase** hosts Postgres.
+Production: **Zeabur** runs Docker containers; **InsForge** provides Postgres + PostgREST; **iRewards** is the Next.js app.
 
 ## Architecture
 
 ```text
-                    ┌─────────────────────────┐
-  *.irewards.store  │  Zeabur (Docker)        │
-  irewards.store ──▶│  Next.js standalone     │
-                    │  PORT from Zeabur env   │
-                    └───────────┬─────────────┘
-                                │
-                    ┌───────────▼─────────────┐
-                    │  Supabase Postgres      │
-                    │  PostgREST (adminDb)    │
-                    └─────────────────────────┘
+  irewards.store
+        │
+        ▼
+┌───────────────────┐     ┌─────────────────────────────┐
+│  irewards (Git)   │────▶│  insforge :7130             │
+│  Dockerfile       │     │  postgrest + postgres       │
+│  PORT=8080        │     │  (internal Zeabur network)  │
+└───────────────────┘     └─────────────────────────────┘
 ```
 
-| Layer | Choice |
-|-------|--------|
-| Compute | Zeabur — `Dockerfile` at repo root |
-| Database | Supabase — `DATABASE_PROVIDER=supabase` |
-| App queries | `@supabase/supabase-js` via `adminDb()` |
-| Migrations | `insforge/migrations/*.sql` → `npm run db:migrate:supabase` |
-| Local dev | InsForge Docker (`npm run insforge:setup`) — unchanged |
+| Layer | Service |
+|-------|---------|
+| App | `irewards` — root `Dockerfile`, Next.js standalone |
+| API/DB | `insforge` + `postgrest` + `postgres` (InsForge images) |
+| Local dev | `npm run insforge:up` + `npm run dev` (unchanged) |
 
-## One-time setup
-
-### 1. Supabase
-
-1. Create a project at [supabase.com](https://supabase.com).
-2. **Settings → API:** `SUPABASE_URL`, **service_role** key.
-3. **Settings → Database:** copy the **direct** connection string (port **5432**, not pooler).
+## Quick deploy (full stack)
 
 ```bash
+npm run zeabur:setup   # prints checklist
+
+# Deploy postgres + postgrest + insforge + app from template:
+npm run zeabur:template:deploy
+```
+
+You will be prompted for:
+
+- **PUBLIC_DOMAIN** — e.g. `irewards.store`
+- **JWT_SECRET** — shared InsForge secret (32+ chars)
+- **POSTGRES_PASSWORD**
+- **INSFORGE_API_KEY** / **INSFORGE_ANON_KEY** — use the same values on both `insforge` and `irewards` services
+
+After deploy, open the **irewards** service → **Variables** and add Meta, HitPay, cron, and platform secrets from `.env.zeabur.example`.
+
+## App-only deploy (InsForge already on Zeabur)
+
+1. Zeabur → **Add Service** → **GitHub** → `Hantuhan/irewards`
+2. `Dockerfile` is auto-detected
+3. Set `PORT=8080`, `DATABASE_PROVIDER=insforge`
+4. `INSFORGE_URL=http://<insforge-internal-host>:7130`
+5. Copy keys from InsForge service → `INSFORGE_API_KEY`, `NEXT_PUBLIC_INSFORGE_ANON_KEY`
+6. `INSFORGE_DATABASE_URL=postgresql://postgres:PASSWORD@<postgres-host>:5432/irewards`
+
+## Migrations
+
+SQL in `insforge/migrations/` runs automatically when the app container starts (`RUN_MIGRATIONS=true`).
+
+Manual:
+
+```bash
+INSFORGE_DATABASE_URL='postgresql://...' npm run db:migrate:remote
+```
+
+## Local production Docker test
+
+```bash
+npm run insforge:up
+npm run insforge:sync-env
 cp .env.zeabur.example .env.zeabur
-# edit credentials
-source .env.zeabur
-npm run zeabur:setup
+# set INSFORGE_URL=http://host.docker.internal:7230 + keys from .env.local
+docker compose up --build
 ```
 
-### 2. Zeabur service
+## Uploads
 
-1. [Zeabur dashboard](https://zeabur.com) → **New Project** → connect GitHub repo.
-2. Zeabur detects `Dockerfile` automatically (`zbpack.json` points at it).
-3. **Variables** tab — paste all vars from `.env.zeabur.example` (use secret fields for keys).
-4. Set `PORT=8080` (Zeabur default) — the Dockerfile reads `process.env.PORT`.
-5. **Networking → Domain:**
-   - `irewards.store` (apex)
-   - `*.irewards.store` (wildcard for cafe subdomains)
+Menu/banner images → `public/uploads/`. Attach a Zeabur volume at `/app/public/uploads` on the **irewards** service.
 
-### 3. DNS (Cloudflare or your registrar)
+## Cron & webhooks
 
-Point to Zeabur-assigned hostname:
-
-| Record | Type | Value |
-|--------|------|--------|
-| `irewards.store` | CNAME | Zeabur hostname |
-| `*.irewards.store` | CNAME | Zeabur hostname |
-
-Middleware rewrites `cafe1.irewards.store` → `/m/cafe1/…` automatically.
-
-### 4. Cron
-
-Zeabur has no built-in cron for all plans — use an external scheduler every **1 minute**:
-
-```bash
-curl -X POST "https://irewards.store/api/cron/automation" \
-  -H "Authorization: Bearer $CRON_SECRET"
-```
-
-Or run `scripts/cron-automation.sh` with `BASE_URL=https://irewards.store`.
-
-### 5. Webhooks
-
-| Service | URL |
-|---------|-----|
-| Meta WhatsApp | `https://irewards.store/api/webhooks/meta` |
+| Job | URL |
+|-----|-----|
+| Automation | `POST https://irewards.store/api/cron/automation` + `Bearer $CRON_SECRET` |
+| Meta | `https://irewards.store/api/webhooks/meta` |
 | HitPay | `https://irewards.store/api/webhooks/payments` |
 
-Set `NEXT_PUBLIC_APP_URL=https://irewards.store` before going live.
+## Optional: Supabase
 
-## Docker image
-
-Built from multi-stage `Dockerfile` (Node 22 Alpine, Next.js `standalone` output):
-
-```bash
-docker build -t irewards .
-docker run --rm -p 8080:8080 --env-file .env.zeabur -e PORT=8080 irewards
-```
-
-Health checks:
-
-- `GET /api/health` — liveness
-- `GET /api/health/db` — Postgres connectivity
-
-## Uploads (menu photos, banners)
-
-Files are written to `public/uploads/` on disk. Zeabur containers are **ephemeral** — attach a **persistent volume** at `/app/public/uploads` in the Zeabur Docker settings, or migrate to S3/R2/Supabase Storage later.
-
-## Environment variables
-
-See `.env.zeabur.example`. Production check:
-
-```bash
-NODE_ENV=production DATABASE_PROVIDER=supabase sh scripts/check-production-env.sh
-```
-
-## Local vs production
-
-| | Local | Zeabur production |
-|---|--------|-------------------|
-| Database | InsForge (`npm run insforge:up`) | Supabase |
-| `DATABASE_PROVIDER` | unset or `insforge` | `supabase` |
-| App URL | `http://localhost:3002` | `https://irewards.store` |
-| Payments | `PAYMENT_PROVIDER=dev` | `hitpay` |
-
-## Scripts
-
-| Command | Purpose |
-|---------|---------|
-| `npm run zeabur:setup` | Migrate Supabase + print deploy checklist |
-| `npm run docker:prod` | Local production image test |
-| `npm run db:migrate:supabase` | Migrations only |
-
-## Optional: Cloudflare Workers
-
-OpenNext / `wrangler.jsonc` remain in the repo for a future Workers path but are **not** the primary deployment. Use Zeabur Docker + Supabase for production.
+`DATABASE_PROVIDER=supabase` still works if you prefer hosted Postgres — not required for Zeabur + InsForge.

@@ -5,15 +5,15 @@ import { assertPasswordStrength } from "@/lib/merchant/password";
 import { createSessionToken, sessionCookieHeader } from "@/lib/merchant/session";
 import { merchantPublicOrigin } from "@/lib/tenancy/host";
 import { provisionMerchant } from "@/lib/tenancy/provision";
-import { slugifyMerchantName } from "@/lib/tenancy/slug";
+import { normalizeSubdomainInput } from "@/lib/tenancy/slug";
 
 const signupSchema = z.object({
-  cafeName: z.string().trim().min(2).max(80),
+  cafeName: z.string().trim().min(2, "Cafe name must be at least 2 characters").max(80),
   currency: z.enum(["MYR", "SGD"]),
-  ownerName: z.string().trim().min(1).max(80),
-  ownerEmail: z.string().email(),
-  ownerPassword: z.string().min(12),
-  subdomain: z.string().trim().min(2).max(48).optional(),
+  ownerName: z.string().trim().min(1, "Enter your name").max(80),
+  ownerEmail: z.string().email("Enter a valid work email"),
+  ownerPassword: z.string().min(12, "Password must be at least 12 characters"),
+  subdomain: z.string().trim().max(48).optional(),
 });
 
 export async function POST(request: Request) {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const body = signupSchema.parse(await request.json());
     assertPasswordStrength(body.ownerPassword);
 
-    const preferred = body.subdomain?.toLowerCase() || slugifyMerchantName(body.cafeName);
+    const preferred = normalizeSubdomainInput(body.subdomain ?? "", body.cafeName);
     const result = await provisionMerchant({
       cafeName: body.cafeName,
       currency: body.currency,

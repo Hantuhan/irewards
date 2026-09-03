@@ -42,11 +42,24 @@ export function isReservedSubdomain(subdomain: string): boolean {
   return RESERVED.has(subdomain.toLowerCase());
 }
 
+const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$/;
+
+export function isValidSubdomainFormat(subdomain: string): boolean {
+  return SUBDOMAIN_RE.test(subdomain);
+}
+
 export function assertValidSubdomain(subdomain: string): void {
-  if (!/^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$/.test(subdomain)) {
+  if (!isValidSubdomainFormat(subdomain)) {
     throw new Error("Subdomain must be 2–48 chars: lowercase letters, numbers, hyphens");
   }
   if (isReservedSubdomain(subdomain)) {
     throw new Error("That subdomain is reserved");
   }
+}
+
+/** Normalize user input into a slug-safe subdomain candidate. */
+export function normalizeSubdomainInput(input: string, fallbackName: string): string {
+  const fromInput = slugifyMerchantName(input);
+  if (fromInput && fromInput !== "cafe") return fromInput;
+  return slugifyMerchantName(fallbackName) || "cafe";
 }

@@ -3,7 +3,7 @@ import { sqlHealthcheck } from "@/lib/db/sql";
 
 /**
  * DB health for ops. Uses Hyperdrive on Workers when bound, else DATABASE_URL.
- * App queries use Supabase PostgREST (adminDb) when DATABASE_PROVIDER=supabase.
+ * App queries use InsForge via adminDb().
  */
 export async function GET() {
   try {

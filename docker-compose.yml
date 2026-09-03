@@ -6,12 +6,17 @@ services:
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     restart: unless-stopped
-    # Zeabur production: set Variables in dashboard (see .env.zeabur.example).
-    # Local prod test: copy .env.zeabur → .env.local or use --env-file .env.zeabur
     env_file:
       - .env.local
     environment:
       PORT: "8080"
       NODE_ENV: production
+      DATABASE_PROVIDER: insforge
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:8080}
-      DATABASE_PROVIDER: ${DATABASE_PROVIDER:-supabase}
+      # InsForge on host (npm run insforge:up):
+      INSFORGE_URL: ${INSFORGE_URL:-http://host.docker.internal:7230}
+      NEXT_PUBLIC_INSFORGE_URL: ${NEXT_PUBLIC_INSFORGE_URL:-http://localhost:7230}
+      INSFORGE_DATABASE_URL: ${INSFORGE_DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:55532/irewards}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

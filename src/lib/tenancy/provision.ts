@@ -1,7 +1,11 @@
 import { adminDb } from "@/lib/db/admin";
 import { DEFAULT_REWARD_LEVELS } from "@/lib/loyalty/default-reward-levels";
 import { hashPassword } from "@/lib/merchant/password";
-import { assertValidSubdomain, slugifyMerchantName } from "@/lib/tenancy/slug";
+import {
+  isReservedSubdomain,
+  isValidSubdomainFormat,
+  normalizeSubdomainInput,
+} from "@/lib/tenancy/slug";
 import type { MerchantRow } from "@/lib/db/types";
 
 function db() {
@@ -39,13 +43,21 @@ async function subdomainTaken(subdomain: string): Promise<boolean> {
   return Boolean(bySlug);
 }
 
+async function subdomainAvailable(subdomain: string): Promise<boolean> {
+  return (
+    isValidSubdomainFormat(subdomain) &&
+    !isReservedSubdomain(subdomain) &&
+    !(await subdomainTaken(subdomain))
+  );
+}
+
 async function allocateSubdomain(preferred: string): Promise<string> {
-  assertValidSubdomain(preferred);
-  if (!(await subdomainTaken(preferred))) return preferred;
+  const base = normalizeSubdomainInput(preferred, preferred);
+  if (await subdomainAvailable(base)) return base;
+
   for (let i = 2; i <= 99; i++) {
-    const candidate = `${preferred.slice(0, 44)}-${i}`;
-    assertValidSubdomain(candidate);
-    if (!(await subdomainTaken(candidate))) return candidate;
+    const candidate = `${base.slice(0, 44)}-${i}`;
+    if (await subdomainAvailable(candidate)) return candidate;
   }
   throw new Error("Could not allocate a free subdomain — try another cafe name");
 }
@@ -53,7 +65,10 @@ async function allocateSubdomain(preferred: string): Promise<string> {
 export async function provisionMerchant(
   input: ProvisionMerchantInput,
 ): Promise<ProvisionMerchantResult> {
-  const preferred = (input.subdomain ?? slugifyMerchantName(input.cafeName)).toLowerCase();
+  const preferred = normalizeSubdomainInput(
+    input.subdomain ?? "",
+    input.cafeName,
+  );
   const subdomain = await allocateSubdomain(preferred);
 
   const { data: merchant, error: merchantError } = await db()

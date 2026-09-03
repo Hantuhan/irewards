@@ -3,9 +3,41 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { validatePasswordStrength } from "@/lib/auth/password-policy";
-import { slugifyMerchantName } from "@/lib/tenancy/slug";
+import { MerchantAuthShell } from "@/components/merchant/MerchantAuthShell";
+import { Icon } from "@/components/ui/Icon";
+import {
+  PASSWORD_REQUIREMENTS,
+  passwordRequirementStatus,
+  validatePasswordStrength,
+} from "@/lib/auth/password-policy";
 import { apexDomain } from "@/lib/tenancy/host";
+import { normalizeSubdomainInput, slugifyMerchantName } from "@/lib/tenancy/slug";
+import {
+  manusInsetPanelClass,
+  manusInputClass,
+  manusLabelClass,
+  manusPanelClass,
+  manusPrimaryButtonClass,
+  manusSectionTitleClass,
+} from "@/lib/ui/manus";
+
+function signupFieldErrors(input: {
+  cafeName: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPassword: string;
+}): string[] {
+  const errors: string[] = [];
+  if (input.cafeName.trim().length < 2) errors.push("Cafe name must be at least 2 characters");
+  if (input.ownerName.trim().length < 1) errors.push("Enter your name");
+  if (!input.ownerEmail.trim()) errors.push("Enter your work email");
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.ownerEmail.trim())) {
+    errors.push("Enter a valid email address");
+  }
+  if (!input.ownerPassword) errors.push("Choose an owner password");
+  else errors.push(...validatePasswordStrength(input.ownerPassword));
+  return errors;
+}
 
 export function SignupForm() {
   const router = useRouter();
@@ -17,14 +49,34 @@ export function SignupForm() {
   const [subdomainOverride, setSubdomainOverride] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState(false);
 
   const apex = apexDomain();
   const suggested = useMemo(() => slugifyMerchantName(cafeName || "cafe"), [cafeName]);
-  const subdomain = (subdomainOverride || suggested).toLowerCase();
-  const passwordIssues = validatePasswordStrength(ownerPassword);
+  const subdomain = normalizeSubdomainInput(subdomainOverride || suggested, cafeName || "cafe");
+  const passwordStatus = passwordRequirementStatus(ownerPassword);
+  const validationErrors = signupFieldErrors({
+    cafeName,
+    ownerName,
+    ownerEmail,
+    ownerPassword,
+  });
+  const readyToSubmit = validationErrors.length === 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTouched(true);
+    const errors = signupFieldErrors({
+      cafeName,
+      ownerName,
+      ownerEmail,
+      ownerPassword,
+    });
+    if (errors.length > 0) {
+      setError(errors.join(" · "));
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -33,10 +85,10 @@ export function SignupForm() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          cafeName,
+          cafeName: cafeName.trim(),
           currency,
-          ownerName,
-          ownerEmail,
+          ownerName: ownerName.trim(),
+          ownerEmail: ownerEmail.trim(),
           ownerPassword,
           subdomain,
         }),
@@ -45,7 +97,13 @@ export function SignupForm() {
         error?: string;
         merchant?: { dashboardPath: string; portalUrl: string; subdomain: string };
       };
-      if (!response.ok) throw new Error(json.error ?? "Signup failed");
+      if (!response.ok) {
+        const message = json.error ?? "Signup failed";
+        if (message.toLowerCase().includes("already registered")) {
+          throw new Error(`${message}. Try signing in instead.`);
+        }
+        throw new Error(message);
+      }
       router.push(json.merchant?.dashboardPath ?? "/login");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
@@ -55,49 +113,53 @@ export function SignupForm() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-surface p-6">
-      <div className="w-full max-w-lg">
-        <header className="zenith-surface mb-6 px-8 py-6 text-center">
-          <span className="font-display text-headline-sm font-bold text-primary">iRewards</span>
-          <p className="mt-2 font-display text-eyebrow uppercase tracking-widest text-on-surface-variant">
-            Open your cafe portal
-          </p>
-        </header>
+    <MerchantAuthShell
+      wide
+      eyebrow="iRewards · B2B SaaS"
+      title="Open your cafe portal"
+      description="Table storefront, loyalty, and WhatsApp retention — each cafe gets its own subdomain and merchant dashboard."
+    >
+      <form
+        onSubmit={(e) => void handleSubmit(e)}
+        className={`flex flex-col gap-6 p-8 ${manusPanelClass}`}
+        noValidate
+      >
+        <section className="flex flex-col gap-4">
+          <h2 className={manusSectionTitleClass}>Your cafe</h2>
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="zenith-surface flex flex-col gap-4 p-8">
           <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">Cafe name</span>
+            <span className={manusLabelClass}>Cafe name</span>
             <input
-              className="mt-2 w-full border border-surface-container-highest px-3 py-2"
+              className={manusInputClass}
               value={cafeName}
               onChange={(e) => setCafeName(e.target.value)}
-              required
-              minLength={2}
+              placeholder="e.g. Kedai Kopi Senja"
+              autoComplete="organization"
             />
           </label>
 
           <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-              Subdomain (auto)
-            </span>
+            <span className={manusLabelClass}>Subdomain</span>
             <div className="mt-2 flex items-center gap-2">
               <input
-                className="w-full border border-surface-container-highest px-3 py-2 font-mono text-label-mono"
+                className={`${manusInputClass} mt-0 font-mono text-label-mono`}
                 value={subdomainOverride || suggested}
-                onChange={(e) => setSubdomainOverride(e.target.value.toLowerCase())}
-                pattern="[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?"
+                onChange={(e) => setSubdomainOverride(slugifyMerchantName(e.target.value))}
+                aria-describedby="subdomain-hint"
               />
-              <span className="shrink-0 text-body-md text-on-surface-variant">.{apex}</span>
+              <span className="shrink-0 font-mono text-label-mono text-on-surface-variant">
+                .{apex}
+              </span>
             </div>
-            <p className="mt-1 text-body-md text-on-surface-variant">
-              Your storefront: https://{subdomain}.{apex}
+            <p id="subdomain-hint" className="mt-2 font-mono text-[11px] text-on-surface-variant">
+              Storefront → https://{subdomain}.{apex}
             </p>
           </label>
 
           <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">Currency</span>
+            <span className={manusLabelClass}>Currency</span>
             <select
-              className="mt-2 w-full border border-surface-container-highest px-3 py-2"
+              className={manusInputClass}
               value={currency}
               onChange={(e) => setCurrency(e.target.value as "MYR" | "SGD")}
             >
@@ -105,72 +167,95 @@ export function SignupForm() {
               <option value="SGD">Singapore (SGD)</option>
             </select>
           </label>
+        </section>
+
+        <div className="h-px bg-surface-container-highest" aria-hidden />
+
+        <section className="flex flex-col gap-4">
+          <h2 className={manusSectionTitleClass}>Owner account</h2>
 
           <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">Your name</span>
+            <span className={manusLabelClass}>Your name</span>
             <input
-              className="mt-2 w-full border border-surface-container-highest px-3 py-2"
+              className={manusInputClass}
               value={ownerName}
               onChange={(e) => setOwnerName(e.target.value)}
-              required
+              autoComplete="name"
             />
           </label>
 
           <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">Work email</span>
+            <span className={manusLabelClass}>Work email</span>
             <input
               type="email"
-              className="mt-2 w-full border border-surface-container-highest px-3 py-2"
+              className={manusInputClass}
               value={ownerEmail}
               onChange={(e) => setOwnerEmail(e.target.value)}
-              required
+              autoComplete="email"
             />
           </label>
 
           <label className="block">
-            <span className="font-display text-eyebrow uppercase text-on-surface-variant">
-              Owner password
-            </span>
+            <span className={manusLabelClass}>Owner password</span>
             <input
               type="password"
-              className="mt-2 w-full border border-surface-container-highest px-3 py-2"
+              className={manusInputClass}
               value={ownerPassword}
               onChange={(e) => setOwnerPassword(e.target.value)}
-              required
-              minLength={12}
               autoComplete="new-password"
             />
-            {ownerPassword && passwordIssues.length > 0 && (
-              <ul className="mt-2 list-disc pl-5 text-body-md text-on-surface-variant">
-                {passwordIssues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
+            <div className={`mt-3 p-4 ${manusInsetPanelClass}`}>
+              <p className={manusLabelClass}>Password requirements</p>
+              <ul className="mt-2 space-y-1.5" aria-live="polite">
+                {PASSWORD_REQUIREMENTS.map((rule) => {
+                  const met = passwordStatus[rule.id];
+                  return (
+                    <li
+                      key={rule.id}
+                      className={`flex items-start gap-2 text-[12px] leading-snug ${
+                        met ? "text-[#1a3d2e]" : "text-on-surface-variant"
+                      }`}
+                    >
+                      <Icon
+                        name={met ? "check_circle" : "radio_button_unchecked"}
+                        className={`mt-px text-[14px] ${met ? "text-[#1a3d2e]" : ""}`}
+                      />
+                      <span>{rule.label}</span>
+                    </li>
+                  );
+                })}
               </ul>
-            )}
+            </div>
           </label>
+        </section>
 
-          {error && (
-            <p className="text-body-md text-red-700" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading || passwordIssues.length > 0}
-            className="bg-primary py-3 font-display text-headline-sm text-on-primary disabled:opacity-60"
+        {error && (
+          <p
+            className="border border-red-200 bg-red-50 px-4 py-3 text-body-md text-red-800"
+            role="alert"
           >
-            {loading ? "Provisioning…" : "Create cafe portal"}
-          </button>
-
-          <p className="text-center text-body-md text-on-surface-variant">
-            Already have an account?{" "}
-            <Link href="/login" className="underline">
-              Sign in
-            </Link>
+            {error}
           </p>
-        </form>
-      </div>
-    </main>
+        )}
+
+        {touched && !readyToSubmit && !error && (
+          <p className="border border-[#8a6d1f]/30 bg-[#8a6d1f]/10 px-4 py-3 text-body-md text-[#5c4a14]">
+            Complete all fields and the password checklist, then click Create cafe portal.
+          </p>
+        )}
+
+        <button type="submit" disabled={loading} className={manusPrimaryButtonClass}>
+          <Icon name="storefront" />
+          {loading ? "Provisioning…" : "Create cafe portal"}
+        </button>
+
+        <p className="text-center text-body-md text-on-surface-variant">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-[#1a3d2e] underline underline-offset-2">
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </MerchantAuthShell>
   );
 }

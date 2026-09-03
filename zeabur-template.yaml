@@ -1,0 +1,208 @@
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+  name: iRewards
+spec:
+  description: iRewards F&B SaaS — Next.js app + InsForge Postgres (MY/SG)
+  icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/nodejs.svg
+  tags:
+    - Tool
+    - CMS
+  variables:
+    - key: PUBLIC_DOMAIN
+      type: DOMAIN
+      name: App domain
+      description: Public URL for iRewards (e.g. irewards.store)
+    - key: JWT_SECRET
+      type: STRING
+      name: InsForge JWT secret
+      description: Shared secret for InsForge/PostgREST (32+ random chars)
+    - key: POSTGRES_PASSWORD
+      type: STRING
+      name: Postgres password
+      description: Database password for the irewards database
+    - key: INSFORGE_API_KEY
+      type: STRING
+      name: InsForge API key (service role)
+      description: Server admin key — same value on InsForge + app services
+    - key: INSFORGE_ANON_KEY
+      type: STRING
+      name: InsForge anon key
+      description: Public anon key — same value on InsForge + app services
+  readme: |-
+    # iRewards on Zeabur (Docker + InsForge)
+
+    Deploys:
+    - **postgres** — InsForge Postgres (`irewards` database)
+    - **postgrest** — PostgREST API
+    - **insforge** — InsForge API (internal)
+    - **irewards** — Next.js app from GitHub (`Dockerfile`)
+
+    After deploy, set Meta/HitPay/cron secrets on the **irewards** service.
+    Attach a volume on **irewards** at `/app/public/uploads` for menu images.
+
+    Migrations run automatically on app boot (`RUN_MIGRATIONS=true`).
+  services:
+    - name: postgres
+      icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/postgresql.svg
+      template: PREBUILT
+      spec:
+        source:
+          image: ghcr.io/insforge/postgres:v15.13.4
+        ports:
+          - id: database
+            port: 5432
+            type: TCP
+        volumes:
+          - id: data
+            dir: /var/lib/postgresql/data
+        env:
+          POSTGRES_USER:
+            default: postgres
+            expose: true
+          POSTGRES_PASSWORD:
+            default: ${POSTGRES_PASSWORD}
+            expose: true
+          POSTGRES_DB:
+            default: irewards
+            expose: true
+          POSTGRES_HOST:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+          ENCRYPTION_KEY:
+            default: ${JWT_SECRET}
+          JWT_SECRET:
+            default: ${JWT_SECRET}
+
+    - name: postgrest
+      icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/postgresql.svg
+      template: PREBUILT
+      dependencies:
+        - postgres
+      spec:
+        source:
+          image: postgrest/postgrest:v12.2.12
+        ports:
+          - id: api
+            port: 3000
+            type: TCP
+        env:
+          PGRST_DB_URI:
+            default: postgres://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/irewards
+          POSTGREST_HOST:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+          PGRST_DB_SCHEMA:
+            default: public
+          PGRST_DB_ANON_ROLE:
+            default: anon
+          PGRST_JWT_SECRET:
+            default: ${JWT_SECRET}
+          PGRST_DB_POOL:
+            default: "50"
+          PGRST_DB_CHANNEL_ENABLED:
+            default: "true"
+          PGRST_DB_CHANNEL:
+            default: pgrst
+
+    - name: insforge
+      icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/nodejs.svg
+      template: PREBUILT
+      dependencies:
+        - postgres
+        - postgrest
+      spec:
+        source:
+          image: ghcr.io/insforge/insforge-oss:latest
+        ports:
+          - id: api
+            port: 7130
+            type: TCP
+        volumes:
+          - id: storage
+            dir: /insforge-storage
+          - id: logs
+            dir: /insforge-logs
+        env:
+          PORT:
+            default: "7130"
+          POSTGRES_HOST:
+            default: ${POSTGRES_HOST}
+          POSTGRES_PORT:
+            default: "5432"
+          POSTGRES_DB:
+            default: irewards
+          POSTGRES_USER:
+            default: postgres
+          POSTGRES_PASSWORD:
+            default: ${POSTGRES_PASSWORD}
+          DATABASE_URL:
+            default: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/irewards
+            expose: true
+          POSTGREST_BASE_URL:
+            default: http://${POSTGREST_HOST}:3000
+          JWT_SECRET:
+            default: ${JWT_SECRET}
+          ENCRYPTION_KEY:
+            default: ${JWT_SECRET}
+          ACCESS_API_KEY:
+            default: ${INSFORGE_API_KEY}
+            expose: true
+          ACCESS_ANON_KEY:
+            default: ${INSFORGE_ANON_KEY}
+            expose: true
+          INSFORGE_HOST:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+          API_BASE_URL:
+            default: https://${PUBLIC_DOMAIN}
+          VITE_API_BASE_URL:
+            default: https://${PUBLIC_DOMAIN}
+
+    - name: irewards
+      icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/nodejs.svg
+      template: GIT
+      domainKey: PUBLIC_DOMAIN
+      dependencies:
+        - insforge
+        - postgres
+      spec:
+        source:
+          type: GITHUB
+          repoID: "1353822367"
+          branch: main
+        ports:
+          - id: web
+            port: 8080
+            type: HTTP
+        volumes:
+          - id: uploads
+            dir: /app/public/uploads
+        env:
+          PORT:
+            default: "8080"
+          NODE_ENV:
+            default: production
+          DATABASE_PROVIDER:
+            default: insforge
+          RUN_MIGRATIONS:
+            default: "true"
+          NEXT_PUBLIC_APP_URL:
+            default: https://${PUBLIC_DOMAIN}
+          NEXT_PUBLIC_APEX_DOMAIN:
+            default: irewards.store
+          INSFORGE_URL:
+            default: http://${INSFORGE_HOST}:7130
+          NEXT_PUBLIC_INSFORGE_URL:
+            default: https://${PUBLIC_DOMAIN}
+          INSFORGE_API_KEY:
+            default: ${INSFORGE_API_KEY}
+          NEXT_PUBLIC_INSFORGE_ANON_KEY:
+            default: ${INSFORGE_ANON_KEY}
+          INSFORGE_DATABASE_URL:
+            default: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/irewards
+          PAYMENT_PROVIDER:
+            default: dev

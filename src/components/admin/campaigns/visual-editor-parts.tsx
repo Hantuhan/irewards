@@ -3,12 +3,13 @@
 import { Icon } from "@/components/ui/Icon";
 import type { NodeKind } from "@/lib/campaigns/workflow-spec";
 
+import { manusDotGridClass } from "@/lib/ui/manus";
+
 export const labelClass =
   "font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant";
 
 /** Manus canvas: warm paper ground with a fine dot grid. */
-export const dotGridClass =
-  "bg-[#fbfbfa] bg-[radial-gradient(circle,_#d8d8d4_1px,_transparent_1px)] bg-[length:22px_22px]";
+export const dotGridClass = manusDotGridClass;
 
 const KIND_ACCENT: Record<NodeKind, string> = {
   trigger: "text-[#1a3d2e]",

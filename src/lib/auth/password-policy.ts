@@ -10,6 +10,36 @@ export const PASSWORD_POLICY = {
 
 export type PasswordIssue = string;
 
+export const PASSWORD_REQUIREMENTS = [
+  { id: "length", label: `At least ${PASSWORD_POLICY.minLength} characters` },
+  { id: "upper", label: "One uppercase letter (A–Z)" },
+  { id: "lower", label: "One lowercase letter (a–z)" },
+  { id: "digit", label: "One number (0–9)" },
+  { id: "special", label: "One special character (!@#$…)" },
+  { id: "safe", label: "No obvious words (password, qwerty, demo123)" },
+] as const;
+
+const FORBIDDEN_WORDS = ["password", "irewards", "demo123", "qwerty", "123456"] as const;
+
+function hasForbiddenWord(password: string): boolean {
+  const lower = password.toLowerCase();
+  return FORBIDDEN_WORDS.some((bad) => lower.includes(bad));
+}
+
+export function passwordRequirementStatus(password: string): Record<
+  (typeof PASSWORD_REQUIREMENTS)[number]["id"],
+  boolean
+> {
+  return {
+    length: password.length >= PASSWORD_POLICY.minLength,
+    upper: /[A-Z]/.test(password),
+    lower: /[a-z]/.test(password),
+    digit: /[0-9]/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+    safe: password.length === 0 || !hasForbiddenWord(password),
+  };
+}
+
 export function validatePasswordStrength(password: string): PasswordIssue[] {
   const issues: PasswordIssue[] = [];
   if (password.length < PASSWORD_POLICY.minLength) {
@@ -30,12 +60,8 @@ export function validatePasswordStrength(password: string): PasswordIssue[] {
   if (/(.)\1{3,}/.test(password)) {
     issues.push("Avoid long repeated characters");
   }
-  const lower = password.toLowerCase();
-  for (const bad of ["password", "irewards", "demo123", "qwerty", "123456"]) {
-    if (lower.includes(bad)) {
-      issues.push("Avoid common or product-related words");
-      break;
-    }
+  if (hasForbiddenWord(password)) {
+    issues.push("Avoid common or product-related words");
   }
   return issues;
 }

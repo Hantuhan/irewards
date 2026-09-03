@@ -5,9 +5,8 @@ Smart table storefront + WhatsApp retention for cafes and F&B merchants in Malay
 ## Stack
 
 - **Next.js 15** — storefront + API routes
-- **Docker** — production image for [Zeabur](docs/ZEABUR.md); local dev containers
-- **Supabase** — production Postgres (`DATABASE_PROVIDER=supabase`)
-- **InsForge** — dedicated local Postgres + API (`infra/insforge/`)
+- **Docker** — production on [Zeabur](docs/ZEABUR.md) (`Dockerfile` + `zeabur-template.yaml`)
+- **InsForge** — Postgres + API (local dev + Zeabur production stack)
 - **Meta WhatsApp Cloud API** — inbound webhooks, outbound messages, template approvals
 - **HitPay** — payment requests + webhooks (dev mode for local testing)
 
@@ -181,22 +180,14 @@ Meta only delivers business-initiated messages (broadcasts, win-back, review nud
 
 ## Deploying on Zeabur (Docker)
 
-Production runs on **Zeabur** from the root `Dockerfile`, with **Supabase** as the database.
+Production runs on **Zeabur** (Docker) with **InsForge** as the database stack.
 
 ```bash
-cp .env.zeabur.example .env.zeabur
-# fill Supabase credentials + secrets
-npm run zeabur:setup          # apply migrations
-# connect repo in Zeabur dashboard → auto-detects Dockerfile
+npm run zeabur:setup
+npm run zeabur:template:deploy   # postgres + postgrest + insforge + app
 ```
 
-Full guide: [docs/ZEABUR.md](docs/ZEABUR.md)
-
-- Set `PORT=8080` in Zeabur Variables (app reads `process.env.PORT`)
-- Domains: `irewards.store` + `*.irewards.store`
-- Cron: external scheduler → `POST /api/cron/automation` with `Authorization: Bearer $CRON_SECRET`
-- Meta webhook: `https://irewards.store/api/webhooks/meta`
-- Attach a persistent volume at `/app/public/uploads` for menu/banner images
+Or deploy **app only** from GitHub if InsForge is already on Zeabur. Full guide: [docs/ZEABUR.md](docs/ZEABUR.md)
 
 ## DeepSeek AI (merchant assistant)
 

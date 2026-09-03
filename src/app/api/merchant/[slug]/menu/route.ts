@@ -12,6 +12,7 @@ import { listModifierGroupsByItemIds } from "@/lib/db/modifiers-repository";
 import { listUpsellLinksByItemIds } from "@/lib/db/upsell-repository";
 import { verifyMerchantAccess } from "@/lib/merchant/access";
 import { parseMenuBadges } from "@/lib/menu/menu-badges";
+import { MAX_DETAIL_STATS, parseMenuItemDetail } from "@/lib/menu/detail";
 import type { ProgramLanguage } from "@/lib/i18n/program-locale";
 
 function parseStorefrontLang(value: string | null): ProgramLanguage {
@@ -30,6 +31,7 @@ const weeklyScheduleSchema = z
 
 const modifierOptionSchema = z.object({
   name: z.string().min(1),
+  description: z.string().max(120).nullable().optional(),
   priceDeltaCents: z.number().int().optional(),
   maxQuantity: z.number().int().min(1).max(99).optional(),
   isDefault: z.boolean().optional(),
@@ -38,6 +40,7 @@ const modifierOptionSchema = z.object({
 
 const modifierGroupSchema = z.object({
   name: z.string().min(1),
+  description: z.string().max(120).nullable().optional(),
   required: z.boolean().optional(),
   minSelect: z.number().int().min(0).optional(),
   maxSelect: z.number().int().min(1).optional(),
@@ -55,6 +58,19 @@ const takeawayChargeSchema = z.object({
 });
 
 const localizedMapSchema = z.record(z.string(), z.string()).optional();
+
+const detailSchema = z
+  .object({
+    eyebrow: z.string().max(60).optional(),
+    heroNote: z.string().max(80).optional(),
+    heroNoteRight: z.string().max(40).optional(),
+    stats: z
+      .array(z.object({ label: z.string().max(40), value: z.string().max(60) }))
+      .max(MAX_DETAIL_STATS)
+      .optional(),
+    notesPlaceholder: z.string().max(160).optional(),
+  })
+  .optional();
 
 const itemSchema = z.object({
   slug: z.string().min(1),
@@ -101,6 +117,7 @@ const itemSchema = z.object({
   ingredientIds: z.array(z.string().min(1)).optional(),
   mainIngredientIds: z.array(z.string().min(1)).max(2).optional(),
   coffeeProfile: z.record(z.string(), z.unknown()).optional(),
+  detail: detailSchema,
 });
 
 function merchantTimezone(merchant: { timezone?: string | null }) {
@@ -120,17 +137,17 @@ export async function GET(request: Request, context: RouteContext) {
 
     if (format === "storefront") {
       const lang = parseStorefrontLang(url.searchParams.get("lang"));
-      const menu = await getActiveMenuForStorefront(
-        merchant.id,
-        merchantTimezone(merchant),
-        lang,
-      );
+      const [menu, storefrontIngredientCatalog] = await Promise.all([
+        getActiveMenuForStorefront(merchant.id, merchantTimezone(merchant), lang),
+        getMerchantIngredientCatalog(merchant.id),
+      ]);
       const languages = (merchant.languages ?? ["en"]).filter(
         (l): l is "en" | "zh" | "ms" => l === "en" || l === "zh" || l === "ms",
       );
       return NextResponse.json({
         categories: menu,
         badges: parseMenuBadges(merchant.menu_badges_json),
+        ingredientPresets: storefrontIngredientCatalog,
         languages: languages.length > 0 ? languages : ["en"],
         merchant: {
           name: merchant.name,
@@ -196,6 +213,7 @@ export async function GET(request: Request, context: RouteContext) {
         ingredientIds: item.ingredient_ids ?? [],
         mainIngredientIds: item.main_ingredient_ids ?? [],
         coffeeProfile: item.coffee_profile_json ?? {},
+        detail: parseMenuItemDetail(item.detail_json),
       })),
     });
   } catch (error) {
@@ -236,6 +254,7 @@ export async function PUT(request: Request, context: RouteContext) {
       itemNotes: body.itemNotes,
       ingredientIds: body.ingredientIds,
       mainIngredientIds: body.mainIngredientIds,
+      detail: body.detail ? parseMenuItemDetail(body.detail) : undefined,
     });
 
     return NextResponse.json({

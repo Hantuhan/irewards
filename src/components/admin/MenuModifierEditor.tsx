@@ -123,6 +123,18 @@ export function MenuModifierEditor({
                     className="w-full border border-surface-container-highest px-3 py-2"
                   />
                 </label>
+                <label className="sm:col-span-2">
+                  <span className="mb-1 block text-[11px] uppercase text-on-surface-variant">
+                    Helper text <span className="normal-case text-outline">(shown under the group title)</span>
+                  </span>
+                  <input
+                    value={group.description ?? ""}
+                    maxLength={120}
+                    onChange={(e) => updateGroup(gi, { description: e.target.value || null })}
+                    placeholder="e.g. Recommended warm for a crisp, fragrant crust"
+                    className="w-full border border-surface-container-highest px-3 py-2 text-[13px]"
+                  />
+                </label>
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -167,12 +179,23 @@ export function MenuModifierEditor({
                     key={oi}
                     className="grid gap-2 border border-surface-container-highest bg-surface-container-low p-2 sm:grid-cols-[1fr_80px_120px_72px_32px] sm:items-center sm:border-0 sm:bg-transparent sm:p-0"
                   >
-                    <input
-                      value={option.name}
-                      onChange={(e) => updateOption(gi, oi, { name: e.target.value })}
-                      placeholder="Option name"
-                      className="border border-surface-container-highest px-3 py-2"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <input
+                        value={option.name}
+                        onChange={(e) => updateOption(gi, oi, { name: e.target.value })}
+                        placeholder="Option name"
+                        className="border border-surface-container-highest px-3 py-2"
+                      />
+                      <input
+                        value={option.description ?? ""}
+                        maxLength={120}
+                        onChange={(e) =>
+                          updateOption(gi, oi, { description: e.target.value || null })
+                        }
+                        placeholder="Helper text (optional) — e.g. Reheated 3 mins in stone oven"
+                        className="border border-surface-container-highest px-3 py-1.5 text-[12px] text-on-surface-variant"
+                      />
+                    </div>
                     <label className="flex flex-col gap-1 sm:contents">
                       <span className="font-mono text-[10px] uppercase text-on-surface-variant sm:hidden">
                         Max qty

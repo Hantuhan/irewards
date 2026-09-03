@@ -164,9 +164,23 @@ first_item_id=$(node -e "
 " "$menu_resp" 2>/dev/null || true)
 [ -n "$first_item_id" ] && pass "Checkout item ($first_item_id)" || fail "No available menu item for checkout"
 
+# Required modifier groups need a selection — pick each group's default option.
+first_item_selections=$(node -e "
+  const d = JSON.parse(process.argv[1]);
+  const id = process.argv[2];
+  const item = (d.categories || []).flatMap((c) => c.items || []).find((i) => i.id === id);
+  const selections = [];
+  for (const group of item?.modifierGroups || []) {
+    if (!group.required) continue;
+    const option = (group.options || []).find((o) => o.isDefault) || (group.options || [])[0];
+    if (option) selections.push({ groupId: group.id, optionId: option.id });
+  }
+  console.log(JSON.stringify(selections));
+" "$menu_resp" "$first_item_id" 2>/dev/null || echo "[]")
+
 checkout_resp=$(curl -s -X POST "$BASE_URL/api/orders/checkout" \
   -H "Content-Type: application/json" \
-  -d "{\"merchantSlug\":\"$MERCHANT_SLUG\",\"tableId\":\"$TABLE_ID\",\"items\":[{\"id\":\"$first_item_id\",\"quantity\":1}]}")
+  -d "{\"merchantSlug\":\"$MERCHANT_SLUG\",\"tableId\":\"$TABLE_ID\",\"items\":[{\"id\":\"$first_item_id\",\"quantity\":1,\"selections\":$first_item_selections}]}")
 order_id=$(json_field "$checkout_resp" "orderId" 2>/dev/null || true)
 [ -n "$order_id" ] && pass "Checkout created order $order_id" || fail "Checkout failed: $checkout_resp"
 

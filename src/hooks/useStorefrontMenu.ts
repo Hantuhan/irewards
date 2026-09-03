@@ -7,11 +7,13 @@ import {
   type StorefrontMenuItem,
 } from "@/lib/menu/storefront";
 import type { MenuBadge } from "@/lib/menu/menu-badges";
+import type { MenuIngredientPreset } from "@/lib/menu/menu-ingredients";
 import type { ProgramLanguage } from "@/lib/i18n/program-locale";
 
 export function useStorefrontMenu(merchantSlug: string, lang: ProgramLanguage = "en") {
   const [categories, setCategories] = useState<StorefrontCategory[]>([]);
   const [badges, setBadges] = useState<MenuBadge[]>([]);
+  const [ingredientPresets, setIngredientPresets] = useState<MenuIngredientPreset[]>([]);
   const [languages, setLanguages] = useState<ProgramLanguage[]>(["en"]);
   const [merchantName, setMerchantName] = useState(merchantSlug);
   const [merchantCurrency, setMerchantCurrency] = useState<"MYR" | "SGD">("MYR");
@@ -27,6 +29,7 @@ export function useStorefrontMenu(merchantSlug: string, lang: ProgramLanguage = 
       .then((data) => {
         setCategories(data.categories);
         setBadges(data.badges);
+        setIngredientPresets(data.ingredientPresets ?? []);
         const langs = data.languages.filter(
           (l): l is ProgramLanguage => l === "en" || l === "zh" || l === "ms",
         );
@@ -55,6 +58,7 @@ export function useStorefrontMenu(merchantSlug: string, lang: ProgramLanguage = 
     categories,
     allItems,
     badges,
+    ingredientPresets,
     languages,
     merchantName,
     merchantCurrency,

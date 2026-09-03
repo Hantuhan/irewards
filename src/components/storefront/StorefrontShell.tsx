@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CustomerMobileNav } from "@/components/customer/CustomerMobileNav";
 import { MenuItemCustomizeSheet } from "@/components/storefront/MenuItemCustomizeSheet";
-import { MenuItemDetailSheet } from "@/components/storefront/MenuItemDetailSheet";
 import {
   StorefrontCategoryPills,
   StorefrontMenuHeader,
@@ -90,8 +90,9 @@ export function StorefrontShell({
     serviceType,
   } = useTableCart(merchantSlug, tableId, allItems);
 
+  const router = useRouter();
   const [activeItem, setActiveItem] = useState<StorefrontMenuItem | null>(null);
-  const [sheetMode, setSheetMode] = useState<"detail" | "customize" | null>(null);
+  const [sheetMode, setSheetMode] = useState<"customize" | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -309,17 +310,10 @@ export function StorefrontShell({
       .finally(() => setPhoneBusy(false));
   }
 
+  /** Product detail is a routed page (shared template for every product). */
   function openItemDetail(item: StorefrontMenuItem) {
-    setActiveItem(item);
-    setSheetMode("detail");
-    setDetailError(null);
-    setDetailLoading(true);
-    void fetchStorefrontMenuItem(merchantSlug, item.id, lang)
-      .then((fresh) => setActiveItem(fresh))
-      .catch((err) =>
-        setDetailError(err instanceof Error ? err.message : "Failed to load product details"),
-      )
-      .finally(() => setDetailLoading(false));
+    const href = routes.item(item.id);
+    router.push(embed ? `${href}?embed=1` : href);
   }
 
   function openCustomize(item: StorefrontMenuItem) {
@@ -349,15 +343,6 @@ export function StorefrontShell({
       return;
     }
     addItem(item.id);
-  }
-
-  function handleDetailAdd(item: StorefrontMenuItem) {
-    if ((item.modifierGroups?.length ?? 0) > 0) {
-      setSheetMode("customize");
-      return;
-    }
-    addItem(item.id);
-    closeSheet();
   }
 
   if (menuLoading) {
@@ -642,23 +627,18 @@ export function StorefrontShell({
         }}
       />
 
-      {activeItem && sheetMode === "detail" && (
-        <MenuItemDetailSheet
-          item={activeItem}
-          quantity={quantityInCart(activeItem.id)}
-          currency={merchantCurrency}
-          loading={detailLoading}
-          error={detailError}
-          badgeCatalog={badges}
-          lang={lang}
-          copy={copy}
-          onClose={closeSheet}
-          onAdd={() => handleDetailAdd(activeItem)}
-          hasModifiers={(activeItem.modifierGroups?.length ?? 0) > 0}
-        />
+      {activeItem && sheetMode === "customize" && detailError && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50">
+          <button type="button" className="absolute inset-0" aria-label="Close" onClick={closeSheet} />
+          <div className="relative w-full max-w-[382px] bg-surface p-5">
+            <p className="text-body-md text-red-700" role="alert">
+              {detailError}
+            </p>
+          </div>
+        </div>
       )}
 
-      {activeItem && sheetMode === "customize" && !detailLoading && (
+      {activeItem && sheetMode === "customize" && !detailLoading && !detailError && (
         <MenuItemCustomizeSheet
           item={activeItem}
           onClose={closeSheet}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   cartLineKey,
+  normalizeLineNote,
   type CartLinePayload,
   type CartModifierSelection,
   unitPriceWithModifiers,
@@ -33,6 +34,7 @@ export type CartLine = {
   unitPriceCents: number;
   packedForTakeaway: boolean;
   takeawaySurchargeCents: number;
+  note?: string;
 };
 
 type StoredLine = {
@@ -41,6 +43,7 @@ type StoredLine = {
   selections: CartModifierSelection[];
   packedForTakeaway?: boolean;
   promoPriceCents?: number | null;
+  note?: string;
 };
 
 export function useTableCart(
@@ -90,7 +93,7 @@ export function useTableCart(
 
   const cartLines: CartLine[] = useMemo(() => {
     return lines
-      .map((line) => {
+      .map((line): CartLine | null => {
         const item = itemMap.get(line.itemId);
         if (!item) return null;
         const menuBaseCents =
@@ -107,7 +110,7 @@ export function useTableCart(
             )
           : 0;
         return {
-          key: cartLineKey(line.itemId, line.selections),
+          key: cartLineKey(line.itemId, line.selections, line.note),
           itemId: line.itemId,
           itemName: item.name,
           quantity: line.quantity,
@@ -116,6 +119,7 @@ export function useTableCart(
           unitPriceCents: basePriceCents + takeawaySurchargeCents,
           packedForTakeaway,
           takeawaySurchargeCents,
+          note: normalizeLineNote(line.note),
         };
       })
       .filter((l): l is CartLine => l !== null);
@@ -150,6 +154,7 @@ export function useTableCart(
           quantity: s.quantity,
         })),
         packedForTakeaway: line.packedForTakeaway,
+        note: line.note,
       })),
     [cartLines],
   );
@@ -160,11 +165,13 @@ export function useTableCart(
       selections: CartModifierSelection[],
       amount = 1,
       promoPriceCents?: number | null,
+      note?: string | null,
     ) => {
-      const key = cartLineKey(itemId, selections);
+      const normalizedNote = normalizeLineNote(note);
+      const key = cartLineKey(itemId, selections, normalizedNote);
       setLines((prev) => {
         const idx = prev.findIndex(
-          (l) => cartLineKey(l.itemId, l.selections) === key,
+          (l) => cartLineKey(l.itemId, l.selections, l.note) === key,
         );
         if (idx >= 0) {
           const next = [...prev];
@@ -184,6 +191,7 @@ export function useTableCart(
             selections,
             packedForTakeaway: serviceType === "takeaway",
             promoPriceCents,
+            note: normalizedNote,
           },
         ];
       });
@@ -200,9 +208,11 @@ export function useTableCart(
 
   const setLineQuantity = useCallback((key: string, quantity: number) => {
     setLines((prev) => {
-      if (quantity <= 0) return prev.filter((l) => cartLineKey(l.itemId, l.selections) !== key);
+      if (quantity <= 0) {
+        return prev.filter((l) => cartLineKey(l.itemId, l.selections, l.note) !== key);
+      }
       return prev.map((l) =>
-        cartLineKey(l.itemId, l.selections) === key ? { ...l, quantity } : l,
+        cartLineKey(l.itemId, l.selections, l.note) === key ? { ...l, quantity } : l,
       );
     });
   }, []);
@@ -226,7 +236,7 @@ export function useTableCart(
   const setLinePackedForTakeaway = useCallback((key: string, packedForTakeaway: boolean) => {
     setLines((prev) =>
       prev.map((l) =>
-        cartLineKey(l.itemId, l.selections) === key ? { ...l, packedForTakeaway } : l,
+        cartLineKey(l.itemId, l.selections, l.note) === key ? { ...l, packedForTakeaway } : l,
       ),
     );
   }, []);

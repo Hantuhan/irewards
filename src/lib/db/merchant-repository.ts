@@ -45,9 +45,11 @@ import {
 } from "@/lib/merchant/sales-report";
 import {
   displayLineName,
+  normalizeLineNote,
   unitPriceWithModifiers,
   validateSelections,
 } from "@/lib/menu/modifiers";
+import { menuItemDetailToJson, type MenuItemDetail } from "@/lib/menu/detail";
 import type {
   CampaignRow,
   CustomerRow,
@@ -535,6 +537,7 @@ export async function upsertMenuItem(
     ingredientsI18n?: LocalizedMap;
     itemNotesI18n?: LocalizedMap;
     coffeeProfile?: Record<string, unknown>;
+    detail?: MenuItemDetail;
   },
 ): Promise<MenuItemRow> {
   const categories = await listMenuCategories(merchantId);
@@ -630,6 +633,18 @@ export async function upsertMenuItem(
     if (!mainErr) {
       row.main_ingredient_ids = normalizedMainIngredientIds;
     }
+  }
+
+  if (input.detail !== undefined) {
+    const detailJson = menuItemDetailToJson(input.detail);
+    const { error: detailErr } = await db()
+      .from("menu_items")
+      .update({ detail_json: detailJson })
+      .eq("id", row.id);
+    if (detailErr && !/detail_json/i.test(detailErr.message)) {
+      throw new Error(detailErr.message);
+    }
+    if (!detailErr) row.detail_json = detailJson;
   }
 
   if (input.availableDineIn !== undefined || input.availableTakeaway !== undefined) {
@@ -732,6 +747,7 @@ export async function resolveMenuItemsForCheckout(
     quantity: number;
     selections?: { groupId: string; optionId: string }[];
     packedForTakeaway?: boolean;
+    note?: string;
   }[],
   timeZone: string,
   serviceType: "dine_in" | "takeaway" = "dine_in",
@@ -758,6 +774,7 @@ export async function resolveMenuItemsForCheckout(
     modifiers: { groupName: string; optionName: string; priceDeltaCents: number }[];
     packedForTakeaway: boolean;
     takeawaySurchargeCents: number;
+    note?: string;
   }[] = [];
 
   for (const line of lines) {
@@ -796,6 +813,7 @@ export async function resolveMenuItemsForCheckout(
       modifiers,
       packedForTakeaway,
       takeawaySurchargeCents,
+      note: normalizeLineNote(line.note),
     });
   }
 
@@ -812,21 +830,30 @@ export async function createOrderItems(
     modifiers?: { groupName: string; optionName: string; priceDeltaCents: number }[];
     packedForTakeaway?: boolean;
     takeawaySurchargeCents?: number;
+    note?: string;
   }[],
 ) {
   if (lines.length === 0) return;
-  const { error } = await db().from("order_items").insert(
-    lines.map((line) => ({
-      order_id: orderId,
-      menu_item_id: line.menuItemId,
-      name: line.name,
-      quantity: line.quantity,
-      unit_price_cents: line.unitPriceCents,
-      modifiers: line.modifiers ?? null,
-      packed_for_takeaway: line.packedForTakeaway ?? false,
-      takeaway_surcharge_cents: line.takeawaySurchargeCents ?? 0,
-    })),
-  );
+  const rows = lines.map((line) => ({
+    order_id: orderId,
+    menu_item_id: line.menuItemId,
+    name: line.name,
+    quantity: line.quantity,
+    unit_price_cents: line.unitPriceCents,
+    modifiers: line.modifiers ?? null,
+    packed_for_takeaway: line.packedForTakeaway ?? false,
+    takeaway_surcharge_cents: line.takeawaySurchargeCents ?? 0,
+    note: line.note ?? null,
+  }));
+  const { error } = await db().from("order_items").insert(rows);
+  if (error && /note/i.test(error.message)) {
+    // Migration 055 not applied yet — retry without the note column.
+    const { error: retryError } = await db()
+      .from("order_items")
+      .insert(rows.map(({ note: _note, ...rest }) => rest));
+    if (retryError) throw new Error(retryError.message);
+    return;
+  }
   if (error) throw new Error(error.message);
 }
 

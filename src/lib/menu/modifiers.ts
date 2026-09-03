@@ -1,6 +1,8 @@
 export type ModifierOption = {
   id: string;
   name: string;
+  /** Helper copy under the option name on the product detail page. */
+  description?: string | null;
   priceDeltaCents: number;
   maxQuantity?: number;
   isDefault?: boolean;
@@ -9,6 +11,8 @@ export type ModifierOption = {
 export type ModifierGroup = {
   id: string;
   name: string;
+  /** Helper copy under the group title on the product detail page. */
+  description?: string | null;
   required: boolean;
   minSelect: number;
   maxSelect: number;
@@ -29,7 +33,16 @@ export type CartLinePayload = {
   quantity: number;
   selections?: { groupId: string; optionId: string; quantity?: number }[];
   packedForTakeaway?: boolean;
+  /** Diner's kitchen / barista note for this line. */
+  note?: string;
 };
+
+export const MAX_LINE_NOTE_LENGTH = 160;
+
+export function normalizeLineNote(note: string | null | undefined): string | undefined {
+  const trimmed = (note ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_LINE_NOTE_LENGTH);
+  return trimmed || undefined;
+}
 
 export function defaultSelections(groups: ModifierGroup[]): CartModifierSelection[] {
   const selections: CartModifierSelection[] = [];
@@ -78,12 +91,17 @@ export function displayLineName(itemName: string, selections: CartModifierSelect
   return mods ? `${itemName} (${mods})` : itemName;
 }
 
-export function cartLineKey(itemId: string, selections: CartModifierSelection[]): string {
+export function cartLineKey(
+  itemId: string,
+  selections: CartModifierSelection[],
+  note?: string | null,
+): string {
   const part = selections
     .map((s) => `${s.optionId}:${s.quantity ?? 1}`)
     .sort()
     .join(",");
-  return `${itemId}::${part}`;
+  const noteKey = normalizeLineNote(note);
+  return noteKey ? `${itemId}::${part}::${noteKey}` : `${itemId}::${part}`;
 }
 
 export function validateSelections(

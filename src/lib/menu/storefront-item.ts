@@ -12,6 +12,7 @@ import { normalizeMainIngredientIds } from "@/lib/menu/main-ingredients";
 import { takeawayChargeFromRow } from "@/lib/menu/takeaway-charge";
 import type { UpsellLinkConfig } from "@/lib/menu/upsell-rules";
 import { parseCoffeeProfile } from "@/lib/menu/coffee-profile";
+import { parseMenuItemDetail } from "@/lib/menu/detail";
 import { parseCategoryProfile, resolveSimpleCategory } from "@/lib/menu/simple-category-options";
 import { isCoffeeMenuCategory, isDrinkMenuCategory } from "@/lib/menu/coffee-templates";
 import type { StorefrontMenuItem } from "@/lib/menu/storefront";
@@ -41,6 +42,7 @@ export type MenuItemDetailRow = {
   takeaway_surcharge_priority?: number | null;
   available_dine_in?: boolean | null;
   available_takeaway?: boolean | null;
+  detail_json?: Record<string, unknown> | null;
 };
 
 type MapStorefrontItemInput = {
@@ -104,5 +106,6 @@ export function mapStorefrontMenuItem({
     takeawayCharge: takeawayChargeFromRow(item),
     availableDineIn: item.available_dine_in ?? true,
     availableTakeaway: item.available_takeaway ?? true,
+    detail: parseMenuItemDetail(item.detail_json),
   };
 }

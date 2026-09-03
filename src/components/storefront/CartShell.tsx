@@ -426,6 +426,11 @@ export function CartShell({ merchantSlug, tableId }: CartShellProps) {
                               .join(", ")}
                           </p>
                         )}
+                        {line.note && (
+                          <p className="mt-1 border-l-2 border-primary/30 pl-2 text-[12px] italic text-on-surface-variant">
+                            {line.note}
+                          </p>
+                        )}
                         <p className="mt-1 font-mono text-label-mono text-on-surface-variant">
                           {formatMerchantPrice(line.unitPriceCents, currency)} each
                           {line.takeawaySurchargeCents > 0 && (

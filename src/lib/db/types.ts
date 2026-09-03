@@ -145,6 +145,7 @@ export type OrderItemRow = {
   modifiers?: { groupName: string; optionName: string; priceDeltaCents: number }[] | null;
   packed_for_takeaway?: boolean;
   takeaway_surcharge_cents?: number;
+  note?: string | null;
 };
 
 export type CustomerRow = {
@@ -240,6 +241,7 @@ export type MenuItemRow = {
   takeaway_surcharge_priority?: number;
   available_dine_in?: boolean;
   available_takeaway?: boolean;
+  detail_json?: Record<string, unknown> | null;
 };
 
 export type PromoRow = {

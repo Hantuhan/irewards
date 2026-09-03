@@ -73,6 +73,8 @@ export type ProductEditorShellProps = {
   onToggleTakeaway: () => void;
   takeawayChargeSlot: ReactNode;
   availabilitySlot: ReactNode;
+  /** Product detail page template slots (eyebrow, hero caption, stats, note prompt) */
+  detailSlot?: ReactNode;
   /** Nested editors */
   modifiersSlot: ReactNode;
   mainIngredientsSlot?: ReactNode;
@@ -118,6 +120,7 @@ export function ProductEditorShell({
   onToggleTakeaway,
   takeawayChargeSlot,
   availabilitySlot,
+  detailSlot,
   modifiersSlot,
   mainIngredientsSlot,
   dietarySlot,
@@ -420,6 +423,15 @@ export function ProductEditorShell({
               </p>
             </div>
           </EditorCard>
+
+          {detailSlot ? (
+            <EditorCard
+              title="Product detail page"
+              description="Editorial slots on the diner product page: category line, hero caption, spec stats and the kitchen-note prompt. Every product shares the same template."
+            >
+              {detailSlot}
+            </EditorCard>
+          ) : null}
 
           {mainIngredientsSlot ? (
             <EditorCard

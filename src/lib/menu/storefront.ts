@@ -1,7 +1,9 @@
 import type { MenuBadge } from "@/lib/menu/menu-badges";
+import type { MenuIngredientPreset } from "@/lib/menu/menu-ingredients";
 import type { CoffeeProfile } from "@/lib/menu/coffee-profile";
 import type { SimpleCategoryProfile } from "@/lib/menu/simple-category-profile";
 import type { ProgramLanguage } from "@/lib/i18n/program-locale";
+import type { MenuItemDetail } from "@/lib/menu/detail";
 
 export type StorefrontMenuItem = {
   id: string;
@@ -28,6 +30,8 @@ export type StorefrontMenuItem = {
   takeawayCharge?: import("@/lib/menu/takeaway-charge").TakeawayChargeConfig;
   availableDineIn?: boolean;
   availableTakeaway?: boolean;
+  /** Detail-page template slots (eyebrow, hero caption, stats, note prompt). */
+  detail?: MenuItemDetail;
 };
 
 export type StorefrontCategory = {
@@ -39,6 +43,8 @@ export type StorefrontCategory = {
 export type StorefrontMenuResponse = {
   categories: StorefrontCategory[];
   badges: MenuBadge[];
+  /** Merchant allergen / dietary chip library (for localized disclosure labels). */
+  ingredientPresets?: MenuIngredientPreset[];
   languages: ProgramLanguage[];
   merchant: {
     name: string;
@@ -63,6 +69,7 @@ export async function fetchStorefrontMenu(
   return {
     categories: json.categories ?? [],
     badges: json.badges ?? [],
+    ingredientPresets: json.ingredientPresets ?? [],
     languages: json.languages ?? ["en"],
     merchant: json.merchant ?? {
       name: merchantSlug,

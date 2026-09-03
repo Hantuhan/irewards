@@ -53,6 +53,7 @@ const checkoutSchema = z.object({
         )
         .optional(),
       packedForTakeaway: z.boolean().optional(),
+      note: z.string().max(160).optional(),
     }),
   ),
 });

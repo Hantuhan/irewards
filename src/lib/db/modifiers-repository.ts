@@ -9,6 +9,7 @@ type GroupRow = {
   id: string;
   menu_item_id: string;
   name: string;
+  description?: string | null;
   required: boolean;
   min_select: number;
   max_select: number;
@@ -19,6 +20,7 @@ type OptionRow = {
   id: string;
   group_id: string;
   name: string;
+  description?: string | null;
   price_delta_cents: number;
   is_default: boolean;
   sort_order: number;
@@ -28,6 +30,7 @@ type OptionRow = {
 export type ModifierGroupInput = {
   id?: string;
   name: string;
+  description?: string | null;
   required?: boolean;
   minSelect?: number;
   maxSelect?: number;
@@ -35,6 +38,7 @@ export type ModifierGroupInput = {
   options: {
     id?: string;
     name: string;
+    description?: string | null;
     priceDeltaCents?: number;
     maxQuantity?: number;
     isDefault?: boolean;
@@ -46,6 +50,7 @@ function mapGroup(group: GroupRow, options: OptionRow[]): ModifierGroup {
   return {
     id: group.id,
     name: group.name,
+    description: group.description ?? null,
     required: group.required,
     minSelect: group.min_select,
     maxSelect: group.max_select,
@@ -56,6 +61,7 @@ function mapGroup(group: GroupRow, options: OptionRow[]): ModifierGroup {
         (o): ModifierOption => ({
           id: o.id,
           name: o.name,
+          description: o.description ?? null,
           priceDeltaCents: o.price_delta_cents,
           maxQuantity: o.max_quantity ?? 1,
           isDefault: o.is_default,
@@ -133,6 +139,7 @@ export async function replaceModifierGroups(
         {
           menu_item_id: menuItemId,
           name: group.name,
+          description: group.description?.trim() || null,
           required: group.required ?? false,
           min_select: group.minSelect ?? (group.required ? 1 : 0),
           max_select: group.maxSelect ?? 1,
@@ -152,6 +159,7 @@ export async function replaceModifierGroups(
           group.options.map((option, oi) => ({
             group_id: groupId,
             name: option.name,
+            description: option.description?.trim() || null,
             price_delta_cents: option.priceDeltaCents ?? 0,
             max_quantity: option.maxQuantity ?? 1,
             is_default: option.isDefault ?? false,

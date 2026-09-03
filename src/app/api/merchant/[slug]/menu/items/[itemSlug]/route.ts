@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getStorefrontMenuItemBySlug } from "@/lib/db/merchant-repository";
+import {
+  getMerchantIngredientCatalog,
+  getStorefrontMenuItemBySlug,
+} from "@/lib/db/merchant-repository";
 import { getMerchantBySlug } from "@/lib/db/repository";
 import { currencyDisplayCode, type MerchantCurrency } from "@/lib/merchant/currency";
 
@@ -34,9 +37,12 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
+    const ingredientPresets = await getMerchantIngredientCatalog(merchant.id);
+
     return NextResponse.json({
       currency: currencyDisplayCode((merchant.currency ?? "MYR") as MerchantCurrency),
       item,
+      ingredientPresets,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load product";

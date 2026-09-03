@@ -28,8 +28,14 @@ import {
   type MenuIngredientPreset,
 } from "@/lib/menu/menu-ingredients";
 import { MenuItemIngredientPicker } from "@/components/admin/MenuItemIngredientPicker";
-import { MenuItemDetailSheet } from "@/components/storefront/MenuItemDetailSheet";
-import { MenuItemCustomizeSheet } from "@/components/storefront/MenuItemCustomizeSheet";
+import { ProductDetailView } from "@/components/storefront/ProductDetailView";
+import { MenuDetailTemplateEditor } from "@/components/admin/MenuDetailTemplateEditor";
+import { MenuCatalogImportPanel } from "@/components/admin/MenuCatalogImportPanel";
+import {
+  emptyMenuItemDetail,
+  parseMenuItemDetail,
+  type MenuItemDetail,
+} from "@/lib/menu/detail";
 import type { TakeawayChargeConfig } from "@/lib/menu/takeaway-charge";
 import { mergeMaxProfitLinks, type UpsellLinkConfig } from "@/lib/menu/upsell-rules";
 import { MainIngredientPicker } from "@/components/admin/MainIngredientPicker";
@@ -50,7 +56,6 @@ import {
 import type { LocalizedMap } from "@/lib/i18n/program-locale";
 import {
   centsToPriceInput,
-  currencyDisplayCode,
   formatMerchantPrice,
   parsePriceToCents,
   type MerchantCurrency,
@@ -136,6 +141,7 @@ type MenuItem = {
   itemNotesI18n?: LocalizedMap;
   coffeeProfile?: CoffeeProfile | SimpleCategoryProfile;
   simpleCategoryProfile?: SimpleCategoryProfile;
+  detail?: MenuItemDetail;
 };
 
 type Category = { slug: string; label: string; labelI18n?: LocalizedMap };
@@ -171,6 +177,7 @@ function newItemDraft(categorySlug: string): MenuItem {
     ingredientsI18n: { en: "" },
     itemNotesI18n: { en: "" },
     coffeeProfile: emptyCoffeeProfile(),
+    detail: emptyMenuItemDetail(),
   };
 }
 
@@ -228,7 +235,9 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
   const [completingProduct, setCompletingProduct] = useState(false);
   const [completeHint, setCompleteHint] = useState<string | null>(null);
   const [productPreview, setProductPreview] = useState<StorefrontMenuItem | null>(null);
-  const [productPreviewMode, setProductPreviewMode] = useState<"detail" | "customize">("detail");
+  const [detailDraft, setDetailDraft] = useState<MenuItemDetail>(emptyMenuItemDetail());
+  const [showCatalogImport, setShowCatalogImport] = useState(false);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
   const [ingredientPresets, setIngredientPresets] = useState<MenuIngredientPreset[]>([]);
   const [ingredientIds, setIngredientIds] = useState<string[]>([]);
   const [mainIngredientIds, setMainIngredientIds] = useState<MainIngredientId[]>([]);
@@ -320,6 +329,7 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
           ingredientsI18n: item.ingredientsI18n ?? { en: item.ingredients ?? "" },
           itemNotesI18n: item.itemNotesI18n ?? { en: item.itemNotes ?? "" },
           coffeeProfile: parseCoffeeProfile(item.coffeeProfile),
+          detail: parseMenuItemDetail(item.detail),
           simpleCategoryProfile: (() => {
             const cat = data.categories.find((c) => c.slug === item.categorySlug);
             const kind = resolveSimpleCategory(item.categorySlug, cat?.label);
@@ -1005,10 +1015,7 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
       const drinkItem = isDrinkMenuCategory(payload.categorySlug, saveCategory?.label);
       const simpleKind = resolveSimpleCategory(payload.categorySlug, saveCategory?.label);
       const simpleModifiers = simpleKind
-        ? ensureSimpleCategoryModifiers(simpleKind, modifierGroups, currency, {
-            ...simpleProfile,
-            detailLevel: "simple",
-          })
+        ? ensureSimpleCategoryModifiers(simpleKind, modifierGroups, currency, simpleProfile)
         : modifierGroups;
 
       payload = {
@@ -1029,10 +1036,7 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
             ? new Date(availableUntilLocal).toISOString()
             : null,
         modifierGroups: coffeeItem
-          ? ensureSimpleDrinkModifiers(modifierGroups, currency, {
-              ...coffeeProfile,
-              detailLevel: "simple",
-            })
+          ? ensureSimpleDrinkModifiers(modifierGroups, currency, coffeeProfile)
           : simpleModifiers,
         upsellLinks,
         takeawayCharge,
@@ -1068,6 +1072,7 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
             ? { ...simpleProfile, detailLevel: "simple" }
             : emptyCoffeeProfile(),
         priceCents: parsePriceToCents(priceInput),
+        detail: detailDraft,
       };
       if (availabilityMode !== "weekly") payload.availabilityWeekly = null;
       if (availabilityMode !== "date_range") {
@@ -1173,9 +1178,29 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
       takeawayCharge,
       availableDineIn,
       availableTakeaway,
+      detail: detailDraft,
     };
     setProductPreview(preview);
-    setProductPreviewMode("detail");
+  }
+
+  /** Pairing cards for the admin preview, built from the saved product list. */
+  function previewPairings(): { item: StorefrontMenuItem; quantityInCart: number }[] {
+    return upsellLinks
+      .map((link) => items.find((i) => i.slug === link.slug))
+      .filter((i): i is MenuItem => Boolean(i))
+      .slice(0, 4)
+      .map((i) => ({
+        item: {
+          id: i.slug,
+          name: i.name,
+          description: i.description ?? "",
+          priceCents: i.priceCents,
+          category: i.categorySlug,
+          menuItemId: i.slug,
+          imageUrl: i.imageUrl,
+        },
+        quantityInCart: 0,
+      }));
   }
 
   function duplicateEditingItem() {
@@ -1276,6 +1301,7 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
     setKcalManual(item.kcal != null);
     setKcalHint(item.kcal != null ? "Saved on this product" : null);
     setItemNotesInput(item.itemNotes ?? "");
+    setDetailDraft(parseMenuItemDetail(item.detail));
   }
 
   function openNewEditor(categorySlug = defaultCategory) {
@@ -1305,6 +1331,7 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
     setKcalManual(false);
     setKcalHint(null);
     setItemNotesInput("");
+    setDetailDraft(emptyMenuItemDetail());
     const cat = categories.find((c) => c.slug === draft.categorySlug);
     setCoffeeProfile(emptyCoffeeProfile());
     const simpleKind = resolveSimpleCategory(draft.categorySlug, cat?.label);
@@ -1627,6 +1654,14 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
               onSubmit={() => void saveItem(editing).catch(() => {})}
               onPreview={openProductPreview}
               onDuplicate={isNewItem ? undefined : () => duplicateEditingItem()}
+              detailSlot={
+                <MenuDetailTemplateEditor
+                  value={detailDraft}
+                  onChange={setDetailDraft}
+                  categoryLabel={editingCategory?.label ?? null}
+                  kcal={kcalInput}
+                />
+              }
               name={editing.name}
               onNameChange={(value) =>
                 setEditing({
@@ -1948,32 +1983,44 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
           </form>
         )}
 
-        {productPreview && productPreviewMode === "detail" && (
-          <MenuItemDetailSheet
-            item={productPreview}
-            quantity={0}
-            currency={currency}
-            badgeCatalog={badgeCatalog}
-            ingredientCatalog={ingredientPresets}
-            hasModifiers={(productPreview.modifierGroups?.length ?? 0) > 0}
-            onClose={() => setProductPreview(null)}
-            onAdd={() => {
-              if ((productPreview.modifierGroups?.length ?? 0) > 0) {
-                setProductPreviewMode("customize");
-                return;
-              }
-              setProductPreview(null);
-            }}
-          />
-        )}
-
-        {productPreview && productPreviewMode === "customize" && (
-          <MenuItemCustomizeSheet
-            item={productPreview}
-            currency={currencyDisplayCode(currency)}
-            onClose={() => setProductPreviewMode("detail")}
-            onConfirm={() => setProductPreview(null)}
-          />
+        {productPreview && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6">
+            <button
+              type="button"
+              className="absolute inset-0"
+              aria-label="Close preview"
+              onClick={() => setProductPreview(null)}
+            />
+            <div className="relative flex h-[min(880px,94vh)] w-full max-w-mobile flex-col overflow-hidden border border-surface-container-highest bg-surface shadow-2xl">
+              <div className="flex items-center justify-between border-b border-surface-container-highest bg-surface-container-lowest px-4 py-2">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
+                  Storefront preview · product page
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setProductPreview(null)}
+                  aria-label="Close"
+                  className="flex h-7 w-7 items-center justify-center text-on-surface-variant hover:text-primary"
+                >
+                  <Icon name="close" className="text-[18px]" />
+                </button>
+              </div>
+              <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <ProductDetailView
+                  item={productPreview}
+                  preview
+                  currency={currency}
+                  categoryLabel={editingCategory?.label ?? null}
+                  badgeCatalog={badgeCatalog}
+                  ingredientCatalog={ingredientPresets}
+                  contextLabel="Table 01 · Dine-in"
+                  pointsPerRinggit={1}
+                  pairings={previewPairings()}
+                  onBack={() => setProductPreview(null)}
+                />
+              </div>
+            </div>
+          </div>
         )}
 
         {!loading && categories.length > 0 && !showCategoryManager && !editing && (
@@ -2071,6 +2118,17 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
                     </div>
                     <button
                       type="button"
+                      onClick={() => {
+                        setShowProductStarter(false);
+                        setShowCatalogImport((prev) => !prev);
+                      }}
+                      className="inline-flex items-center gap-1.5 border border-primary px-4 py-2 font-body-md font-medium text-primary"
+                    >
+                      <Icon name="download" className="text-[18px]" />
+                      Import catalog
+                    </button>
+                    <button
+                      type="button"
                       onClick={startAddProduct}
                       className="inline-flex items-center gap-1.5 bg-primary px-4 py-2 font-body-md font-medium text-on-primary"
                     >
@@ -2079,6 +2137,29 @@ export function MenuAdminShell({ merchantSlug }: MenuAdminShellProps) {
                     </button>
                   </div>
                 </div>
+
+                {importNotice && (
+                  <p className="mb-4 flex items-center gap-2 border border-surface-container-highest bg-surface-container-low px-4 py-3 text-body-md text-on-surface">
+                    <Icon name="check_circle" className="text-[18px] text-manus" />
+                    {importNotice}
+                  </p>
+                )}
+
+                {showCatalogImport && (
+                  <MenuCatalogImportPanel
+                    merchantSlug={merchantSlug}
+                    onClose={() => setShowCatalogImport(false)}
+                    onImported={(result) => {
+                      setShowCatalogImport(false);
+                      setImportNotice(
+                        `Imported ${result.productsUpserted} products across ${
+                          result.categoriesCreated + result.categoriesReused
+                        } categories (${result.categoriesCreated} new).`,
+                      );
+                      void load();
+                    }}
+                  />
+                )}
 
                 {showProductStarter && defaultCategory && (
                   <MenuProductStarter

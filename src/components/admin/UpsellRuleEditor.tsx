@@ -205,7 +205,7 @@ export function UpsellRuleEditor({
                           updateLink(link.slug, {
                             promoMode,
                             promoPriceCents:
-                              promoMode === "custom" ? (link.promoPriceCents ?? 0) : null,
+                              promoMode === "custom" ? (link.promoPriceCents ?? 0) : undefined,
                           });
                         }}
                         className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
@@ -249,8 +249,10 @@ export function UpsellRuleEditor({
                           const ruleType = e.target.value as UpsellRuleType;
                           updateLink(link.slug, {
                             ruleType,
-                            minCartCents: ruleType === "min_cart" ? (link.minCartCents ?? 0) : null,
-                            maxCartCents: ruleType === "max_cart" ? (link.maxCartCents ?? 0) : null,
+                            minCartCents:
+                              ruleType === "min_cart" ? (link.minCartCents ?? 0) : undefined,
+                            maxCartCents:
+                              ruleType === "max_cart" ? (link.maxCartCents ?? 0) : undefined,
                           });
                         }}
                         className="w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2"
@@ -275,8 +277,8 @@ export function UpsellRuleEditor({
                           onBlur={() => {
                             const cents = parsePriceToCents(ruleAmountInputFor(link));
                             updateLink(link.slug, {
-                              minCartCents: link.ruleType === "min_cart" ? cents : null,
-                              maxCartCents: link.ruleType === "max_cart" ? cents : null,
+                              minCartCents: link.ruleType === "min_cart" ? cents : undefined,
+                              maxCartCents: link.ruleType === "max_cart" ? cents : undefined,
                             });
                             setRuleInputs((prev) => ({
                               ...prev,

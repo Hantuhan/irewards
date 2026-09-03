@@ -21,6 +21,7 @@ export function customerRoutes(merchantSlug: string, tableId: string) {
     rewards: `${base}/rewards`,
     cart: `${base}/cart`,
     profile: `${base}/profile`,
+    item: (itemSlug: string) => `${base}/item/${encodeURIComponent(itemSlug)}`,
     thanks: (orderId: string) => `${base}/thanks?orderId=${orderId}`,
   };
 }

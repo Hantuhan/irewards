@@ -38,6 +38,19 @@ next-env.d.ts
 public/uploads/
 
 Thumbs.db
+.DS_Store
+
+# local agent / cursor state
+.agents/
+.cursor/
+skills-lock.json
+"StoreFront Detail/"
+StoreFront Detail/
+
+# insforge overrides
+infra/insforge/.agents/
+infra/insforge/docker-compose.override.yml
+infra/insforge/skills-lock.json
 
 # ide
 .idea/

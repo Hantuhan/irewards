@@ -238,7 +238,7 @@ async function runCampaignSend(job: AutomationJobRow, merchant: MerchantRow): Pr
       "Not sent: the campaign's WhatsApp copy has no approved Meta template (or it changed after approval).",
     );
   }
-  await sendWhatsAppTemplateMessage(payload.phone, {
+  await sendWhatsAppTemplateMessage(merchant.id, payload.phone, {
     name: template.name,
     language: template.language,
     bodyParams: templateValuesFor(template.variables, values),

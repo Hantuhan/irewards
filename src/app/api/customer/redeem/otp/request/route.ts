@@ -58,6 +58,7 @@ export async function POST(request: Request) {
     });
 
     const send = await sendRedeemOtpWhatsApp({
+      merchantId: merchant.id,
       phone: customer.phone,
       code,
       merchantName: merchant.name,

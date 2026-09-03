@@ -47,6 +47,7 @@ export async function updateWhatsAppTemplate(
     Pick<
       WhatsAppTemplateRow,
       | "meta_template_id"
+      | "waba_id"
       | "status"
       | "rejection_reason"
       | "submitted_at"

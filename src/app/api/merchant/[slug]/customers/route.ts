@@ -267,7 +267,7 @@ export async function POST(request: Request, context: RouteContext) {
       ].join("\n");
 
       try {
-        await sendWhatsAppMessage(phone, message);
+        await sendWhatsAppMessage(merchant.id, phone, message);
         whatsappSent = true;
       } catch (err) {
         whatsappWarning =

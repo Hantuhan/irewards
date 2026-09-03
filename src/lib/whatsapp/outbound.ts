@@ -1,4 +1,5 @@
-import { graphFetch, getMetaConfig, isWhatsAppDevMode, toMetaPhone } from "@/lib/meta/client";
+import { graphFetch, isWhatsAppDevMode, toMetaPhone } from "@/lib/meta/client";
+import { getMetaConfigForMerchant } from "@/lib/meta/merchant-config";
 
 type SendResult = { id: string };
 
@@ -6,10 +7,18 @@ type MetaSendResponse = {
   messages?: { id: string }[];
 };
 
-async function postMessage(payload: Record<string, unknown>): Promise<SendResult> {
-  const { phoneNumberId } = getMetaConfig();
+/**
+ * Every send is scoped to a merchant, because every merchant sends from their
+ * own connected WABA on their own Meta bill.
+ */
+async function postMessage(
+  merchantId: string,
+  payload: Record<string, unknown>,
+): Promise<SendResult> {
+  const { phoneNumberId, accessToken } = await getMetaConfigForMerchant(merchantId);
   const result = await graphFetch<MetaSendResponse>(`${phoneNumberId}/messages`, {
     method: "POST",
+    accessToken,
     body: { messaging_product: "whatsapp", recipient_type: "individual", ...payload },
   });
   return { id: result.messages?.[0]?.id ?? "unknown" };
@@ -20,13 +29,17 @@ async function postMessage(payload: Record<string, unknown>): Promise<SendResult
  * service window (i.e. as a reply to something the member sent). Anything
  * business-initiated must go through `sendWhatsAppTemplateMessage`.
  */
-export async function sendWhatsAppMessage(toPhone: string, body: string): Promise<SendResult> {
+export async function sendWhatsAppMessage(
+  merchantId: string,
+  toPhone: string,
+  body: string,
+): Promise<SendResult> {
   if (isWhatsAppDevMode()) {
     console.info("[whatsapp:dev] text →", toPhone, body);
     return { id: "dev-message" };
   }
 
-  return postMessage({
+  return postMessage(merchantId, {
     to: toMetaPhone(toPhone),
     type: "text",
     text: { preview_url: false, body },
@@ -43,6 +56,7 @@ export type TemplateSend = {
 
 /** Sends a Meta-approved template. This is the only way to message members outside the 24h window. */
 export async function sendWhatsAppTemplateMessage(
+  merchantId: string,
   toPhone: string,
   template: TemplateSend,
 ): Promise<SendResult> {
@@ -71,7 +85,7 @@ export async function sendWhatsAppTemplateMessage(
     });
   }
 
-  return postMessage({
+  return postMessage(merchantId, {
     to: toMetaPhone(toPhone),
     type: "template",
     template: {

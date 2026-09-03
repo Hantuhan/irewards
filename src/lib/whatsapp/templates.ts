@@ -13,7 +13,8 @@ import {
   listTemplatesByStatus,
   updateWhatsAppTemplate,
 } from "@/lib/db/whatsapp-template-repository";
-import { getMetaConfig, graphFetch, isWhatsAppDevMode, MetaApiError } from "@/lib/meta/client";
+import { getMetaAppConfig, graphFetch, isWhatsAppDevMode, MetaApiError } from "@/lib/meta/client";
+import { findMetaConfigForMerchant, getMetaConfigForMerchant } from "@/lib/meta/merchant-config";
 import { asWhatsAppTemplate, asWorkflow, whatsAppCompliance } from "@/lib/campaigns/workflow-spec";
 import { describeBlockers, lintWhatsAppTemplate, type ComplianceReport } from "@/lib/whatsapp/meta-compliance";
 import { adminDb } from "@/lib/db/admin";
@@ -60,8 +61,8 @@ function absoluteUrl(url: string): string {
  * Image headers need a media handle from Meta's resumable upload API, not a
  * URL. Two calls: open an upload session on the app, then push the bytes.
  */
-async function uploadHeaderImage(imageUrl: string): Promise<string> {
-  const { appId } = getMetaConfig();
+async function uploadHeaderImage(imageUrl: string, accessToken: string): Promise<string> {
+  const { appId } = getMetaAppConfig();
   if (!appId) {
     throw new Error("META_APP_ID is required to submit templates with an image header");
   }
@@ -73,10 +74,10 @@ async function uploadHeaderImage(imageUrl: string): Promise<string> {
 
   const session = await graphFetch<{ id: string }>(`${appId}/uploads`, {
     method: "POST",
+    accessToken,
     query: { file_length: String(bytes.byteLength), file_type: fileType },
   });
 
-  const { accessToken } = getMetaConfig();
   const upload = await fetch(`https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v21.0"}/${session.id}`, {
     method: "POST",
     headers: {
@@ -131,7 +132,10 @@ export async function submitCampaignTemplate(
   const dev = isWhatsAppDevMode();
 
   let headerHandle: string | null = null;
-  if (headerImageUrl && !dev) headerHandle = await uploadHeaderImage(headerImageUrl);
+  if (headerImageUrl && !dev) {
+    const { accessToken } = await getMetaConfigForMerchant(merchant.id);
+    headerHandle = await uploadHeaderImage(headerImageUrl, accessToken);
+  }
 
   const components = buildTemplateComponents({ bodyText, variables, headerHandle });
 
@@ -160,11 +164,12 @@ export async function submitCampaignTemplate(
   }
 
   try {
-    const { wabaId } = getMetaConfig();
+    const { wabaId, accessToken } = await getMetaConfigForMerchant(merchant.id);
     const created = await graphFetch<{ id: string; status?: string; category?: string }>(
       `${wabaId}/message_templates`,
       {
         method: "POST",
+        accessToken,
         body: {
           name: row.name,
           language: row.language,
@@ -176,6 +181,9 @@ export async function submitCampaignTemplate(
     );
     return updateWhatsAppTemplate(row.id, {
       meta_template_id: created.id,
+      // Approvals belong to the WABA they were granted on, so a template
+      // approved for one merchant says nothing about another's.
+      waba_id: wabaId,
       status: statusFromMeta(created.status ?? "PENDING"),
       submitted_at: now,
       status_checked_at: now,
@@ -225,9 +233,16 @@ export async function refreshTemplateStatus(row: WhatsAppTemplateRow): Promise<W
     });
   }
 
+  // Poll on the account that owns the template.
+  const config = await findMetaConfigForMerchant(row.merchant_id);
+  if (!config) return row;
+
   const remote = await graphFetch<{ status?: string; rejected_reason?: string; category?: string }>(
     row.meta_template_id,
-    { query: { fields: "name,status,category,rejected_reason,language" } },
+    {
+      accessToken: config.accessToken,
+      query: { fields: "name,status,category,rejected_reason,language" },
+    },
   );
 
   const status = statusFromMeta(remote.status);

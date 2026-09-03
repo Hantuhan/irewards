@@ -4,6 +4,7 @@ import { findTemplateByMetaId } from "@/lib/db/whatsapp-template-repository";
 import { adminDb } from "@/lib/db/admin";
 import { parseJoinMessage } from "@/lib/loyalty/join-token";
 import { fromMetaPhone, shouldSkipMetaVerify, verifyMetaSignature } from "@/lib/meta/client";
+import { getMerchantIdByPhoneNumberId } from "@/lib/db/whatsapp-account-repository";
 import { JoinError, processWhatsAppJoin } from "@/lib/services/loyalty-join";
 import { isOptOutMessage } from "@/lib/whatsapp/opt-out";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/outbound";
@@ -44,6 +45,8 @@ type InboundMessage = {
 
 type ChangeValue = {
   messaging_product?: string;
+  /** Identifies which of our merchants' numbers this event arrived on. */
+  metadata?: { display_phone_number?: string; phone_number_id?: string };
   contacts?: { wa_id?: string; profile?: { name?: string } }[];
   messages?: InboundMessage[];
   // message_template_status_update / message_template_quality_update
@@ -61,7 +64,8 @@ type ChangeValue = {
 
 type WebhookBody = {
   object?: string;
-  entry?: { changes?: { field?: string; value?: ChangeValue }[] }[];
+  /** `entry[].id` is the WABA id the event belongs to. */
+  entry?: { id?: string; changes?: { field?: string; value?: ChangeValue }[] }[];
 };
 
 export async function POST(request: Request) {
@@ -83,14 +87,24 @@ export async function POST(request: Request) {
     for (const change of entry.changes ?? []) {
       const value = change.value ?? {};
       try {
+        // Which merchant this concerns is decided by the number the event
+        // arrived on, never by the sender's phone — one person can be a member
+        // at several cafes, so their number identifies nobody.
+        const merchantId = await resolveMerchantId(value);
+
         if (change.field === "message_template_status_update") {
           await handleTemplateStatus(value);
         } else if (change.field === "message_template_quality_update") {
           await handleTemplateQuality(value);
         } else if (change.field === "phone_number_quality_update") {
-          await applyPhoneQualityEvent(value);
+          await applyPhoneQualityEvent(value, {
+            merchantId,
+            phoneNumberId: value.metadata?.phone_number_id ?? null,
+          });
         } else if (change.field === "messages" || value.messages) {
-          for (const message of value.messages ?? []) await handleInbound(message, value);
+          for (const message of value.messages ?? []) {
+            await handleInbound(message, value, merchantId);
+          }
         }
       } catch (error) {
         console.error("Meta webhook handler error:", change.field, error);
@@ -99,6 +113,17 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * The merchant whose connected number this event arrived on. Null when the
+ * event came in on the platform number (a pilot merchant sending from ours),
+ * in which case the handlers fall back to matching on the member's phone.
+ */
+async function resolveMerchantId(value: ChangeValue): Promise<string | null> {
+  const phoneNumberId = value.metadata?.phone_number_id;
+  if (!phoneNumberId) return null;
+  return getMerchantIdByPhoneNumberId(phoneNumberId).catch(() => null);
 }
 
 async function handleTemplateStatus(value: ChangeValue) {
@@ -138,31 +163,43 @@ function messageText(message: InboundMessage): string {
   ).trim();
 }
 
-async function handleInbound(message: InboundMessage, value: ChangeValue) {
+async function handleInbound(
+  message: InboundMessage,
+  value: ChangeValue,
+  merchantId: string | null,
+) {
   const phone = fromMetaPhone(message.from);
   if (!phone) return;
 
   const text = messageText(message);
   const externalUserId = value.contacts?.find((c) => c.wa_id === message.from)?.wa_id ?? message.from;
 
+  // Whoever we reply as has to be the number they wrote to. Without a
+  // connected merchant we have nothing to send from, so the event is recorded
+  // and left unanswered rather than replied to from the wrong store.
+  const replyFrom = merchantId;
+  const reply = async (body: string) => {
+    if (!replyFrom) return;
+    await sendWhatsAppMessage(replyFrom, phone, body);
+  };
+
   if (isOptOutMessage(text)) {
-    await handleMarketingOptOut(phone);
-    await sendWhatsAppMessage(phone, "You have been unsubscribed from marketing messages.");
+    await handleMarketingOptOut(phone, merchantId);
+    await reply("You have been unsubscribed from marketing messages.");
     return;
   }
 
   // Review nudge replies: 5 = happy (Google link), 1–4 = private feedback.
   const rating = text.match(/^[1-5]$/)?.[0];
   if (rating) {
-    await handleReviewReply(phone, Number(rating));
+    await handleReviewReply(phone, Number(rating), merchantId);
     return;
   }
 
   const joinToken = parseJoinMessage(text);
   if (!joinToken) {
     if (text) {
-      await sendWhatsAppMessage(
-        phone,
+      await reply(
         "Send JOIN-{token} from your receipt to join iRewards and claim points. Reply STOP to opt out of marketing.",
       );
     }
@@ -171,33 +208,47 @@ async function handleInbound(message: InboundMessage, value: ChangeValue) {
 
   try {
     const result = await processWhatsAppJoin({ token: joinToken, phone, externalUserId });
-    await sendWhatsAppMessage(
-      phone,
-      `You're in iRewards! Level: ${result.tierName}. +${result.pointsAwarded} point${
-        result.pointsAwarded === 1 ? "" : "s"
-      } added. Balance: ${result.customer.points_balance}. See you next time!`,
-    );
+    // The join token names the store, so reply from that one even if the
+    // message arrived on the platform number.
+    const joinMerchantId = result.customer.merchant_id ?? replyFrom;
+    const congratulations = `You're in iRewards! Level: ${result.tierName}. +${result.pointsAwarded} point${
+      result.pointsAwarded === 1 ? "" : "s"
+    } added. Balance: ${result.customer.points_balance}. See you next time!`;
+    if (joinMerchantId) await sendWhatsAppMessage(joinMerchantId, phone, congratulations);
   } catch (error) {
     if (error instanceof JoinError) {
-      await sendWhatsAppMessage(phone, error.message);
+      await reply(error.message);
       return;
     }
     console.error("WhatsApp join error:", error);
-    await sendWhatsAppMessage(phone, "Something went wrong. Please ask staff for help.");
+    await reply("Something went wrong. Please ask staff for help.");
   }
 }
 
-async function handleReviewReply(phone: string, rating: number) {
-  const { data } = await adminDb()
+/**
+ * A reply to a review nudge. Scoped to the store whose number was messaged —
+ * without that, one reply would file feedback against every cafe the member
+ * belongs to.
+ */
+async function handleReviewReply(phone: string, rating: number, merchantId: string | null) {
+  let query = adminDb()
     .from("customers")
     .select("id, merchant_id, display_name")
     .eq("phone", phone)
-    .eq("is_member", true)
-    .limit(5);
+    .eq("is_member", true);
+  if (merchantId) query = query.eq("merchant_id", merchantId);
+
+  const { data } = await query.limit(5);
 
   const customers = (data ?? []) as { id: string; merchant_id: string; display_name: string | null }[];
   if (customers.length === 0) {
-    await sendWhatsAppMessage(phone, "Thanks for the reply. Join iRewards after your next visit to unlock member perks.");
+    if (merchantId) {
+      await sendWhatsAppMessage(
+        merchantId,
+        phone,
+        "Thanks for the reply. Join iRewards after your next visit to unlock member perks.",
+      );
+    }
     return;
   }
 
@@ -220,6 +271,7 @@ async function handleReviewReply(phone: string, rating: number) {
       const row = merchant as { name?: string; google_url?: string | null } | null;
       const link = row?.google_url?.trim();
       await sendWhatsAppMessage(
+        customer.merchant_id,
         phone,
         link
           ? `Thanks so much! If you have 20 seconds, a Google review helps us a lot:\n${link}`
@@ -227,6 +279,7 @@ async function handleReviewReply(phone: string, rating: number) {
       );
     } else {
       await sendWhatsAppMessage(
+        customer.merchant_id,
         phone,
         "Thanks for telling us — a manager will follow up privately. We appreciate your honesty.",
       );
@@ -234,8 +287,16 @@ async function handleReviewReply(phone: string, rating: number) {
   }
 }
 
-async function handleMarketingOptOut(phone: string) {
-  const { data } = await adminDb().from("customers").select("id").eq("phone", phone).limit(20);
+/**
+ * Opting out applies to the store whose number they messaged. Unsubscribing
+ * someone from every cafe they belong to because they told one to stop would
+ * quietly destroy the other merchants' lists.
+ */
+async function handleMarketingOptOut(phone: string, merchantId: string | null) {
+  let query = adminDb().from("customers").select("id").eq("phone", phone);
+  if (merchantId) query = query.eq("merchant_id", merchantId);
+
+  const { data } = await query.limit(20);
 
   for (const row of data ?? []) {
     await updateCustomer((row as { id: string }).id, { marketing_opt_out: true });

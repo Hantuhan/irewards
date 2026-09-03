@@ -15,6 +15,8 @@ export type MetaConfig = {
   phoneNumberId: string;
   appId: string | null;
   appSecret: string | null;
+  /** "merchant" when the credentials came from that merchant's connected WABA. */
+  source: "merchant" | "platform";
 };
 
 /** Dev mode: log instead of calling Meta. Controlled only by WHATSAPP_SKIP_SEND. */
@@ -22,6 +24,14 @@ export function isWhatsAppDevMode(): boolean {
   return process.env.WHATSAPP_SKIP_SEND === "true";
 }
 
+/**
+ * The platform's own WABA, from env.
+ *
+ * Merchants connect their own account through Embedded Signup and are billed
+ * by Meta directly — see `getMetaConfigForMerchant`. This remains for the app
+ * credentials (image uploads are an app-level call) and as a fallback for a
+ * pilot merchant running on our number before they connect their own.
+ */
 export function getMetaConfig(): MetaConfig {
   const accessToken = process.env.META_ACCESS_TOKEN;
   const wabaId = process.env.META_WABA_ID;
@@ -39,7 +49,25 @@ export function getMetaConfig(): MetaConfig {
     phoneNumberId,
     appId: process.env.META_APP_ID || null,
     appSecret: process.env.META_APP_SECRET || null,
+    source: "platform",
   };
+}
+
+/** App-level credentials, which exist whether or not a platform WABA is configured. */
+export function getMetaAppConfig(): { appId: string | null; appSecret: string | null } {
+  return {
+    appId: process.env.META_APP_ID || null,
+    appSecret: process.env.META_APP_SECRET || null,
+  };
+}
+
+/** True when a platform-level WABA is configured to fall back to. */
+export function hasPlatformWhatsApp(): boolean {
+  return Boolean(
+    process.env.META_ACCESS_TOKEN &&
+      process.env.META_WABA_ID &&
+      process.env.META_PHONE_NUMBER_ID,
+  );
 }
 
 export class MetaApiError extends Error {
@@ -59,6 +87,8 @@ type GraphInit = {
   body?: Record<string, unknown> | FormData;
   query?: Record<string, string | undefined>;
   headers?: Record<string, string>;
+  /** The merchant's token. Falls back to the platform token when omitted. */
+  accessToken?: string;
 };
 
 /** Calls `https://graph.facebook.com/{version}/{path}` and unwraps Meta's error envelope. */
@@ -66,7 +96,7 @@ export async function graphFetch<T = Record<string, unknown>>(
   path: string,
   init: GraphInit = {},
 ): Promise<T> {
-  const { accessToken } = getMetaConfig();
+  const accessToken = init.accessToken ?? getMetaConfig().accessToken;
   const url = new URL(`https://graph.facebook.com/${META_GRAPH_VERSION}/${path.replace(/^\//, "")}`);
   for (const [key, value] of Object.entries(init.query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, value);

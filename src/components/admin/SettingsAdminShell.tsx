@@ -17,13 +17,14 @@ import { SocialIcon } from "@/components/ui/SocialIcon";
 import { dashboardRoutes } from "@/lib/navigation/routes";
 import { legalPolicyPath } from "@/lib/merchant/legal-policies";
 import { syncTaxFlagsForCurrency } from "@/lib/merchant/charge-settings";
+import { WhatsAppSettingsPanel } from "@/components/admin/WhatsAppSettingsPanel";
 import { resolveLegalPolicyDefaults } from "@/lib/merchant/default-legal-policies";
 import { parseReceiptLayout, type ReceiptLayout } from "@/lib/receipt/layout";
 import { manusHeaderBtnClass, manusHeaderPrimaryBtnClass } from "@/lib/ui/manus";
 
 type SettingsAdminShellProps = { merchantSlug: string };
 
-type TabId = "store" | "checkout" | "online" | "receipt" | "legal" | "flow" | "team";
+type TabId = "store" | "checkout" | "online" | "receipt" | "legal" | "flow" | "whatsapp" | "team";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "store", label: "Store" },
@@ -32,6 +33,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "receipt", label: "Receipt" },
   { id: "legal", label: "Legal" },
   { id: "flow", label: "Diner flow" },
+  { id: "whatsapp", label: "WhatsApp" },
   { id: "team", label: "Team" },
 ];
 
@@ -1226,6 +1228,7 @@ export function SettingsAdminShell({ merchantSlug }: SettingsAdminShellProps) {
           </section>
         )}
 
+        {tab === "whatsapp" && <WhatsAppSettingsPanel merchantSlug={merchantSlug} />}
         {tab === "team" && <TeamSettingsPanel merchantSlug={merchantSlug} />}
 
       </div>

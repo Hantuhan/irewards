@@ -70,6 +70,7 @@ export async function sendOrderReceipt(input: {
   await deliverOrderReceipt({
     method: input.method,
     destination,
+    merchantId: merchant.id,
     merchant: receiptMerchant,
     order: receiptOrder,
     tableNumber,

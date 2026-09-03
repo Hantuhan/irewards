@@ -321,6 +321,8 @@ export type WhatsAppTemplateRow = {
   header_image_url: string | null;
   components: unknown[];
   meta_template_id: string | null;
+  /** The WABA this template was approved on. Approvals do not cross accounts. */
+  waba_id?: string | null;
   status: WhatsAppTemplateStatus;
   rejection_reason: string | null;
   /** Meta quality score: GREEN / YELLOW / RED / UNKNOWN. */
@@ -334,6 +336,7 @@ export type WhatsAppTemplateRow = {
 };
 
 export type WhatsAppNumberHealthRow = {
+  merchant_id?: string | null;
   phone_number_id: string;
   display_phone_number: string | null;
   /** GREEN / YELLOW / RED / UNKNOWN */

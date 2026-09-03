@@ -173,10 +173,35 @@ Production runs on Zeabur, so the caller is a Zeabur cron (or any external sched
 
 Messaging runs directly on Meta's WhatsApp Business Platform — no Twilio.
 
-1. In [Meta for Developers](https://developers.facebook.com) create an app of type **Business**, add the **WhatsApp** product and link (or create) a WhatsApp Business Account (WABA) with a verified phone number.
-2. Create a **System User** in Business Manager with `whatsapp_business_messaging` and `whatsapp_business_management`, generate a permanent token and put it in `META_ACCESS_TOKEN`. Copy `META_WABA_ID`, `META_PHONE_NUMBER_ID`, `META_APP_ID` and `META_APP_SECRET` from the app settings.
-3. Under **WhatsApp → Configuration** set the callback URL to `https://<your-domain>/api/webhooks/meta`, use `META_WEBHOOK_VERIFY_TOKEN` as the verify token, and subscribe to the `messages` and `message_template_status_update` fields.
-4. Locally, keep `WHATSAPP_SKIP_SEND=true`: sends are logged, and template submissions are simulated (a "Check status" click approves them) so the full flow can be exercised without a WABA.
+**Each merchant connects their own WhatsApp Business Account** through Meta's
+Embedded Signup, in **Settings → WhatsApp**. Meta bills that merchant directly
+for their own messages, and their sending reputation is theirs alone — one
+store sending badly can no longer get a shared number restricted for everybody
+on the platform.
+
+### Platform setup (once)
+
+1. In [Meta for Developers](https://developers.facebook.com) create an app of type **Business** and add the **WhatsApp** product.
+2. Register as a **Tech Provider** and configure **Embedded Signup**. Put the resulting configuration id in `META_EMBEDDED_SIGNUP_CONFIG_ID`, and the app credentials in `META_APP_ID` / `META_APP_SECRET`.
+3. Under **WhatsApp → Configuration** set the callback URL to `https://<your-domain>/api/webhooks/meta`, use `META_WEBHOOK_VERIFY_TOKEN` as the verify token, and subscribe to `messages`, `message_template_status_update`, `message_template_quality_update` and `phone_number_quality_update`.
+4. Set `WHATSAPP_TOKEN_KEY` to a long random string. Merchant access tokens are encrypted with it (AES-256-GCM) before they are stored — rotating it invalidates every stored token and forces merchants to reconnect.
+5. Locally, keep `WHATSAPP_SKIP_SEND=true`: sends are logged, and template submissions are simulated (a "Check status" click approves them) so the full flow can be exercised without a WABA.
+
+`META_ACCESS_TOKEN` / `META_WABA_ID` / `META_PHONE_NUMBER_ID` are now **optional**.
+When set they act as a platform fallback, so a pilot merchant can run on our
+number before connecting their own. Leave them unset in the steady state.
+
+### What a merchant needs to connect
+
+Worth saying up front in onboarding, because the third one stops people:
+
+- A Facebook account that manages their business.
+- Business registration details for Meta's verification (SSM in Malaysia, ACRA in Singapore).
+- **A phone number not already registered on WhatsApp.** Most cafes already use their shop number on the ordinary WhatsApp app and will need a different one.
+
+A WhatsApp campaign cannot go live until an account is connected — the go-live
+check says so in plain words rather than letting the campaign sit "Active" and
+send nothing.
 
 ### Template approval (required for broadcasts)
 

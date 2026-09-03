@@ -1,13 +1,6 @@
 import { isWhatsAppDevMode } from "@/lib/meta/client";
+import { findMetaConfigForMerchant } from "@/lib/meta/merchant-config";
 import { sendWhatsAppMessage, sendWhatsAppTemplateMessage } from "@/lib/whatsapp/outbound";
-
-function metaConfigured(): boolean {
-  return Boolean(
-    process.env.META_ACCESS_TOKEN &&
-      process.env.META_WABA_ID &&
-      process.env.META_PHONE_NUMBER_ID,
-  );
-}
 
 /**
  * Sends a 4-digit redeem OTP over WhatsApp.
@@ -16,11 +9,15 @@ function metaConfigured(): boolean {
  * When Meta is unset or WHATSAPP_SKIP_SEND=true, logs locally (dev).
  */
 export async function sendRedeemOtpWhatsApp(input: {
+  merchantId: string;
   phone: string;
   code: string;
   merchantName: string;
 }): Promise<{ messageId: string; channel: "template" | "text" | "dev" }> {
-  if (isWhatsAppDevMode() || !metaConfigured()) {
+  // No connected WABA (and no platform fallback) means there is nowhere to
+  // send from — log it in dev rather than failing the member's login.
+  const configured = (await findMetaConfigForMerchant(input.merchantId)) !== null;
+  if (isWhatsAppDevMode() || !configured) {
     console.info(
       `[whatsapp:dev] redeem OTP → ${input.phone} code=${input.code} cafe=${input.merchantName}`,
     );
@@ -31,7 +28,7 @@ export async function sendRedeemOtpWhatsApp(input: {
   const templateLang = process.env.META_REDEEM_OTP_TEMPLATE_LANG?.trim() || "en";
 
   if (templateName) {
-    const result = await sendWhatsAppTemplateMessage(input.phone, {
+    const result = await sendWhatsAppTemplateMessage(input.merchantId, input.phone, {
       name: templateName,
       language: templateLang,
       bodyParams: [input.code, input.merchantName],
@@ -42,6 +39,6 @@ export async function sendRedeemOtpWhatsApp(input: {
   const body =
     `Your ${input.merchantName} iRewards verification code is: ${input.code}. ` +
     `It expires in 5 minutes. If you did not request this, ignore this message.`;
-  const result = await sendWhatsAppMessage(input.phone, body);
+  const result = await sendWhatsAppMessage(input.merchantId, input.phone, body);
   return { messageId: result.id, channel: "text" };
 }

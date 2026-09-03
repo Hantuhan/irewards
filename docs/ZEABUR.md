@@ -72,6 +72,17 @@ docker compose up --build
 
 Menu/banner images → `public/uploads/`. Attach a Zeabur volume at `/app/public/uploads` on the **irewards** service.
 
+## WhatsApp
+
+Merchants connect their own WhatsApp Business Account via Embedded Signup, so
+the service needs the **app**-level secrets rather than a platform WABA:
+`META_APP_ID`, `META_APP_SECRET`, `META_EMBEDDED_SIGNUP_CONFIG_ID`,
+`META_WEBHOOK_VERIFY_TOKEN`, and `WHATSAPP_TOKEN_KEY` (encrypts stored merchant
+tokens — rotating it forces every merchant to reconnect).
+
+`META_ACCESS_TOKEN` / `META_WABA_ID` / `META_PHONE_NUMBER_ID` are optional and
+only act as a fallback for a pilot merchant sending from the platform number.
+
 ## Cron & webhooks
 
 The automation cron is **required**, not optional. Nothing inside the app

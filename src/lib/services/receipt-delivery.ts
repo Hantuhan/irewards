@@ -12,6 +12,8 @@ export type ReceiptDeliveryMethod = "email" | "whatsapp";
 export async function deliverOrderReceipt(input: {
   method: ReceiptDeliveryMethod;
   destination: string;
+  /** Whose WhatsApp account the receipt sends from. */
+  merchantId: string;
   merchant: ReceiptMerchant & { name: string };
   order: ReceiptOrder;
   tableNumber?: string | null;
@@ -30,7 +32,7 @@ export async function deliverOrderReceipt(input: {
   }
 
   const phone = normalizePhone(input.destination);
-  await sendWhatsAppMessage(phone, `*${input.merchant.name}*\n\n${text}`);
+  await sendWhatsAppMessage(input.merchantId, phone, `*${input.merchant.name}*\n\n${text}`);
 }
 
 export function resolveReceiptDestination(input: {

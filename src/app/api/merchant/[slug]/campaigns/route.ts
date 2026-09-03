@@ -70,7 +70,8 @@ export async function GET(request: Request, context: RouteContext) {
     const [campaigns, templates, health, automationHealth] = await Promise.all([
       listCampaigns(merchant.id),
       listLatestTemplatesByCampaign(merchant.id),
-      getNumberHealth().catch(() => null),
+      // Scoped to this merchant's own number, not whichever row was newest.
+      getNumberHealth(merchant.id).catch(() => null),
       getAutomationHealth().catch(() => null),
     ]);
     return NextResponse.json({

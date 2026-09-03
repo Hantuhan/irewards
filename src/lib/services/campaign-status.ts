@@ -4,6 +4,7 @@ import { getLatestTemplateForCampaign } from "@/lib/db/whatsapp-template-reposit
 import { updateCampaign, updateCampaignStatus } from "@/lib/db/merchant-repository";
 import type { CampaignRow } from "@/lib/db/types";
 import { getCampaignById } from "@/lib/services/campaign-send";
+import { findMetaConfigForMerchant } from "@/lib/meta/merchant-config";
 import { isTemplateSendable } from "@/lib/whatsapp/template-spec";
 import { summarizeTemplate } from "@/lib/whatsapp/templates";
 
@@ -31,6 +32,13 @@ export async function goLiveBlocker(
   if (issues.length > 0) return `Fix the workflow before going live: ${issues[0]}`;
 
   if (campaign.channel === "whatsapp") {
+    // No connected account means this campaign would sit Active and send
+    // nothing — the same silent failure the cron heartbeat exists to prevent.
+    const sender = await findMetaConfigForMerchant(campaign.merchant_id);
+    if (!sender) {
+      return "Connect your WhatsApp Business account before switching this on — open Settings → WhatsApp. Until then this campaign has no number to send from.";
+    }
+
     const latest = await getLatestTemplateForCampaign(campaign.id);
     const messageBody =
       overrides.messageBody !== undefined ? overrides.messageBody : campaign.message_body;

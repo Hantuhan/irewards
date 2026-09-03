@@ -4,6 +4,7 @@ import { runInactivitySweep } from "@/lib/services/churn-scheduler";
 import { refreshNumberHealth } from "@/lib/whatsapp/number-health";
 import { refreshPendingTemplates } from "@/lib/whatsapp/templates";
 import { AUTOMATION_TASK, recordHeartbeat } from "@/lib/services/heartbeat";
+import { listConnectedWhatsAppMerchantIds } from "@/lib/db/whatsapp-account-repository";
 
 export async function POST(request: Request) {
   const isProd = process.env.NODE_ENV === "production";
@@ -28,11 +29,26 @@ export async function POST(request: Request) {
   }
 
   const templates = await refreshPendingTemplates();
-  const number = await refreshNumberHealth().catch((err) => ({
-    checked: false,
-    quality: null,
-    error: err instanceof Error ? err.message : "failed",
-  }));
+
+  // Number health is per merchant now, so this walks the connected accounts.
+  // Sequential on purpose: this is a poll, and hammering Meta with a burst of
+  // parallel calls is how a platform gets rate limited.
+  const connected = await listConnectedWhatsAppMerchantIds().catch(() => []);
+  let numbersChecked = 0;
+  const numberErrors: string[] = [];
+  for (const merchantId of connected) {
+    try {
+      const result = await refreshNumberHealth(merchantId);
+      if (result.checked) numbersChecked += 1;
+    } catch (err) {
+      numberErrors.push(err instanceof Error ? err.message : "failed");
+    }
+  }
+  const number = {
+    merchants: connected.length,
+    checked: numbersChecked,
+    ...(numberErrors.length > 0 && { errors: numberErrors.slice(0, 3) }),
+  };
   const sweep = await runInactivitySweep();
   const jobs = await processDueAutomationJobs(100);
 

@@ -55,6 +55,7 @@ export type MerchantRow = {
   weekly_revenue_target_cents?: number | null;
   monthly_revenue_target_cents?: number | null;
   kitchen_flow_json?: unknown;
+  kitchen_stations_json?: unknown;
   /** Public SaaS subdomain (defaults to slug), e.g. cafe1 → cafe1.irewards.store */
   subdomain?: string;
   suspended_at?: string | null;
@@ -133,6 +134,7 @@ export type OrderRow = {
   receipt_sent_at?: string | null;
   receipt_delivery_method?: "email" | "whatsapp" | null;
   receipt_destination?: string | null;
+  station_status_json?: unknown;
 };
 
 export type OrderItemRow = {
@@ -146,6 +148,7 @@ export type OrderItemRow = {
   packed_for_takeaway?: boolean;
   takeaway_surcharge_cents?: number;
   note?: string | null;
+  station_id?: string | null;
 };
 
 export type CustomerRow = {
@@ -205,6 +208,7 @@ export type MenuCategoryRow = {
   label: string;
   label_i18n?: Record<string, string> | null;
   sort_order: number;
+  station_id?: string | null;
 };
 
 export type MenuItemRow = {

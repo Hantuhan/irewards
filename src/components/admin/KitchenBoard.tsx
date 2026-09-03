@@ -8,6 +8,11 @@ import {
   type KitchenAlert,
 } from "@/lib/kitchen/alerts";
 import { getStepMeta, isTerminalStatus, type KitchenFlow } from "@/lib/kitchen/flow";
+import {
+  statusForStation,
+  type KitchenStation,
+  type StationStatusMap,
+} from "@/lib/kitchen/stations";
 
 /**
  * Kitchen display, built to the conventions cafe staff already know from
@@ -26,6 +31,8 @@ export type KitchenOrderItem = {
   quantity: number;
   note?: string | null;
   packedForTakeaway?: boolean;
+  /** Prep station this line was routed to when the order was placed. */
+  stationId?: string | null;
   modifiers?: { groupName: string; optionName: string }[];
 };
 
@@ -35,8 +42,26 @@ export type KitchenOrder = {
   customerDisplay: string | null;
   kitchenStatus: string | null;
   paidAt: string | null;
+  /** Per-station progress when stations are configured. */
+  stationStatus?: StationStatusMap;
   items: KitchenOrderItem[];
 };
+
+/**
+ * Lines this station makes. Unrouted lines belong to everyone rather than
+ * disappearing, so a half-configured menu never hides food from the pass.
+ */
+export function itemsForStation(
+  items: KitchenOrderItem[],
+  stationId: string | null,
+  stations: KitchenStation[],
+): KitchenOrderItem[] {
+  if (!stationId || stations.length === 0) return items;
+  const known = new Set(stations.map((s) => s.id));
+  return items.filter(
+    (item) => !item.stationId || !known.has(item.stationId) || item.stationId === stationId,
+  );
+}
 
 export type KitchenTableGroup = {
   tableKey: string;
@@ -195,28 +220,42 @@ function OrderTicket({
   order,
   flow,
   now,
+  stations,
+  activeStationId,
   onAdvance,
   formatTime,
 }: {
   order: KitchenOrder;
   flow: KitchenFlow;
   now: number;
-  onAdvance: (orderId: string, nextStatus: string) => void;
+  stations: KitchenStation[];
+  activeStationId: string | null;
+  onAdvance: (orderId: string, nextStatus: string, stationId?: string) => void;
   formatTime: (iso: string | null) => string;
 }) {
-  const status = order.kitchenStatus ?? flow[0]!.id;
+  const items = itemsForStation(order.items, activeStationId, stations);
+  // When a station is selected it advances its own lines, so the header shows
+  // that station's progress rather than the whole ticket's.
+  const status = activeStationId
+    ? statusForStation(order.stationStatus ?? {}, activeStationId, order.kitchenStatus, flow)
+    : (order.kitchenStatus ?? flow[0]!.id);
   const meta = getStepMeta(flow, status);
   const isTerminal = meta?.isTerminal ?? isTerminalStatus(status, flow);
-  const takeaway = orderIsTakeaway(order);
+  const takeaway = items.some((item) => item.packedForTakeaway);
   const elapsed = elapsedMs(order.paidAt, now);
   const severity = waitSeverity(Math.floor(elapsed / 60_000), isTerminal, takeaway);
 
+  // Alerts come from the whole ticket, never just this station's lines. An
+  // allergy belongs to the guest, not to one item: a dairy allergy written on
+  // the breakfast still has to reach the barista pouring the milk.
   const alerts = collectKitchenAlerts(
     order.items.map((item) => ({
       note: item.note,
       modifierNames: (item.modifiers ?? []).map((m) => m.optionName),
     })),
   );
+
+  if (items.length === 0) return null;
 
   return (
     <article
@@ -251,7 +290,7 @@ function OrderTicket({
       <AlertBanner alerts={alerts} />
 
       <ul className="px-3">
-        {order.items.map((item, index) => (
+        {items.map((item, index) => (
           <ItemLine key={`${order.id}-${item.name}-${index}`} item={item} />
         ))}
       </ul>
@@ -263,7 +302,7 @@ function OrderTicket({
         {meta?.nextId && meta.actionLabel ? (
           <button
             type="button"
-            onClick={() => onAdvance(order.id, meta.nextId!)}
+            onClick={() => onAdvance(order.id, meta.nextId!, activeStationId ?? undefined)}
             className="min-h-[40px] flex-1 bg-primary px-3 font-display text-[13px] font-bold uppercase tracking-wide text-on-primary transition-opacity hover:opacity-90"
           >
             {meta.actionLabel}
@@ -279,6 +318,8 @@ export function KitchenTableCard({
   group,
   flow,
   now,
+  stations = [],
+  activeStationId = null,
   expanded,
   onToggleExpand,
   onAdvance,
@@ -287,12 +328,17 @@ export function KitchenTableCard({
   group: KitchenTableGroup;
   flow: KitchenFlow;
   now: number;
+  stations?: KitchenStation[];
+  activeStationId?: string | null;
   expanded: boolean;
   onToggleExpand: () => void;
-  onAdvance: (orderId: string, nextStatus: string) => void;
+  onAdvance: (orderId: string, nextStatus: string, stationId?: string) => void;
   formatTime: (iso: string | null) => string;
 }) {
-  const orders = group.orders;
+  const orders = group.orders.filter(
+    (order) => itemsForStation(order.items, activeStationId, stations).length > 0,
+  );
+  if (orders.length === 0) return null;
   const oldestPaidAt = orders.reduce<string | null>((oldest, o) => {
     if (!o.paidAt) return oldest;
     if (!oldest || o.paidAt < oldest) return o.paidAt;
@@ -306,6 +352,7 @@ export function KitchenTableCard({
     return severityRank(s) > severityRank(worst) ? s : worst;
   }, "ok");
 
+  // Same rule as the ticket: every station working this table sees the allergy.
   const tableAlerts = collectKitchenAlerts(
     orders.flatMap((o) =>
       o.items.map((item) => ({
@@ -356,6 +403,8 @@ export function KitchenTableCard({
             order={order}
             flow={flow}
             now={now}
+            stations={stations}
+            activeStationId={activeStationId}
             onAdvance={onAdvance}
             formatTime={formatTime}
           />

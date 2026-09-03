@@ -15,6 +15,11 @@ import {
   type KitchenOrder,
   type KitchenTableGroup,
 } from "@/components/admin/KitchenBoard";
+import {
+  KitchenStationEditor,
+  type StationCategory,
+} from "@/components/admin/KitchenStationEditor";
+import { parseKitchenStations, type KitchenStation } from "@/lib/kitchen/stations";
 
 type BoardFilter = "active" | "completed";
 import {
@@ -216,6 +221,12 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
   const [flowDraft, setFlowDraft] = useState<KitchenFlow>(DEFAULT_KITCHEN_FLOW);
   const [savingFlow, setSavingFlow] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
+  const [stations, setStations] = useState<KitchenStation[]>([]);
+  const [stationCategories, setStationCategories] = useState<StationCategory[]>([]);
+  const [activeStationId, setActiveStationId] = useState<string | null>(null);
+  const [showStationEditor, setShowStationEditor] = useState(false);
+  const [savingStations, setSavingStations] = useState(false);
+  const [stationError, setStationError] = useState<string | null>(null);
   const [needsMembershipSetup, setNeedsMembershipSetup] = useState(false);
 
   useEffect(() => {
@@ -231,11 +242,22 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
         orders: KitchenOrder[];
         kitchenFlow: KitchenFlowStep[];
         terminalStepId: string;
+        stations?: KitchenStation[];
       }>(`/api/merchant/${merchantSlug}/orders`);
       setOrders(data.orders);
       const flow = parseKitchenFlow(data.kitchenFlow);
       setKitchenFlow(flow);
       setCompletedStepId(data.terminalStepId ?? terminalStepId(flow));
+      const nextStations = parseKitchenStations(data.stations ?? []);
+      setStations(nextStations);
+      // Each screen stays on its own station, so the bar tablet keeps showing
+      // the bar after a refresh.
+      setActiveStationId((current) => {
+        if (nextStations.length === 0) return null;
+        const stored =
+          current ?? window.localStorage.getItem(`irewards-kds-station:${merchantSlug}`);
+        return stored && nextStations.some((s) => s.id === stored) ? stored : null;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load orders");
     } finally {
@@ -321,12 +343,63 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
       });
   }, [visibleOrders]);
 
-  async function advanceOrder(orderId: string, kitchenStatus: string) {
+  async function advanceOrder(orderId: string, kitchenStatus: string, stationId?: string) {
     await merchantApi(`/api/merchant/${merchantSlug}/orders`, {
       method: "PATCH",
-      body: JSON.stringify({ orderId, kitchenStatus }),
+      body: JSON.stringify({ orderId, kitchenStatus, stationId }),
     });
     await load();
+  }
+
+  function selectStation(stationId: string | null) {
+    setActiveStationId(stationId);
+    const key = `irewards-kds-station:${merchantSlug}`;
+    if (stationId) window.localStorage.setItem(key, stationId);
+    else window.localStorage.removeItem(key);
+  }
+
+  async function openStationEditor() {
+    setStationError(null);
+    setShowFlowEditor(false);
+    try {
+      const data = await merchantApi<{
+        stations: KitchenStation[];
+        categories: StationCategory[];
+      }>(`/api/merchant/${merchantSlug}/kitchen/stations`);
+      setStations(parseKitchenStations(data.stations));
+      setStationCategories(data.categories ?? []);
+      setShowStationEditor(true);
+    } catch (err) {
+      setStationError(err instanceof Error ? err.message : "Failed to load stations");
+      setShowStationEditor(true);
+    }
+  }
+
+  async function saveStations(next: KitchenStation[], categories: StationCategory[]) {
+    setSavingStations(true);
+    setStationError(null);
+    try {
+      const data = await merchantApi<{
+        stations: KitchenStation[];
+        categories: StationCategory[];
+      }>(`/api/merchant/${merchantSlug}/kitchen/stations`, {
+        method: "PUT",
+        body: JSON.stringify({
+          stations: next,
+          categoryStations: categories.map((c) => ({ slug: c.slug, stationId: c.stationId })),
+        }),
+      });
+      const saved = parseKitchenStations(data.stations);
+      setStations(saved);
+      setStationCategories(data.categories ?? []);
+      if (saved.length === 0) selectStation(null);
+      setShowStationEditor(false);
+      await load();
+    } catch (err) {
+      setStationError(err instanceof Error ? err.message : "Failed to save stations");
+    } finally {
+      setSavingStations(false);
+    }
   }
 
   async function saveFlow() {
@@ -374,20 +447,39 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
       eyebrow="Live kitchen"
       layout="viewport"
       headerAction={
-        !showFlowEditor ? (
-          <button
-            type="button"
-            onClick={openFlowEditor}
-            className={manusHeaderBtnClass}
-          >
-            <Icon name="tune" className="text-base" />
-            Edit flow
-          </button>
+        !showFlowEditor && !showStationEditor ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void openStationEditor()}
+              className={manusHeaderBtnClass}
+            >
+              <Icon name="countertops" className="text-base" />
+              Stations
+            </button>
+            <button type="button" onClick={openFlowEditor} className={manusHeaderBtnClass}>
+              <Icon name="tune" className="text-base" />
+              Edit flow
+            </button>
+          </div>
         ) : undefined
       }
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-        {showFlowEditor ? (
+        {showStationEditor ? (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+            <KitchenStationEditor
+              stations={stations}
+              categories={stationCategories}
+              saving={savingStations}
+              error={stationError}
+              onSave={(nextStations, nextCategories) =>
+                void saveStations(nextStations, nextCategories)
+              }
+              onCancel={() => setShowStationEditor(false)}
+            />
+          </div>
+        ) : showFlowEditor ? (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
             <KitchenFlowEditor
               flow={flowDraft}
@@ -424,6 +516,33 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
               Flow:{" "}
               <span className="font-mono text-label-mono">{flowSummary(kitchenFlow)}</span>
             </p>
+
+            {stations.length > 0 && (
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-on-surface-variant">
+                  Station
+                </span>
+                {[{ id: null, label: "All" }, ...stations.map((s) => ({ id: s.id, label: s.label }))].map(
+                  (station) => {
+                    const isActive = activeStationId === station.id;
+                    return (
+                      <button
+                        key={station.id ?? "all"}
+                        type="button"
+                        onClick={() => selectStation(station.id)}
+                        className={`border px-3 py-1.5 font-display text-[13px] font-semibold transition-colors ${
+                          isActive
+                            ? "border-primary bg-primary text-on-primary"
+                            : "border-surface-container-highest text-on-surface-variant hover:text-primary"
+                        }`}
+                      >
+                        {station.label}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            )}
 
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap gap-2">
@@ -493,6 +612,8 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
                           return next;
                         })
                       }
+                      stations={stations}
+                      activeStationId={activeStationId}
                       onAdvance={advanceOrder}
                       formatTime={formatTime}
                     />

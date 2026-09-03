@@ -201,6 +201,7 @@ export async function updateMerchant(
       | "weekly_revenue_target_cents"
       | "monthly_revenue_target_cents"
       | "kitchen_flow_json"
+      | "kitchen_stations_json"
       | "membership_setup_completed_at"
       | "points_program_enabled"
       | "stamps_program_enabled"
@@ -753,13 +754,13 @@ export async function resolveMenuItemsForCheckout(
 ) {
   const { data, error } = await db()
     .from("menu_items")
-    .select("*, menu_categories(slug)")
+    .select("*, menu_categories(slug, station_id)")
     .eq("merchant_id", merchantId)
     .eq("active", true);
 
   if (error) throw new Error(error.message);
   const items = (data ?? []) as (MenuItemRow & {
-    menu_categories: { slug: string };
+    menu_categories: { slug: string; station_id?: string | null };
   })[];
 
   const bySlug = new Map(items.map((item) => [item.slug, item]));
@@ -774,6 +775,7 @@ export async function resolveMenuItemsForCheckout(
     packedForTakeaway: boolean;
     takeawaySurchargeCents: number;
     note?: string;
+    stationId?: string | null;
   }[] = [];
 
   for (const line of lines) {
@@ -813,6 +815,9 @@ export async function resolveMenuItemsForCheckout(
       packedForTakeaway,
       takeawaySurchargeCents,
       note: normalizeLineNote(line.note),
+      // Snapshot the station so re-routing a category later never rewrites
+      // what an already-placed ticket said.
+      stationId: item.menu_categories?.station_id ?? null,
     });
   }
 
@@ -830,6 +835,7 @@ export async function createOrderItems(
     packedForTakeaway?: boolean;
     takeawaySurchargeCents?: number;
     note?: string;
+    stationId?: string | null;
   }[],
 ) {
   if (lines.length === 0) return;
@@ -843,13 +849,14 @@ export async function createOrderItems(
     packed_for_takeaway: line.packedForTakeaway ?? false,
     takeaway_surcharge_cents: line.takeawaySurchargeCents ?? 0,
     note: line.note ?? null,
+    station_id: line.stationId ?? null,
   }));
   const { error } = await db().from("order_items").insert(rows);
-  if (error && /note/i.test(error.message)) {
+  if (error && /note|station_id/i.test(error.message)) {
     // Migration 055 not applied yet — retry without the note column.
     const { error: retryError } = await db()
       .from("order_items")
-      .insert(rows.map(({ note: _note, ...rest }) => rest));
+      .insert(rows.map(({ note: _note, station_id: _station, ...rest }) => rest));
     if (retryError) throw new Error(retryError.message);
     return;
   }
@@ -948,10 +955,14 @@ export async function updateOrderKitchenStatus(
   merchantId: string,
   orderId: string,
   kitchenStatus: string,
+  stationStatus?: Record<string, string>,
 ): Promise<OrderRow> {
+  const patch: Record<string, unknown> = { kitchen_status: kitchenStatus };
+  if (stationStatus) patch.station_status_json = stationStatus;
+
   const { data, error } = await db()
     .from("orders")
-    .update({ kitchen_status: kitchenStatus })
+    .update(patch)
     .eq("id", orderId)
     .eq("merchant_id", merchantId)
     .eq("status", "paid")
@@ -960,6 +971,24 @@ export async function updateOrderKitchenStatus(
 
   if (error) throw new Error(error.message);
   return data as OrderRow;
+}
+
+/** Assign menu categories to prep stations. Null clears the routing. */
+export async function setCategoryStations(
+  merchantId: string,
+  assignments: { slug: string; stationId: string | null }[],
+): Promise<void> {
+  const categories = await listMenuCategories(merchantId);
+  for (const assignment of assignments) {
+    const category = categories.find((c) => c.slug === assignment.slug);
+    if (!category) continue;
+    const { error } = await db()
+      .from("menu_categories")
+      .update({ station_id: assignment.stationId })
+      .eq("id", category.id)
+      .eq("merchant_id", merchantId);
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function remapMerchantOrderKitchenStatuses(

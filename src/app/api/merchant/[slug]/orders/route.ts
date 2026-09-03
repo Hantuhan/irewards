@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getMerchantBySlug } from "@/lib/db/repository";
+import { getMerchantBySlug, getOrderById } from "@/lib/db/repository";
 import {
+  getOrderItems,
   listMerchantOrders,
   remapMerchantOrderKitchenStatuses,
   updateMerchant,
@@ -16,6 +17,12 @@ import {
   type KitchenFlow,
   type KitchenFlowStep,
 } from "@/lib/kitchen/flow";
+import {
+  overallStatusFromStations,
+  parseKitchenStations,
+  parseStationStatus,
+  stationsForOrder,
+} from "@/lib/kitchen/stations";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -50,6 +57,7 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const flow = flowFromMerchant(merchant);
+    const stations = parseKitchenStations(merchant.kitchen_stations_json);
     const url = new URL(request.url);
     const kitchen = url.searchParams.get("kitchen") as string | "active" | null;
 
@@ -62,6 +70,7 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({
       kitchenFlow: serializeFlow(flow),
       terminalStepId: terminalStepId(flow),
+      stations,
       orders: orders.map((order) => ({
         id: order.id,
         tableNumber: order.table_number,
@@ -69,11 +78,13 @@ export async function GET(request: Request, context: RouteContext) {
         kitchenStatus: order.kitchen_status,
         paidAt: order.paid_at,
         totalCents: order.total_cents,
+        stationStatus: parseStationStatus(order.station_status_json),
         items: order.items.map((item) => ({
           name: item.name,
           quantity: item.quantity,
           note: item.note ?? null,
           packedForTakeaway: item.packed_for_takeaway ?? false,
+          stationId: item.station_id ?? null,
           modifiers: (item.modifiers ?? []).map((mod) => ({
             groupName: mod.groupName,
             optionName: mod.optionName,
@@ -90,6 +101,8 @@ export async function GET(request: Request, context: RouteContext) {
 const patchOrderSchema = z.object({
   orderId: z.string().uuid(),
   kitchenStatus: z.string().min(1),
+  /** Advance only this station. Omitted means the whole ticket moves. */
+  stationId: z.string().min(1).optional(),
 });
 
 const patchFlowSchema = z.object({
@@ -135,10 +148,38 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Invalid kitchen step for this flow" }, { status: 400 });
     }
 
+    // With stations on, a station advances its own lines and the ticket's
+    // overall status becomes the least advanced station — an order is only
+    // ready once every station that touches it is ready.
+    let overallStatus = orderBody.kitchenStatus;
+    let nextStationStatus: Record<string, string> | undefined;
+
+    if (orderBody.stationId) {
+      const stationList = parseKitchenStations(merchant.kitchen_stations_json);
+      const existing = await getOrderById(orderBody.orderId);
+      if (!existing || existing.merchant_id !== merchant.id) {
+        return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      }
+      const existingItems = await getOrderItems(existing.id);
+      const current = parseStationStatus(existing.station_status_json);
+      nextStationStatus = { ...current, [orderBody.stationId]: orderBody.kitchenStatus };
+      const active = stationsForOrder(
+        existingItems.map((i) => i.station_id ?? null),
+        stationList,
+      );
+      overallStatus = overallStatusFromStations(
+        nextStationStatus,
+        active,
+        flow,
+        orderBody.kitchenStatus,
+      );
+    }
+
     const order = await updateOrderKitchenStatus(
       merchant.id,
       orderBody.orderId,
-      orderBody.kitchenStatus,
+      overallStatus,
+      nextStationStatus,
     );
 
     return NextResponse.json({

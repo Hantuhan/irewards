@@ -30,7 +30,13 @@ type OrderCard = {
   customerDisplay: string | null;
   kitchenStatus: string | null;
   paidAt: string | null;
-  items: { name: string; quantity: number }[];
+  items: {
+    name: string;
+    quantity: number;
+    /** Diner's kitchen / barista note for this line. */
+    note?: string | null;
+    packedForTakeaway?: boolean;
+  }[];
 };
 
 type BoardFilter = "active" | "completed";
@@ -235,10 +241,24 @@ function TableKitchenCard({
                   </button>
                 )}
               </div>
-              <ul className="space-y-0.5 text-body-md">
+              <ul className="space-y-1 text-body-md">
                 {order.items.map((item) => (
-                  <li key={`${order.id}-${item.name}`} className="truncate">
-                    <span className="font-mono text-label-mono">{item.quantity}×</span> {item.name}
+                  <li key={`${order.id}-${item.name}`}>
+                    <div className="flex items-start gap-1.5">
+                      <span className="font-mono text-label-mono">{item.quantity}×</span>
+                      <span className="min-w-0 flex-1">{item.name}</span>
+                      {item.packedForTakeaway ? (
+                        <span className="shrink-0 bg-surface-container-high px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">
+                          To go
+                        </span>
+                      ) : null}
+                    </div>
+                    {item.note ? (
+                      <p className="mt-1 flex items-start gap-1.5 border-l-2 border-red-700 bg-red-50 px-2 py-1 text-[12px] leading-snug text-red-900">
+                        <Icon name="priority_high" className="mt-px shrink-0 text-[14px]" />
+                        <span>{item.note}</span>
+                      </p>
+                    ) : null}
                   </li>
                 ))}
               </ul>

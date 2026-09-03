@@ -72,6 +72,8 @@ export async function GET(request: Request, context: RouteContext) {
         items: order.items.map((item) => ({
           name: item.name,
           quantity: item.quantity,
+          note: item.note ?? null,
+          packedForTakeaway: item.packed_for_takeaway ?? false,
         })),
       })),
     });

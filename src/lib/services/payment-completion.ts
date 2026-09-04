@@ -29,8 +29,9 @@ export type PaymentCompletionResult = {
 export async function completePaidOrder(
   orderId: string,
   paymentRef: string,
+  paymentProvider?: string | null,
 ): Promise<PaymentCompletionResult> {
-  const order = await markOrderPaid(orderId, paymentRef);
+  const order = await markOrderPaid(orderId, paymentRef, paymentProvider);
   const joinToken = createJoinTokenValue();
   await createJoinToken(order.id, joinToken);
 

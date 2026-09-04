@@ -206,3 +206,8 @@ spec:
             default: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/irewards
           PAYMENT_PROVIDER:
             default: dev
+          PAYMENT_API_KEY:
+            default: ""
+          # Required when PAYMENT_PROVIDER=chip.
+          CHIP_BRAND_ID:
+            default: ""

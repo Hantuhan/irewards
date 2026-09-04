@@ -124,6 +124,7 @@ export type OrderRow = {
   discount_cents: number;
   total_cents: number;
   payment_ref: string | null;
+  payment_provider?: string | null;
   paid_at: string | null;
   created_at: string;
   kitchen_status: KitchenStatus | null;

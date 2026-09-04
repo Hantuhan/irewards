@@ -45,15 +45,24 @@ if [ "${CRON_SECRET:-}" = "irewards-dev-cron" ]; then
   die "CRON_SECRET must not be the local default (irewards-dev-cron)"
 fi
 
-if [ "${PAYMENT_PROVIDER:-}" != "hitpay" ]; then
-  die "PAYMENT_PROVIDER must be hitpay in production (got: ${PAYMENT_PROVIDER:-unset})"
-else
-  ok "PAYMENT_PROVIDER=hitpay"
-fi
-
-require PAYMENT_API_KEY
-require PAYMENT_SALT
-require PAYMENT_WEBHOOK_SECRET
+case "${PAYMENT_PROVIDER:-}" in
+  chip)
+    ok "PAYMENT_PROVIDER=chip"
+    require PAYMENT_API_KEY
+    # CHIP verifies callbacks against a public key it serves, so there is no
+    # shared salt here — the brand is what the API key cannot supply on its own.
+    require CHIP_BRAND_ID
+    ;;
+  hitpay)
+    ok "PAYMENT_PROVIDER=hitpay"
+    require PAYMENT_API_KEY
+    require PAYMENT_SALT
+    require PAYMENT_WEBHOOK_SECRET
+    ;;
+  *)
+    die "PAYMENT_PROVIDER must be chip or hitpay in production (got: ${PAYMENT_PROVIDER:-unset})"
+    ;;
+esac
 
 if [ "${WHATSAPP_SKIP_SEND:-}" = "true" ]; then
   die "WHATSAPP_SKIP_SEND must be unset/false in production"

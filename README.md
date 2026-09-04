@@ -8,7 +8,8 @@ Smart table storefront + WhatsApp retention for cafes and F&B merchants in Malay
 - **Docker** — production on [Zeabur](docs/ZEABUR.md) (`Dockerfile` + `zeabur-template.yaml`)
 - **InsForge** — Postgres + API (local dev + Zeabur production stack)
 - **Meta WhatsApp Cloud API** — inbound webhooks, outbound messages, template approvals
-- **HitPay** — payment requests + webhooks (dev mode for local testing)
+- **CHIP Collect** — payment requests + webhooks, with HitPay kept behind the same
+  provider interface for SGD merchants (dev mode for local testing)
 
 ## Two surfaces (do not mix)
 
@@ -77,7 +78,7 @@ Set `INSFORGE_URL=http://host.docker.internal:7230` in `.env.local` when InsForg
 | `POST /api/webhooks/payments` | Payment confirmed → join token + points |
 | `GET/POST /api/webhooks/meta` | Meta verification handshake; `JOIN-{token}` → member + points; template review verdicts |
 
-## Dev flow (no HitPay keys)
+## Dev flow (no gateway keys)
 
 1. `PAYMENT_PROVIDER=dev` in `.env.local`
 2. `npm run insforge:setup` then `npm run dev`

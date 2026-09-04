@@ -37,7 +37,7 @@ You will be prompted for:
 - **POSTGRES_PASSWORD**
 - **INSFORGE_API_KEY** / **INSFORGE_ANON_KEY** — use the same values on both `insforge` and `irewards` services
 
-After deploy, open the **irewards** service → **Variables** and add Meta, HitPay, cron, and platform secrets from `.env.zeabur.example`.
+After deploy, open the **irewards** service → **Variables** and add Meta, CHIP, cron, and platform secrets from `.env.zeabur.example`.
 
 ## App-only deploy (InsForge already on Zeabur)
 
@@ -96,7 +96,7 @@ missing scheduler is visible rather than silent.
 |-----|-----|
 | Automation (every minute) | `POST https://irewards.store/api/cron/automation` + `Bearer $CRON_SECRET` |
 | Meta | `https://irewards.store/api/webhooks/meta` |
-| HitPay | `https://irewards.store/api/webhooks/payments` |
+| CHIP (success_callback) | `https://irewards.store/api/webhooks/payments` |
 
 ## Optional: Supabase
 

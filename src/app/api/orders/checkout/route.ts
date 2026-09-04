@@ -13,12 +13,9 @@ import {
   getPromoByCode,
   resolveMenuItemsForCheckout,
 } from "@/lib/db/merchant-repository";
-import {
-  createHitPayPaymentRequest,
-  hitPayMethodsForStorefront,
-  isDevPaymentMode,
-  type StorefrontPaymentMethod,
-} from "@/lib/payments/hitpay";
+import { isDevPaymentMode } from "@/lib/payments/mode";
+import { resolvePaymentProvider } from "@/lib/payments/provider";
+import type { StorefrontPaymentMethod } from "@/lib/payments/types";
 import { applyLevelDiscount, resolveCustomerLevel } from "@/lib/loyalty/tiers";
 import { CheckoutError } from "@/lib/services/checkout-error";
 import { evaluatePromoForCheckout } from "@/lib/services/promo";
@@ -91,6 +88,7 @@ export async function POST(request: Request) {
       session?.merchantSlug === body.merchantSlug ? session.customerId : null;
 
     let tierDiscountCents = 0;
+    let customerEmail: string | null = null;
     let pointsRedeemed = 0;
     let promoId: string | null = null;
     let promoDiscountCents = 0;
@@ -99,6 +97,7 @@ export async function POST(request: Request) {
     if (customerId) {
       const customer = await getCustomerById(customerId);
       if (customer?.is_member && customer.merchant_id === merchant.id) {
+        customerEmail = customer.email;
         const levels = await getRewardLevels(merchant.id);
         const level = resolveCustomerLevel(customer.lifetime_points_earned, levels);
         const tierDiscount = applyLevelDiscount(subtotalCents, Number(level.discount_percent));
@@ -181,6 +180,11 @@ export async function POST(request: Request) {
     const chargeSettings = merchantChargeSettingsFromRow(merchant);
     const totals = calculateOrderTotals(subtotalCents, rawDiscountCents, chargeSettings);
 
+    // Resolved before the order row is written so the gateway is recorded on
+    // it from the start — a refund has to find its way back to whoever took
+    // the money, even if the merchant switches provider next week.
+    const provider = isDevPaymentMode() ? null : resolvePaymentProvider(merchant.currency);
+
     const order = await createPendingOrder({
       merchantId: merchant.id,
       venueTableId: table.id,
@@ -194,6 +198,7 @@ export async function POST(request: Request) {
       pointsRedeemed,
       serviceType: body.serviceType,
       stampRewardApplied: stampRewardDiscountCents > 0,
+      paymentProvider: provider?.name ?? "dev",
     });
 
     await createOrderItems(order.id, orderLines);
@@ -203,7 +208,9 @@ export async function POST(request: Request) {
 
     const thanksUrl = `${getAppUrl()}/m/${merchant.slug}/table/${body.tableId}/thanks?orderId=${order.id}`;
 
-    if (isDevPaymentMode()) {
+    // No provider means dev mode — there is nothing to charge through, so the
+    // storefront is handed the simulate-payment endpoint instead of a gateway.
+    if (!provider) {
       return NextResponse.json({
         orderId: order.id,
         mode: "dev",
@@ -219,18 +226,19 @@ export async function POST(request: Request) {
     }
 
     const preferredMethod = (body.paymentMethod ?? "duitnow") as StorefrontPaymentMethod;
-    const payment = await createHitPayPaymentRequest({
+    const payment = await provider.createPaymentRequest({
       orderId: order.id,
       amountCents: totals.totalCents,
       currency: merchant.currency,
       redirectUrl: thanksUrl,
       webhookUrl: `${getAppUrl()}/api/webhooks/payments`,
-      paymentMethods: hitPayMethodsForStorefront(preferredMethod, merchant.currency),
+      method: preferredMethod,
+      customerEmail,
     });
 
     return NextResponse.json({
       orderId: order.id,
-      mode: "hitpay",
+      mode: provider.name,
       subtotalCents: totals.subtotalCents,
       serviceChargeCents: totals.serviceChargeCents,
       taxCents: totals.taxCents,

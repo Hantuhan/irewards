@@ -5,7 +5,7 @@
 1. Scan table QR → web storefront (`/m/{slug}/table/{n}`)
 2. Add items → checkout → `POST /api/orders/checkout`
 3. **Dev:** thank-you page → simulate payment  
-   **Prod:** HitPay redirect → webhook marks order paid
+   **Prod:** CHIP checkout redirect → signed webhook marks order paid
 4. Server creates **join token** (single-use, ~30 min) — points only after verified payment
 5. Thank-you page shows **Join CTA** driven by the merchant's active welcome campaign (`member_joined` / `first_visit`) — headline, pitch, offer badge (voucher % / award points / level welcome points / +1 fallback)
 6. Meta WhatsApp webhook → member created (token claimed atomically) → first-join bonus (level `welcome_points` when set) + order points → welcome campaign runs

@@ -23,7 +23,7 @@ import { calculateOrderTotals } from "@/lib/services/order-totals";
 import { pointsDiscountCents } from "@/lib/loyalty/points";
 import { defaultSelections } from "@/lib/menu/modifiers";
 import { applyLevelDiscount } from "@/lib/loyalty/tiers";
-import type { StorefrontPaymentMethod } from "@/lib/payments/hitpay";
+import type { StorefrontPaymentMethod } from "@/lib/payments/types";
 
 type CartShellProps = {
   merchantSlug: string;

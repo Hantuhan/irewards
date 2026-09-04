@@ -22,7 +22,7 @@ import {
   restoreRedeemedPoints,
   sumPointsLedgerForOrder,
 } from "@/lib/db/repository";
-import { refundHitPayPayment } from "@/lib/payments/hitpay";
+import { providerForOrder } from "@/lib/payments/provider";
 import type { OrderRow } from "@/lib/db/types";
 
 export class RefundError extends Error {
@@ -121,15 +121,21 @@ export async function refundPaidOrder(input: {
   // 1. Money first: the only step that depends on someone else's server. If it
   //    fails nothing has been unwound and the merchant can simply try again.
   let payment: "refunded" | "skipped" = "skipped";
-  if (order.payment_ref) {
-    const result = await refundHitPayPayment({
+  // Back to whoever charged it, not to whoever is configured today. A null
+  // provider means dev mode: no money was taken, so none is given back, and
+  // the loyalty unwind below still has to happen.
+  const chargedBy = providerForOrder(order.payment_provider);
+  if (order.payment_ref && chargedBy) {
+    const result = await chargedBy.refund({
       paymentRef: order.payment_ref,
       amountCents: refundCents,
       currency: input.currency,
     });
     payment = result.status;
-  } else {
+  } else if (!order.payment_ref) {
     warnings.push("No payment reference on this order, so nothing was sent to the payment provider.");
+  } else {
+    warnings.push("This order was paid in dev mode, so there was no real payment to refund.");
   }
 
   // 2. Unwind loyalty.

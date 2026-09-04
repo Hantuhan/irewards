@@ -60,6 +60,8 @@ export async function createPendingOrder(input: {
   discountCents?: number;
   customerId?: string | null;
   paymentRef?: string;
+  /** Which gateway this order is being sent to, so refunds go back to it. */
+  paymentProvider?: string | null;
   promoId?: string | null;
   pointsRedeemed?: number;
   serviceType?: "dine_in" | "takeaway";
@@ -89,6 +91,7 @@ export async function createPendingOrder(input: {
         discount_cents: discountCents,
         total_cents: totalCents,
         payment_ref: input.paymentRef ?? null,
+        payment_provider: input.paymentProvider ?? null,
         promo_id: input.promoId ?? null,
         points_redeemed: input.pointsRedeemed ?? 0,
         service_type: input.serviceType ?? "dine_in",
@@ -127,12 +130,19 @@ export async function getOrderByPaymentRef(paymentRef: string): Promise<OrderRow
 export async function markOrderPaid(
   orderId: string,
   paymentRef: string,
+  /**
+   * Who actually took the money, from the verified webhook. Overwrites what
+   * checkout guessed: if a merchant's provider changed between the order being
+   * created and paid, the refund has to follow the money, not the config.
+   */
+  paymentProvider?: string | null,
 ): Promise<OrderRow> {
   const { data, error } = await db()
     .from("orders")
     .update({
       status: "paid",
       payment_ref: paymentRef,
+      ...(paymentProvider ? { payment_provider: paymentProvider } : {}),
       paid_at: new Date().toISOString(),
       kitchen_status: "new",
     })

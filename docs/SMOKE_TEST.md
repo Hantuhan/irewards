@@ -11,7 +11,7 @@ Last updated: Sep 2026.
 3. Extend / assert loyalty and return-visit gaps listed below when they are missing from scripts.
 4. Fix failures in priority order (see [Bug-fix priority](#bug-fix-priority)).
 
-Out of scope for this pass: real HitPay, live Meta send, stamp cards (v3), SMS (paused), browser/Playwright UI QA.
+Out of scope for this pass: real CHIP/HitPay charges, live Meta send, stamp cards (v3), SMS (paused), browser/Playwright UI QA.
 
 ---
 

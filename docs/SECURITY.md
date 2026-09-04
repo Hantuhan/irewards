@@ -17,7 +17,9 @@
 
 ## Before second merchant
 
-- [x] Payment provider HMAC verification implemented (HitPay)
+- [x] Payment webhook signature verification implemented (CHIP RSA, HitPay HMAC).
+      Both fail closed: a callback that cannot be attributed to a provider and
+      verified against that provider's key is rejected, never parsed.
 - [x] No points/join logic callable from client for awards
 - [x] Redeem points requires verified member session **and** short-lived redeem-auth (WhatsApp OTP)
 - [x] STOP opt-out on outbound WhatsApp
@@ -57,3 +59,15 @@ Fake payments (`PAYMENT_PROVIDER=dev`) accept unsigned webhooks and expose an
 unauthenticated "mark this order paid" endpoint. `isDevPaymentMode()` refuses
 to enable them when `NODE_ENV=production`, regardless of the variable, so a
 stray value cannot cost real revenue.
+
+`/api/webhooks/payments` is shared by every provider, so it first works out who
+sent a callback from the signature header — CHIP's `X-Signature`, HitPay's
+`Hitpay-Signature`. That header only selects which key to check against; the
+payload is not read until that provider's own verification passes, so forging
+one buys a failed signature check and a 401. Verification and parsing are a
+single function for that reason: splitting them is what would let a caller act
+on a body it never checked.
+
+Refunds are sent to the provider recorded on the order, not the one configured
+today. A merchant that switches gateways still has settled orders sitting with
+the old one, and `payment_ref` means nothing without knowing who issued it.

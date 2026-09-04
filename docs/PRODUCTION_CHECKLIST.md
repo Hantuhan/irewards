@@ -14,10 +14,27 @@ Last updated: Sep 2026 (Zeabur Docker + InsForge stack).
 
 1. `npm run zeabur:template:deploy` or GitHub → Dockerfile on Zeabur
 2. Set template variables: `JWT_SECRET`, `POSTGRES_PASSWORD`, InsForge keys
-3. Add Meta/HitPay/cron/platform secrets on **irewards** service (`.env.zeabur.example`)
+3. Add Meta/CHIP/cron/platform secrets on **irewards** service (`.env.zeabur.example`)
 4. Domain: `irewards.store` + `*.irewards.store`
 5. Volume: `/app/public/uploads` on irewards service
 6. External cron → `POST /api/cron/automation`
 7. `NODE_ENV=production npm run check:production-env`
 
 See [docs/ZEABUR.md](ZEABUR.md).
+
+## Payments
+
+Default provider is **CHIP Collect** (`PAYMENT_PROVIDER=chip`), which needs
+`PAYMENT_API_KEY` and `CHIP_BRAND_ID`. HitPay stays supported behind the same
+interface for SGD merchants and for anyone whose average ticket is large enough
+that its flat RM1 card fee stops mattering.
+
+Switching provider is one variable, but two things must be true first:
+
+- **Run migration 063.** Orders record which gateway charged them, and refunds
+  are sent back to that gateway rather than to whichever is configured now.
+  Without the column, a refund on a pre-switch order goes to the wrong API.
+- **Point the new provider's callback at the same URL.**
+  `https://irewards.store/api/webhooks/payments` handles every provider; it
+  routes on the signature header and verifies against that provider's key.
+  Leave the old provider's webhook enabled until its last order is settled.

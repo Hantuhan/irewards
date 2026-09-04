@@ -1,43 +1,30 @@
+/**
+ * HitPay — kept alongside CHIP because it is the only one of the two that
+ * settles SGD, and because a merchant with a large average ticket is not
+ * obviously better off on CHIP: HitPay's flat RM1 card fee hurts a RM12 coffee
+ * and barely registers on a RM150 dinner bill.
+ */
+
 import { createHmac, timingSafeEqual } from "crypto";
+import { isDevPaymentMode } from "./mode";
+import type {
+  CreatePaymentInput,
+  PaymentCurrency,
+  PaymentProvider,
+  PaymentRequest,
+  PaymentWebhookPayload,
+  RefundInput,
+  RefundResult,
+  StorefrontPaymentMethod,
+} from "./types";
 
 const HITPAY_API_BASE =
   process.env.HITPAY_API_BASE ?? "https://api.sandbox.hit-pay.com/v1";
 
-export type HitPayPaymentRequest = {
-  id: string;
-  url: string;
-  reference_number: string;
-};
-
-/**
- * Fake payments: unsigned webhooks are accepted and `/api/orders/{id}/dev-pay`
- * marks an order paid with no authentication at all.
- *
- * Never in production, whatever the environment says. A single stray
- * `PAYMENT_PROVIDER=dev` — copied from an example file, or promoted from a
- * staging config — would otherwise let anyone mark any order paid. The
- * production env checker catches that too, but it is a manual checklist step,
- * and revenue should not depend on someone remembering to run a script.
- */
-export function isDevPaymentMode() {
-  if (process.env.PAYMENT_PROVIDER !== "dev") return false;
-
-  if (process.env.NODE_ENV === "production") {
-    console.error(
-      "PAYMENT_PROVIDER=dev is set in production and is being ignored. Real payments require PAYMENT_PROVIDER=hitpay and PAYMENT_SALT.",
-    );
-    return false;
-  }
-
-  return true;
-}
-
 /** Storefront payment picker → HitPay `payment_methods[]` values. */
-export type StorefrontPaymentMethod = "duitnow" | "card" | "wallet";
-
 export function hitPayMethodsForStorefront(
   method: StorefrontPaymentMethod,
-  currency: "MYR" | "SGD",
+  currency: PaymentCurrency,
 ): string[] {
   if (method === "card") return ["card"];
   if (method === "wallet") {
@@ -49,16 +36,11 @@ export function hitPayMethodsForStorefront(
   return currency === "SGD" ? ["paynow_online"] : ["duitnow", "fpx"];
 }
 
-export async function createHitPayPaymentRequest(input: {
-  orderId: string;
-  amountCents: number;
-  currency: "MYR" | "SGD";
-  redirectUrl: string;
-  webhookUrl: string;
-  paymentMethods?: string[];
-}): Promise<HitPayPaymentRequest> {
-  const apiKey = process.env.PAYMENT_API_KEY;
-  if (!apiKey) throw new Error("Missing PAYMENT_API_KEY");
+export async function createHitPayPaymentRequest(
+  input: CreatePaymentInput,
+): Promise<PaymentRequest> {
+  const key = process.env.PAYMENT_API_KEY;
+  if (!key) throw new Error("Missing PAYMENT_API_KEY");
 
   async function request(methods?: string[]) {
     const body = new URLSearchParams({
@@ -77,7 +59,7 @@ export async function createHitPayPaymentRequest(input: {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "X-BUSINESS-API-KEY": apiKey!,
+        "X-BUSINESS-API-KEY": key!,
       },
       body,
     });
@@ -96,21 +78,16 @@ export async function createHitPayPaymentRequest(input: {
     return {
       id: json.id,
       url: json.url,
-      reference_number: json.reference_number ?? input.orderId,
+      reference: json.reference_number ?? input.orderId,
     };
   }
 
-  const preferred = input.paymentMethods?.filter(Boolean);
-  if (preferred && preferred.length > 0) {
-    try {
-      return await request(preferred);
-    } catch {
-      // Method may not be enabled on the HitPay account — fall back to all methods.
-      return await request();
-    }
+  try {
+    return await request(hitPayMethodsForStorefront(input.method, input.currency));
+  } catch {
+    // Method may not be enabled on the HitPay account — fall back to all methods.
+    return request();
   }
-
-  return request();
 }
 
 export function verifyHitPaySignature(rawBody: string, signature: string | null) {
@@ -125,11 +102,6 @@ export function verifyHitPaySignature(rawBody: string, signature: string | null)
   }
 }
 
-export type RefundResult = {
-  status: "refunded" | "skipped";
-  reference: string | null;
-};
-
 /**
  * Refunds a HitPay payment.
  *
@@ -137,11 +109,7 @@ export type RefundResult = {
  * payment mode nothing was ever charged, so there is nothing to give back and
  * the refund is reported as skipped rather than pretended.
  */
-export async function refundHitPayPayment(input: {
-  paymentRef: string;
-  amountCents: number;
-  currency: "MYR" | "SGD";
-}): Promise<RefundResult> {
+export async function refundHitPayPayment(input: RefundInput): Promise<RefundResult> {
   if (isDevPaymentMode()) {
     console.info("[payments:dev] refund →", input.paymentRef, input.amountCents);
     return { status: "skipped", reference: null };
@@ -180,7 +148,7 @@ export async function refundHitPayPayment(input: {
   return { status: "refunded", reference: json.id ?? null };
 }
 
-export function parseHitPayWebhook(rawBody: string) {
+export function parseHitPayWebhook(rawBody: string): PaymentWebhookPayload | null {
   const json = JSON.parse(rawBody) as {
     id?: string;
     payment_request_id?: string;
@@ -197,11 +165,27 @@ export function parseHitPayWebhook(rawBody: string) {
   const paid = status === "completed" || status === "paid" || status === "succeeded";
 
   return {
-    provider: "hitpay" as const,
+    provider: "hitpay",
     externalId: json.payment_request_id ?? json.id ?? orderId,
     orderId,
     amountCents: Math.round(parseFloat(json.amount ?? "0") * 100),
-    currency: (json.currency ?? "MYR") as "MYR" | "SGD",
-    status: paid ? ("paid" as const) : ("failed" as const),
+    currency: (json.currency ?? "MYR") as PaymentCurrency,
+    status: paid ? "paid" : "failed",
   };
 }
+
+export const hitPayProvider: PaymentProvider = {
+  name: "hitpay",
+  supportsCurrency: (currency) => currency === "MYR" || currency === "SGD",
+  isConfigured: () => Boolean(process.env.PAYMENT_API_KEY && process.env.PAYMENT_SALT),
+  createPaymentRequest: createHitPayPaymentRequest,
+  ownsWebhook: (headers) =>
+    Boolean(headers.get("hitpay-signature") ?? headers.get("x-payment-signature")),
+  verifyWebhook: async (rawBody, headers) =>
+    verifyHitPaySignature(
+      rawBody,
+      headers.get("hitpay-signature") ?? headers.get("x-payment-signature"),
+    ),
+  parseWebhook: parseHitPayWebhook,
+  refund: refundHitPayPayment,
+};

@@ -31,9 +31,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // Browser extensions — ad blockers, password managers, dark-mode toggles —
+    // write their own attributes onto <html> before React hydrates, and React
+    // reports the difference as a hydration mismatch the app cannot fix. This
+    // suppresses the warning for attributes on this element only; mismatches
+    // anywhere inside it are still reported, so a real hydration bug in the
+    // app is not hidden by it.
     <html
       lang="en"
       className={`${hanken.variable} ${inter.variable} ${jetbrains.variable}`}
+      suppressHydrationWarning
     >
       <head>
         {/* Material Symbols — not available via next/font */}

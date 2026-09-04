@@ -27,10 +27,12 @@ type RouteContext = { params: Promise<{ slug: string }> };
  */
 
 const connectSchema = z.object({
-  /** Authorization code from the Embedded Signup dialog. */
+  /** Authorization code from the Embedded Signup dialog. Valid for 30 seconds. */
   code: z.string().min(1),
   wabaId: z.string().min(1),
   phoneNumberId: z.string().min(1),
+  /** Meta Business the WABA sits under. Returned by Embedded Signup v4. */
+  businessId: z.string().min(1).optional(),
 });
 
 export async function GET(request: Request, context: RouteContext) {
@@ -131,6 +133,7 @@ export async function POST(request: Request, context: RouteContext) {
       accessToken,
       displayPhoneNumber: details.display_phone_number ?? null,
       verifiedName: details.verified_name ?? null,
+      businessId: body.businessId ?? null,
     });
 
     return NextResponse.json({ ok: true, account: summarizeWhatsAppAccount(account) });

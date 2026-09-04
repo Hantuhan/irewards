@@ -4,10 +4,12 @@
  * Preference order:
  *   1. The merchant's own WABA, connected through Embedded Signup. Meta bills
  *      them, and their quality rating is theirs alone.
- *   2. The platform WABA from env, if one is configured. This exists so a
- *      pilot merchant can run on our number before connecting their own — it
- *      is not the steady state, because one bad sender on a shared number gets
- *      it restricted for everyone on it.
+ *   2. The platform WABA from env, only when WHATSAPP_ALLOW_PLATFORM_FALLBACK
+ *      is explicitly on. This exists so a pilot merchant can run on our number
+ *      before connecting their own — it is not the steady state, because one
+ *      bad sender on a shared number gets it restricted for everyone on it.
+ *      Off by default, so a merchant who has not connected is told to connect
+ *      rather than quietly borrowing someone else's reputation.
  */
 
 import { getMetaConfig, hasPlatformWhatsApp, type MetaConfig } from "@/lib/meta/client";

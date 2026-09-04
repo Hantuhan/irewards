@@ -22,6 +22,20 @@ Last updated: Sep 2026 (Zeabur Docker + InsForge stack).
 
 See [docs/ZEABUR.md](ZEABUR.md).
 
+## WhatsApp
+
+Merchants connect their own WhatsApp Business Account in Settings → WhatsApp.
+That button only works once the Meta app is set up — `META_APP_ID`,
+`META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_EMBEDDED_SIGNUP_CONFIG_ID`
+and `WHATSAPP_TOKEN_KEY`, all enforced by `check:production-env`.
+
+The shared platform number is off unless `WHATSAPP_ALLOW_PLATFORM_FALLBACK=true`;
+leave it off so a merchant who has not connected is asked to, rather than
+quietly sending on a reputation shared with everyone else.
+
+Full walkthrough, including Meta's Tech Provider and business verification
+steps: [docs/WHATSAPP_SETUP.md](WHATSAPP_SETUP.md).
+
 ## Payments
 
 Default provider is **CHIP Collect** (`PAYMENT_PROVIDER=chip`), which needs

@@ -78,6 +78,13 @@ Set `INSFORGE_URL=http://host.docker.internal:7230` in `.env.local` when InsForg
 | `POST /api/webhooks/payments` | Payment confirmed → join token + points |
 | `GET/POST /api/webhooks/meta` | Meta verification handshake; `JOIN-{token}` → member + points; template review verdicts |
 
+## WhatsApp
+
+Each merchant connects their own WhatsApp Business Account through Meta Embedded
+Signup (Settings → WhatsApp), so Meta bills them and their sending reputation is
+their own. Operator setup is a one-time Meta app configuration —
+see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md).
+
 ## Dev flow (no gateway keys)
 
 1. `PAYMENT_PROVIDER=dev` in `.env.local`

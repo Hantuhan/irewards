@@ -32,8 +32,9 @@ type StatusResponse = {
 /** What Meta's signup dialog posts back once the merchant picks a number. */
 type EmbeddedSignupPayload = {
   type?: string;
+  /** "FINISH" variants mean a real selection; "CANCEL" means they backed out. */
   event?: string;
-  data?: { waba_id?: string; phone_number_id?: string };
+  data?: { waba_id?: string; phone_number_id?: string; business_id?: string };
 };
 
 declare global {
@@ -52,6 +53,23 @@ declare global {
 const GRAPH_VERSION = "v21.0";
 
 /**
+ * Whether a postMessage really came from Meta.
+ *
+ * Compares the parsed hostname, because a suffix test on the raw origin also
+ * accepts `https://notfacebook.com` — and this message is what tells us which
+ * WABA and number to bind the merchant's token to.
+ */
+function isMetaOrigin(origin: string): boolean {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== "https:") return false;
+    return hostname === "facebook.com" || hostname.endsWith(".facebook.com");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Connecting the merchant's own WhatsApp Business Account.
  *
  * Their account, their Meta bill, and their quality rating — so one store
@@ -64,7 +82,11 @@ export function WhatsAppSettingsPanel({ merchantSlug }: { merchantSlug: string }
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   /** The dialog reports the chosen WABA by postMessage, before the code arrives. */
-  const signupSelection = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
+  const signupSelection = useRef<{
+    wabaId?: string;
+    phoneNumberId?: string;
+    businessId?: string;
+  }>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,16 +108,23 @@ export function WhatsAppSettingsPanel({ merchantSlug }: { merchantSlug: string }
   // Meta posts the selected WABA and number into the opener window.
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (!event.origin.endsWith("facebook.com")) return;
+      if (!isMetaOrigin(event.origin)) return;
       try {
         const payload =
           typeof event.data === "string"
             ? (JSON.parse(event.data) as EmbeddedSignupPayload)
             : (event.data as EmbeddedSignupPayload);
         if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
+        // A cancel carries no selection; taking its fields would leave a
+        // half-filled ref that the next attempt then reads as a real choice.
+        if (payload.event && !payload.event.startsWith("FINISH")) return;
+
         if (payload.data?.waba_id) signupSelection.current.wabaId = payload.data.waba_id;
         if (payload.data?.phone_number_id) {
           signupSelection.current.phoneNumberId = payload.data.phone_number_id;
+        }
+        if (payload.data?.business_id) {
+          signupSelection.current.businessId = payload.data.business_id;
         }
       } catch {
         /* Not a message we care about. */
@@ -148,7 +177,12 @@ export function WhatsAppSettingsPanel({ merchantSlug }: { merchantSlug: string }
             config_id: status.configId,
             response_type: "code",
             override_default_response_type: true,
-            extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+            // Embedded Signup v4: `extras` is deliberately empty. Permissions
+            // and product setup moved into the Facebook Login for Business
+            // configuration that META_EMBEDDED_SIGNUP_CONFIG_ID points at.
+            // The old `sessionInfoVersion: "3"` shape is v2, which Meta
+            // deprecates on 15 October 2026.
+            extras: {},
           },
         );
       });
@@ -158,7 +192,7 @@ export function WhatsAppSettingsPanel({ merchantSlug }: { merchantSlug: string }
         return;
       }
 
-      const { wabaId, phoneNumberId } = signupSelection.current;
+      const { wabaId, phoneNumberId, businessId } = signupSelection.current;
       if (!wabaId || !phoneNumberId) {
         setError(
           "Sign-up finished but Meta did not say which number was chosen. Try connecting again.",
@@ -166,9 +200,11 @@ export function WhatsAppSettingsPanel({ merchantSlug }: { merchantSlug: string }
         return;
       }
 
+      // Meta gives the code a 30-second window, so this exchange goes straight
+      // out rather than waiting on anything else.
       await merchantApi(`/api/merchant/${merchantSlug}/whatsapp`, {
         method: "POST",
-        body: JSON.stringify({ code, wabaId, phoneNumberId }),
+        body: JSON.stringify({ code, wabaId, phoneNumberId, businessId }),
       });
       setNotice("WhatsApp connected. Your campaigns will now send from your own number.");
       await load();

@@ -61,8 +61,19 @@ export function getMetaAppConfig(): { appId: string | null; appSecret: string | 
   };
 }
 
-/** True when a platform-level WABA is configured to fall back to. */
+/**
+ * Whether a merchant with no WABA of their own may send on the platform number.
+ *
+ * Opt-in, and deliberately not just "are platform credentials present". Having
+ * them present is normal — they are also what uploads template image headers —
+ * so inferring consent from that quietly put every merchant back on one shared
+ * number, which is the single-quality-rating problem migration 061 exists to
+ * end. Sharing a sender is now something an operator turns on for a named
+ * pilot, not the default a deployment falls into.
+ */
 export function hasPlatformWhatsApp(): boolean {
+  if (process.env.WHATSAPP_ALLOW_PLATFORM_FALLBACK !== "true") return false;
+
   return Boolean(
     process.env.META_ACCESS_TOKEN &&
       process.env.META_WABA_ID &&

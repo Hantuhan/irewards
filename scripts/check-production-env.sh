@@ -25,11 +25,29 @@ require MEMBER_SESSION_SECRET
 require CRON_SECRET
 require PLATFORM_ADMIN_PASSWORD
 require PLATFORM_SESSION_SECRET
-require META_ACCESS_TOKEN
-require META_WABA_ID
-require META_PHONE_NUMBER_ID
+# Merchants connect their own WhatsApp account, so what production actually
+# needs is the app credentials that drive Embedded Signup — not a platform WABA.
+require META_APP_ID
 require META_APP_SECRET
 require META_WEBHOOK_VERIFY_TOKEN
+# Without this the Connect button tells every merchant the server is not set up.
+require META_EMBEDDED_SIGNUP_CONFIG_ID
+
+# Merchant tokens are encrypted with this. It falls back to
+# MERCHANT_SESSION_SECRET, which means rotating a session secret would silently
+# orphan every connected merchant — so production names it explicitly.
+require WHATSAPP_TOKEN_KEY
+
+# The shared platform number is a pilot tool, not the steady state. It is only
+# consulted when the fallback is switched on, and then it must be complete.
+if [ "${WHATSAPP_ALLOW_PLATFORM_FALLBACK:-}" = "true" ]; then
+  warn "WHATSAPP_ALLOW_PLATFORM_FALLBACK=true — merchants without their own WhatsApp account will send on the shared platform number"
+  require META_ACCESS_TOKEN
+  require META_WABA_ID
+  require META_PHONE_NUMBER_ID
+else
+  ok "Platform WhatsApp fallback off — every merchant sends from their own account"
+fi
 
 if [ "${DATABASE_PROVIDER:-insforge}" = "supabase" ]; then
   require SUPABASE_URL

@@ -316,7 +316,7 @@ banner_pub=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/merchant/$MER
 [ "$banner_pub" = "200" ] && pass "Public banner API ($banner_pub)" || fail "Public banner expected 200 got $banner_pub"
 
 # --- Dashboard campaigns page ---
-dash_code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dashboard/$MERCHANT_SLUG/campaigns")
+dash_code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$BASE_URL/dashboard/$MERCHANT_SLUG/campaigns")
 [ "$dash_code" = "200" ] && pass "Dashboard campaigns page ($dash_code)" || fail "Dashboard campaigns expected 200 got $dash_code"
 
 # --- Leave drafts paused/draft (cleanup soft) ---

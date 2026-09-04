@@ -34,7 +34,7 @@ login_code=$(printf '%s' "$login_resp" | tail -n 1)
 auth() { curl -s -b "$COOKIE_JAR" "$@"; }
 
 # --- Dashboard rewards page (hub + stamps shell) ---
-rewards_page=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/dashboard/$MERCHANT_SLUG/rewards")
+rewards_page=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$BASE_URL/dashboard/$MERCHANT_SLUG/rewards")
 [ "$rewards_page" = "200" ] && pass "Dashboard /rewards ($rewards_page)" || fail "Dashboard /rewards expected 200 got $rewards_page"
 
 # --- GET stamps config (auth) ---

@@ -7,6 +7,7 @@ import {
   getMerchantBySlug,
   updateCustomer,
 } from "@/lib/db/repository";
+import { adminDb } from "@/lib/db/admin";
 import { listMenuItems } from "@/lib/db/merchant-repository";
 import {
   clearMemberSessionCookieHeader,
@@ -46,7 +47,13 @@ export async function POST(request: Request) {
       return res;
     }
 
-    let customer = await getCustomerByPhone(merchant.id, DEMO_PHONE);
+    // Prefer a member the demo seed already built. They come with real order
+    // history, a real tier and a real balance, which is the whole point of a
+    // storefront demo — and it avoids minting a synthetic "Alex" that then
+    // shows up in the merchant's customer list as a member who never ordered.
+    let customer = await getSeededDemoMember(merchant.id);
+
+    if (!customer) customer = await getCustomerByPhone(merchant.id, DEMO_PHONE);
     if (!customer?.is_member) {
       if (customer) {
         customer = await updateCustomer(customer.id, {
@@ -64,7 +71,8 @@ export async function POST(request: Request) {
       customer = await updateCustomer(customer.id, { display_name: DEMO_NAME });
     }
 
-    if (customer.points_balance < 100) {
+    // Only top up the fallback Alex. A seeded member's balance is meaningful.
+    if (customer.phone === DEMO_PHONE && customer.points_balance < 100) {
       customer = await awardPointsToCustomer({
         customer,
         orderId: null,
@@ -111,6 +119,26 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Demo session failed";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+/**
+ * The most established member of this cafe, if the demo seed has run.
+ * Highest lifetime points, because that is the account with the most to show:
+ * a top tier, a spent-down balance, and months of orders behind it.
+ */
+async function getSeededDemoMember(merchantId: string) {
+  const { data, error } = await adminDb()
+    .from("customers")
+    .select("*")
+    .eq("merchant_id", merchantId)
+    .eq("is_member", true)
+    .order("lifetime_points_earned", { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) return null;
+  const customer = data[0] as Awaited<ReturnType<typeof getCustomerByPhone>>;
+  // A seeded member has history; a bare row is not worth preferring.
+  return customer && customer.lifetime_points_earned > 0 ? customer : null;
 }
 
 export async function GET() {

@@ -29,6 +29,7 @@
     "zeabur:setup": "sh scripts/zeabur-setup.sh",
     "zeabur:template:deploy": "npx zeabur@latest template deploy -f zeabur-template.yaml",
     "check:production-env": "sh scripts/check-production-env.sh",
+    "demo:seed": "sh scripts/demo-seed.sh",
     "test:alerts": "node scripts/test-kitchen-alerts.mjs",
     "test:optout": "node scripts/test-opt-out.mjs",
     "test:crypto": "node scripts/test-token-crypto.mjs",

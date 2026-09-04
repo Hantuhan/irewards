@@ -78,6 +78,23 @@ Set `INSFORGE_URL=http://host.docker.internal:7230` in `.env.local` when InsForg
 | `POST /api/webhooks/payments` | Payment confirmed → join token + points |
 | `GET/POST /api/webhooks/meta` | Meta verification handshake; `JOIN-{token}` → member + points; template review verdicts |
 
+## Demo data
+
+`npm run demo:seed` rebuilds the **demo-cafe** tenant as a believable cafe: 90
+days of trading (~470 orders with morning and lunch peaks, weekends busier),
+ten members spanning every tier, and the ones the automation rules exist to
+catch — someone churned, someone with a birthday due, someone who joined this
+week, someone opted out of marketing.
+
+Run it before showing the product to anyone. Smoke tests write into demo-cafe,
+so left alone it fills with rows like `Redeem Smoke` and a hundred throwaway
+campaigns, and Reports has nothing to compare week on week.
+
+Destructive, but only to demo-cafe: it clears that tenant's orders, customers
+and campaigns and rebuilds them, and refuses if the merchant does not exist. It
+is deterministic, so a re-seed reproduces the same cafe. Point it at a deployed
+database with `DATABASE_URL=... npm run demo:seed`.
+
 ## WhatsApp
 
 Each merchant connects their own WhatsApp Business Account through Meta Embedded

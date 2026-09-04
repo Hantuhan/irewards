@@ -146,7 +146,9 @@ menu_cat_count=$(node -e "
 " "$menu_admin_resp" 2>/dev/null || true)
 [ -n "$menu_cat_count" ] && pass "Menu catalogue ($menu_cat_count)" || fail "Menu catalogue empty or invalid: $menu_admin_resp"
 
-menu_page_code=$(http_code "$BASE_URL/dashboard/$MERCHANT_SLUG/menu")
+# Dashboard pages are behind merchant auth, so the session cookie has to go
+# with the request — without it this only ever measures the login redirect.
+menu_page_code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$BASE_URL/dashboard/$MERCHANT_SLUG/menu")
 [ "$menu_page_code" = "200" ] && pass "Menu admin page ($menu_page_code)" || fail "Menu admin page expected 200 got $menu_page_code"
 
 # --- Checkout + dev payment ---
@@ -214,10 +216,13 @@ code=$(http_code "$BASE_URL/m/$MERCHANT_SLUG/table/$TABLE_ID/thanks?orderId=$ord
 [ "$code" = "200" ] && pass "Thank-you page ($code)" || fail "Thank-you page expected 200 got $code"
 
 # --- Dashboard pages ---
+# Every one of these is behind merchant auth, so they go out with the session
+# cookie. Without it the loop measures the login redirect and reports the
+# dashboard as broken when it is simply doing its job.
 for path in "" menu rewards customers analytics campaigns "campaigns?tab=promos" tables settings reports; do
   url="$BASE_URL/dashboard/$MERCHANT_SLUG"
   [ -n "$path" ] && url="$url/$path"
-  code=$(http_code "$url")
+  code=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_JAR" "$url")
   [ "$code" = "200" ] && pass "Dashboard /$path ($code)" || fail "Dashboard /$path expected 200 got $code"
 done
 

@@ -142,12 +142,12 @@ export function DemoDinerSim({
         >
           <span className="flex items-center gap-2 font-display text-headline-sm">
             <Icon name="verified_user" />
-            Member (Alex)
+            {member?.displayName ? `Member (${member.displayName})` : "Member"}
           </span>
           <span
             className={`text-[12px] ${mode === "member" ? "text-white/75" : "text-on-surface-variant"}`}
           >
-            Soft-login demo member — loyalty chrome
+            Signs in as this cafe&apos;s most established member
           </span>
         </button>
       </div>

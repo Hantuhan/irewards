@@ -9,6 +9,7 @@ import {
 import { getMerchantById } from "@/lib/db/repository";
 import {
   appendStampsLedger,
+  sumStampsLedgerForOrder,
   ensureCustomerStampCard,
   getCustomerStampCard,
   getMenuItemCategoryMap,
@@ -500,6 +501,58 @@ export async function consumeStampRewardForPaidOrder(input: {
     orderId: input.orderId,
     delta: 0,
     reason: "reward_applied",
+  });
+  return true;
+}
+
+/**
+ * Takes back stamps earned on a refunded order.
+ *
+ * Clamped at zero: the member may have already spent the card, and a negative
+ * stamp count is not a thing a cafe can explain to anyone.
+ */
+export async function reverseOrderStamps(input: {
+  merchantId: string;
+  customerId: string;
+  orderId: string;
+}): Promise<number> {
+  const earned = await sumStampsLedgerForOrder(input.orderId, input.customerId, "order_paid");
+  if (earned <= 0) return 0;
+
+  const card = await getCustomerStampCard(input.merchantId, input.customerId);
+  if (!card) return 0;
+
+  const current = Number(card.stamps_collected ?? 0);
+  const removed = Math.min(earned, Math.max(0, current));
+
+  await updateCustomerStampCard(card.id, { stamps_collected: current - removed });
+  await appendStampsLedger({
+    merchantId: input.merchantId,
+    customerId: input.customerId,
+    orderId: input.orderId,
+    delta: -removed,
+    reason: "order_refunded",
+  });
+  return removed;
+}
+
+/** Gives back the stamp reward an order was quoted with, after a refund. */
+export async function restoreStampRewardForRefund(input: {
+  merchantId: string;
+  customerId: string;
+  orderId: string;
+}): Promise<boolean> {
+  const card = await getCustomerStampCard(input.merchantId, input.customerId);
+  // Already pending means it was never spent, or has been given back already.
+  if (!card || card.pending_reward) return false;
+
+  await updateCustomerStampCard(card.id, { pending_reward: true });
+  await appendStampsLedger({
+    merchantId: input.merchantId,
+    customerId: input.customerId,
+    orderId: input.orderId,
+    delta: 0,
+    reason: "reward_restored",
   });
   return true;
 }

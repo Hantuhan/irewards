@@ -25,7 +25,7 @@ export type ReceiptOrder = {
   shortId: string;
   tableNumber?: string | null;
   paidAt?: string | null;
-  status?: "pending" | "paid" | "cancelled";
+  status?: "pending" | "paid" | "cancelled" | "refunded";
   currency: string;
   subtotalCents: number;
   serviceChargeCents: number;

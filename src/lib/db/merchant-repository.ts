@@ -229,14 +229,17 @@ export async function getMerchantSalesReport(
   const fromIso = queryFromForPeriod(period, timeZone);
   const { data, error } = await db()
     .from("orders")
-    .select("total_cents, paid_at")
+    .select("total_cents, refunded_cents, paid_at")
     .eq("merchant_id", merchantId)
     .eq("status", "paid")
     .not("paid_at", "is", null)
     .gte("paid_at", fromIso);
 
   if (error) throw new Error(error.message);
-  return buildSalesReport((data ?? []) as { total_cents: number; paid_at: string }[], period, timeZone);
+  const rows = ((data ?? []) as { total_cents: number; refunded_cents?: number | null; paid_at: string }[]).map(
+    netOrderRevenue,
+  );
+  return buildSalesReport(rows, period, timeZone);
 }
 
 /** Paid orders for reports (compare, intelligence) — up to 400 days. */
@@ -244,7 +247,7 @@ export async function getMerchantPaidOrdersForReports(merchantId: string, days =
   const fromIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await db()
     .from("orders")
-    .select("id, total_cents, paid_at")
+    .select("id, total_cents, refunded_cents, paid_at")
     .eq("merchant_id", merchantId)
     .eq("status", "paid")
     .not("paid_at", "is", null)
@@ -252,7 +255,12 @@ export async function getMerchantPaidOrdersForReports(merchantId: string, days =
     .order("paid_at", { ascending: true });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as { id: string; total_cents: number; paid_at: string }[];
+  return ((data ?? []) as {
+    id: string;
+    total_cents: number;
+    refunded_cents?: number | null;
+    paid_at: string;
+  }[]).map(netOrderRevenue);
 }
 
 export async function getPromoRedemptionsForMerchant(merchantId: string) {
@@ -1190,7 +1198,7 @@ export async function getMemberDetailForMerchant(
   const [ordersRes, ledgerRes, redemptionsRes, jobsRes] = await Promise.all([
     db()
       .from("orders")
-      .select("id, total_cents, paid_at, created_at, status, venue_table_id, points_redeemed")
+      .select("id, total_cents, refunded_cents, paid_at, created_at, status, venue_table_id, points_redeemed")
       .eq("merchant_id", merchantId)
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false })
@@ -1986,7 +1994,7 @@ export async function getMerchantAnalytics(merchantId: string) {
   const [ordersRes, customersRes, levelsRes, recentOrdersRes] = await Promise.all([
     db()
       .from("orders")
-      .select("total_cents, paid_at, created_at")
+      .select("total_cents, refunded_cents, paid_at, created_at")
       .eq("merchant_id", merchantId)
       .eq("status", "paid"),
     db()
@@ -2000,7 +2008,7 @@ export async function getMerchantAnalytics(merchantId: string) {
       .order("level_number", { ascending: true }),
     db()
       .from("orders")
-      .select("customer_id, total_cents, paid_at")
+      .select("customer_id, total_cents, refunded_cents, paid_at")
       .eq("merchant_id", merchantId)
       .eq("status", "paid")
       .not("customer_id", "is", null)
@@ -2012,10 +2020,12 @@ export async function getMerchantAnalytics(merchantId: string) {
   if (levelsRes.error) throw new Error(levelsRes.error.message);
   if (recentOrdersRes.error) throw new Error(recentOrdersRes.error.message);
 
-  const orders = ordersRes.data ?? [];
+  // Netted here so every figure below — revenue, averages, per-member spend —
+  // reflects money actually kept rather than money once taken.
+  const orders = (ordersRes.data ?? []).map(netOrderRevenue);
   const customers = customersRes.data ?? [];
   const levels = levelsRes.data ?? [];
-  const recentOrders = recentOrdersRes.data ?? [];
+  const recentOrders = (recentOrdersRes.data ?? []).map(netOrderRevenue);
 
   const visits90 = new Map<string, { count: number; spend: number }>();
   const d90 = Date.now() - 90 * 24 * 60 * 60 * 1000;
@@ -2267,6 +2277,37 @@ export async function countPendingStampRewardHolds(
   const { count, error } = await query;
   if (error) throw new Error(error.message);
   return count ?? 0;
+}
+
+/**
+ * Frees the voucher an order consumed, after a refund. A one-per-member code
+ * must be usable again — the member never received what they spent it on.
+ */
+/**
+ * Revenue after refunds.
+ *
+ * A fully refunded order leaves `status = 'paid'` and is filtered out by the
+ * revenue queries. A *partially* refunded one is still a sale, so it stays
+ * paid — and would otherwise be counted at its original amount forever. Every
+ * revenue read nets the refund off here, so no report has to remember to.
+ */
+export function netOrderRevenue<T extends { total_cents: number; refunded_cents?: number | null }>(
+  order: T,
+): T {
+  const refunded = Number(order.refunded_cents ?? 0);
+  if (refunded <= 0) return order;
+  return { ...order, total_cents: Math.max(0, order.total_cents - refunded) };
+}
+
+export async function releasePromoRedemptionForOrder(orderId: string): Promise<boolean> {
+  const { data, error } = await db()
+    .from("promo_redemptions")
+    .delete()
+    .eq("order_id", orderId)
+    .select("id");
+
+  if (error) throw new Error(error.message);
+  return (data?.length ?? 0) > 0;
 }
 
 export async function recordPromoRedemption(input: {

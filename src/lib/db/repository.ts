@@ -488,6 +488,144 @@ export async function awardPointsToCustomer(input: {
   return updated;
 }
 
+/** Net points movement recorded against an order, by reason. */
+export async function sumPointsLedgerForOrder(
+  orderId: string,
+  customerId: string,
+  reason: string,
+): Promise<number> {
+  const { data, error } = await db()
+    .from("points_ledger")
+    .select("delta")
+    .eq("order_id", orderId)
+    .eq("customer_id", customerId)
+    .eq("reason", reason);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce((sum, row) => sum + Number((row as { delta: number }).delta || 0), 0);
+}
+
+/**
+ * Takes back points awarded for an order that is being refunded.
+ *
+ * Clamped, unlike `deductPointsFromCustomer`: the member may already have
+ * spent them, and a negative balance would look broken to the diner and to
+ * staff. Whatever cannot be taken back is reported so the caller can say so
+ * rather than silently under-reversing.
+ *
+ * `lifetime_points_earned` comes down too — tiers are computed from it, and a
+ * refunded sale must not leave someone sitting in Gold.
+ */
+export async function clawBackPointsFromCustomer(input: {
+  customer: CustomerRow;
+  orderId: string;
+  points: number;
+  reason: string;
+}): Promise<{ customer: CustomerRow; clawedBack: number; shortfall: number }> {
+  if (input.points <= 0) {
+    return { customer: input.customer, clawedBack: 0, shortfall: 0 };
+  }
+
+  const clawedBack = Math.min(input.points, Math.max(0, input.customer.points_balance));
+  const shortfall = input.points - clawedBack;
+
+  const updated = await updateCustomer(input.customer.id, {
+    points_balance: input.customer.points_balance - clawedBack,
+    lifetime_points_earned: Math.max(
+      0,
+      input.customer.lifetime_points_earned - input.points,
+    ),
+  });
+
+  if (clawedBack > 0) {
+    await appendPointsLedger({
+      customerId: input.customer.id,
+      orderId: input.orderId,
+      delta: -clawedBack,
+      reason: input.reason,
+    });
+  }
+
+  return { customer: updated, clawedBack, shortfall };
+}
+
+/**
+ * Gives back points a member spent on an order that is being refunded.
+ *
+ * Balance only — deliberately *not* `awardPointsToCustomer`, which also raises
+ * `lifetime_points_earned`. These points were earned long ago and already
+ * counted once; counting them again would push the member up a tier for a sale
+ * that was reversed.
+ */
+export async function restoreRedeemedPoints(input: {
+  customer: CustomerRow;
+  orderId: string;
+  points: number;
+}): Promise<CustomerRow> {
+  if (input.points <= 0) return input.customer;
+
+  const updated = await updateCustomer(input.customer.id, {
+    points_balance: input.customer.points_balance + input.points,
+  });
+  await appendPointsLedger({
+    customerId: input.customer.id,
+    orderId: input.orderId,
+    delta: input.points,
+    reason: "refund_points_returned",
+  });
+  return updated;
+}
+
+/** Applies refund bookkeeping to the order row. */
+export async function markOrderRefunded(input: {
+  orderId: string;
+  refundedCents: number;
+  reason: string;
+  userId: string | null;
+  full: boolean;
+}): Promise<OrderRow> {
+  const { data, error } = await db()
+    .from("orders")
+    .update({
+      // A partial refund is still a sale, so the order stays paid and the
+      // refunded amount is subtracted in reporting.
+      ...(input.full && { status: "refunded" }),
+      refunded_at: new Date().toISOString(),
+      refunded_cents: input.refundedCents,
+      refund_reason: input.reason,
+      refunded_by_user_id: input.userId,
+    })
+    .eq("id", input.orderId)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as OrderRow;
+}
+
+/** Voids an unpaid order. Nothing was charged and nothing was awarded. */
+export async function markOrderCancelled(input: {
+  orderId: string;
+  reason: string;
+  userId: string | null;
+}): Promise<OrderRow> {
+  const { data, error } = await db()
+    .from("orders")
+    .update({
+      status: "cancelled",
+      refund_reason: input.reason,
+      refunded_by_user_id: input.userId,
+    })
+    .eq("id", input.orderId)
+    .eq("status", "pending")
+    .select("*")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("That order is no longer awaiting payment.");
+  return data as OrderRow;
+}
+
 export async function touchCustomerVisit(
   customerId: string,
   input: {

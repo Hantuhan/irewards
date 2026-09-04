@@ -116,7 +116,7 @@ export type OrderRow = {
   merchant_id: string;
   venue_table_id: string | null;
   customer_id: string | null;
-  status: "pending" | "paid" | "cancelled";
+  status: "pending" | "paid" | "cancelled" | "refunded";
   subtotal_cents: number;
   service_charge_cents?: number;
   tax_cents?: number;
@@ -131,6 +131,10 @@ export type OrderRow = {
   points_redeemed: number;
   service_type?: "dine_in" | "takeaway";
   stamp_reward_applied?: boolean;
+  refunded_at?: string | null;
+  refunded_cents?: number;
+  refund_reason?: string | null;
+  refunded_by_user_id?: string | null;
   receipt_requested?: boolean;
   receipt_sent_at?: string | null;
   receipt_delivery_method?: "email" | "whatsapp" | null;

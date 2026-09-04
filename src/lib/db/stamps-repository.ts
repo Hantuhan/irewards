@@ -294,3 +294,20 @@ export async function getMenuItemPriceCents(
   if (!data) return null;
   return Number((data as { price_cents: number }).price_cents);
 }
+
+/** Net stamp movement recorded against an order for one reason. */
+export async function sumStampsLedgerForOrder(
+  orderId: string,
+  customerId: string,
+  reason: string,
+): Promise<number> {
+  const { data, error } = await adminDb()
+    .from("stamps_ledger")
+    .select("delta")
+    .eq("order_id", orderId)
+    .eq("customer_id", customerId)
+    .eq("reason", reason);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce((sum, row) => sum + Number((row as { delta: number }).delta || 0), 0);
+}

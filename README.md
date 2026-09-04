@@ -148,6 +148,9 @@ npm run test     # smoke tests only (merchant login, APIs, checkout, kitchen boa
 
 Smoke tests default to `http://localhost:3002`. Override with `BASE_URL=... npm run test`.
 
+`npm run test:smoke:refunds` covers voiding and refunding, including that the
+loyalty a refunded order handed out is taken back again.
+
 `npm run test:smoke:tenancy` checks that one merchant cannot reach another's
 data. **Set `MERCHANT_SESSION_SECRET` in `.env.local`** before running any of
 these: without it the dashboard used to run with authorization disabled, so the

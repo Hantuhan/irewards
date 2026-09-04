@@ -205,6 +205,12 @@ function KitchenFlowEditor({
 
 export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) {
   const [orders, setOrders] = useState<KitchenOrder[]>([]);
+  const [role, setRole] = useState<string | null>(null);
+  const [refundOrderId, setRefundOrderId] = useState<string | null>(null);
+  const [refundReason, setRefundReason] = useState("");
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
+  const [refundNotice, setRefundNotice] = useState<string | null>(null);
   const [kitchenFlow, setKitchenFlow] = useState<KitchenFlow>(DEFAULT_KITCHEN_FLOW);
   const [completedStepId, setCompletedStepId] = useState("served");
   const [loading, setLoading] = useState(true);
@@ -338,6 +344,34 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
       });
   }, [visibleOrders]);
 
+  // Refunds are manager-and-up. The API enforces it; this keeps a button that
+  // would only ever 403 off a staff member's screen.
+  const canRefund = role === "owner" || role === "manager";
+
+  async function submitRefund() {
+    if (!refundOrderId || refundReason.trim().length < 3) return;
+    setRefundBusy(true);
+    setRefundError(null);
+    try {
+      const result = await merchantApi<{ warnings?: string[]; refundedCents?: number }>(
+        `/api/merchant/${merchantSlug}/orders/${refundOrderId}/refund`,
+        { method: "POST", body: JSON.stringify({ action: "refund", reason: refundReason.trim() }) },
+      );
+      setRefundOrderId(null);
+      setRefundReason("");
+      setRefundNotice(
+        result.warnings?.length
+          ? `Refunded. ${result.warnings.join(" ")}`
+          : "Refunded. Points and vouchers from this order have been reversed.",
+      );
+      await load();
+    } catch (err) {
+      setRefundError(err instanceof Error ? err.message : "Could not refund that order");
+    } finally {
+      setRefundBusy(false);
+    }
+  }
+
   async function advanceOrder(orderId: string, kitchenStatus: string, stationId?: string) {
     await merchantApi(`/api/merchant/${merchantSlug}/orders`, {
       method: "PATCH",
@@ -345,6 +379,23 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
     });
     await load();
   }
+
+  // The refund control is manager-and-up, so the board needs to know who is
+  // signed in. The API enforces it regardless; this only keeps a button that
+  // would always 403 off a staff member's screen.
+  useEffect(() => {
+    let cancelled = false;
+    merchantApi<{ role?: string }>("/api/merchant/auth/me")
+      .then((data) => {
+        if (!cancelled) setRole(data.role ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function selectStation(stationId: string | null) {
     setActiveStationId(stationId);
@@ -433,6 +484,58 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
 
   const completedLabel =
     kitchenFlow.find((s) => s.id === completedStepId)?.label ?? "Completed";
+
+  const refundDialog = refundOrderId ? (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Refund this order"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    >
+      <div className="w-full max-w-sm border border-surface-container-highest bg-surface p-5">
+        <h2 className="font-display text-headline-sm text-on-surface">Refund this order</h2>
+        <p className="mt-1 text-body-md text-on-surface-variant">
+          The diner gets their money back. Points earned on this order are taken back, points they
+          spent are returned, and any voucher becomes usable again.
+        </p>
+        <label className="mt-4 block text-[12px] font-medium text-on-surface">
+          Why?
+          <input
+            autoFocus
+            value={refundReason}
+            onChange={(e) => setRefundReason(e.target.value)}
+            placeholder="e.g. Ran out of kaya toast"
+            className="mt-1 w-full border border-surface-container-highest bg-surface-container-lowest px-3 py-2 text-body-md"
+          />
+        </label>
+        <p className="mt-1 text-[11px] text-on-surface-variant">
+          Recorded against your name so the owner can see who refunded what.
+        </p>
+        {refundError && <p className="mt-2 text-[12px] text-red-700">{refundError}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setRefundOrderId(null);
+              setRefundReason("");
+              setRefundError(null);
+            }}
+            className="border border-surface-container-highest px-4 py-2 text-body-md"
+          >
+            Keep order
+          </button>
+          <button
+            type="button"
+            disabled={refundBusy || refundReason.trim().length < 3}
+            onClick={() => void submitRefund()}
+            className="bg-red-700 px-4 py-2 text-body-md text-white disabled:opacity-50"
+          >
+            {refundBusy ? "Refunding…" : "Refund"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <AdminShell
@@ -610,6 +713,7 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
                       stations={stations}
                       activeStationId={activeStationId}
                       onAdvance={advanceOrder}
+                      onRefund={canRefund ? (id) => setRefundOrderId(id) : undefined}
                       formatTime={formatTime}
                     />
                   ))}
@@ -619,6 +723,22 @@ export function AdminDashboardShell({ merchantSlug }: AdminDashboardShellProps) 
           </>
         )}
       </div>
+      {refundNotice && (
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 border border-surface-container-highest bg-surface px-4 py-3 text-body-md shadow-lg"
+        >
+          {refundNotice}
+          <button
+            type="button"
+            onClick={() => setRefundNotice(null)}
+            className="ml-3 text-[12px] text-on-surface-variant underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {refundDialog}
     </AdminShell>
   );
 }

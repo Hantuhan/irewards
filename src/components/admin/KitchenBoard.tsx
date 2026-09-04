@@ -223,6 +223,7 @@ function OrderTicket({
   stations,
   activeStationId,
   onAdvance,
+  onRefund,
   formatTime,
 }: {
   order: KitchenOrder;
@@ -231,6 +232,8 @@ function OrderTicket({
   stations: KitchenStation[];
   activeStationId: string | null;
   onAdvance: (orderId: string, nextStatus: string, stationId?: string) => void;
+  /** Absent for staff, who cannot refund. */
+  onRefund?: (orderId: string) => void;
   formatTime: (iso: string | null) => string;
 }) {
   const items = itemsForStation(order.items, activeStationId, stations);
@@ -299,6 +302,16 @@ function OrderTicket({
         <span className="font-mono text-[11px] text-on-surface-variant">
           {formatTime(order.paidAt)}
         </span>
+        {onRefund ? (
+          <button
+            type="button"
+            onClick={() => onRefund(order.id)}
+            title="Cannot make this — refund the diner"
+            className="min-h-[40px] shrink-0 border border-surface-container-high px-2.5 font-display text-[12px] uppercase tracking-wide text-on-surface-variant transition-colors hover:border-red-300 hover:text-red-700"
+          >
+            Refund
+          </button>
+        ) : null}
         {meta?.nextId && meta.actionLabel ? (
           <button
             type="button"
@@ -323,6 +336,7 @@ export function KitchenTableCard({
   expanded,
   onToggleExpand,
   onAdvance,
+  onRefund,
   formatTime,
 }: {
   group: KitchenTableGroup;
@@ -333,6 +347,8 @@ export function KitchenTableCard({
   expanded: boolean;
   onToggleExpand: () => void;
   onAdvance: (orderId: string, nextStatus: string, stationId?: string) => void;
+  /** Absent for staff, who cannot refund. */
+  onRefund?: (orderId: string) => void;
   formatTime: (iso: string | null) => string;
 }) {
   const orders = group.orders.filter(
@@ -406,6 +422,7 @@ export function KitchenTableCard({
             stations={stations}
             activeStationId={activeStationId}
             onAdvance={onAdvance}
+            onRefund={onRefund}
             formatTime={formatTime}
           />
         ))}

@@ -125,6 +125,61 @@ export function verifyHitPaySignature(rawBody: string, signature: string | null)
   }
 }
 
+export type RefundResult = {
+  status: "refunded" | "skipped";
+  reference: string | null;
+};
+
+/**
+ * Refunds a HitPay payment.
+ *
+ * `paymentRef` is what the webhook gave us (`payment_request_id`). In dev
+ * payment mode nothing was ever charged, so there is nothing to give back and
+ * the refund is reported as skipped rather than pretended.
+ */
+export async function refundHitPayPayment(input: {
+  paymentRef: string;
+  amountCents: number;
+  currency: "MYR" | "SGD";
+}): Promise<RefundResult> {
+  if (isDevPaymentMode()) {
+    console.info("[payments:dev] refund →", input.paymentRef, input.amountCents);
+    return { status: "skipped", reference: null };
+  }
+
+  const apiKey = process.env.PAYMENT_API_KEY;
+  if (!apiKey) throw new Error("Missing PAYMENT_API_KEY");
+
+  const response = await fetch(`${HITPAY_API_BASE}/refund`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-BUSINESS-API-KEY": apiKey,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    body: JSON.stringify({
+      payment_id: input.paymentRef,
+      amount: (input.amountCents / 100).toFixed(2),
+    }),
+  });
+
+  const json = (await response.json().catch(() => ({}))) as {
+    id?: string;
+    message?: string;
+    errors?: unknown;
+  };
+
+  if (!response.ok) {
+    throw new Error(
+      json.message
+        ? `The payment provider refused the refund: ${json.message}`
+        : `The payment provider refused the refund (${response.status}).`,
+    );
+  }
+
+  return { status: "refunded", reference: json.id ?? null };
+}
+
 export function parseHitPayWebhook(rawBody: string) {
   const json = JSON.parse(rawBody) as {
     id?: string;

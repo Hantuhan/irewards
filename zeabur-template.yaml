@@ -38,7 +38,7 @@ spec:
     - **insforge** — InsForge API (internal)
     - **irewards** — Next.js app from GitHub (`Dockerfile`)
 
-    After deploy, set Meta/HitPay/cron secrets on the **irewards** service.
+    After deploy, set Meta/CHIP/cron secrets on the **irewards** service.
     Attach a volume on **irewards** at `/app/public/uploads` for menu images.
 
     Migrations run automatically on app boot (`RUN_MIGRATIONS=true`).

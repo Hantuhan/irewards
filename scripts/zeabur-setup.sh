@@ -10,7 +10,7 @@ Option A — Full stack template (recommended)
   2. Deploy template:
        npx zeabur template deploy -f zeabur-template.yaml
   3. Set domain variable PUBLIC_DOMAIN → irewards.store
-  4. On irewards service, add Meta/HitPay/cron/platform secrets (see .env.zeabur.example)
+  4. On irewards service, add Meta/CHIP/cron/platform secrets (see .env.zeabur.example)
 
 Option B — App only (InsForge already running)
   1. Zeabur → Add Service → GitHub → Hantuhan/irewards

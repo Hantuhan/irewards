@@ -238,7 +238,9 @@ export function RewardsAdminShell({
       setRules(rulesRes.rules);
       setSelectedRuleId((prev) => prev ?? rulesRes.rules[0]?.id ?? null);
       setMenuItems(
-        (menuRes.items ?? []).map((i) => ({ id: i.id, name: i.name })),
+        (menuRes.items ?? [])
+          .filter((i) => Boolean(i.id))
+          .map((i) => ({ id: i.id, name: i.name })),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");

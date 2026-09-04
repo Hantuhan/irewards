@@ -187,6 +187,7 @@ export async function GET(request: Request, context: RouteContext) {
         sortOrder: c.sort_order,
       })),
       items: items.map((item) => ({
+        id: item.id,
         slug: item.slug,
         categorySlug: categorySlugById.get(item.category_id) ?? "",
         name: item.name,
